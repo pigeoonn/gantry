@@ -1,0 +1,49 @@
+# Maintainer: pigeoonn
+# gantry-git: builds the newest commit of the public repository.
+# Needs the repository to be public. Submit it with:  git clone ssh://aur@aur.archlinux.org/gantry-git.git
+pkgname=gantry-git
+_pkgname=gantry
+pkgver=5.1.0
+pkgrel=1
+pkgdesc='Mod, trainer and crash-hunting hub for Proton games on Linux (development version)'
+arch=('x86_64')
+url='https://github.com/pigeoonn/gantry'
+license=('GPL-3.0-or-later')
+depends=('gcc-libs' 'glibc' 'curl' 'xdg-utils' 'libarchive' 'wayland' 'libxkbcommon')
+makedepends=('cargo' 'git')
+optdepends=(
+  'p7zip: install .7z and .rar mods'
+  'unzip: fallback archive extraction'
+  'gamemode: run games with gamemoderun'
+  'mangohud: performance overlay'
+  'libnotify: desktop notifications (notify-send)'
+  'steam: sync launch options for Steam games'
+  'chromium: app window for the interface (any Chromium based browser works)'
+)
+provides=('gantry')
+conflicts=('gantry')
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_pkgname"
+  printf '%s.r%s.%s' "$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$_pkgname"
+  export CARGO_TARGET_DIR=target
+  cargo build --release --locked
+}
+
+package() {
+  cd "$_pkgname"
+  install -Dm755 target/release/rig "$pkgdir/usr/bin/rig"
+  install -Dm644 packaging/gantry.desktop "$pkgdir/usr/share/applications/gantry.desktop"
+  install -Dm644 src/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/gantry.png"
+  install -Dm644 src/icon.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/gantry.svg"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 docs/GUIDE.md "$pkgdir/usr/share/doc/$pkgname/GUIDE.md"
+  install -Dm644 docs/TUTORIAL.md "$pkgdir/usr/share/doc/$pkgname/TUTORIAL.md"
+}

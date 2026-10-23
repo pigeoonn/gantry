@@ -1,0 +1,8 @@
+name: An idea
+description: Something Gantry could do
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes: { label: What would you like to be able to do, and in which game or situation? }
+    validations: { required: true }

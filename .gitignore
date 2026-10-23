@@ -1,0 +1,9 @@
+/target
+*.log
+*.rigtmp*
+.rig_stage_*
+
+# makepkg output
+packaging/arch/pkg/
+packaging/arch/src/
+*.pkg.tar.*

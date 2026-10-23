@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Gantry
+GenericName=Mod & Trainer Hub
+Comment=Mods, trainers and crash hunting for Proton games
+Exec=rig
+Icon=gantry
+Terminal=false
+Categories=Game;Utility;
+Keywords=gantry;proton;mods;ue4ss;trainer;steam;hydra;
+StartupNotify=false
+StartupWMClass=Gantry

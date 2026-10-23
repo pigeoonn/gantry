@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # libwayland/libxkbcommon: build dependencies of the file-dialog stack.
+      # libarchive-tools: the archive-install tests build real zip files with bsdtar.
+      - name: System packages
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libwayland-dev libxkbcommon-dev libarchive-tools
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy (warnings are errors)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test
+      - name: Release build
+        run: cargo build --release
+      # Opens the real interface in headless Chrome, in every language, and fails on script errors or
+      # text with an unfilled placeholder.
+      - name: Interface check
+        run: node tests/ui_smoke.mjs "$PWD/target/release/rig" google-chrome "$PWD/screens"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screens-linux
+          path: screens
+          retention-days: 7
+
+  # The real Windows build: unit tests run on a Windows machine (hard links, registry, process list...).
+  windows-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests
+        run: cargo test
+      - name: Release build
+        run: cargo build --release
+      - name: Program starts
+        shell: bash
+        run: target/release/rig.exe --version
+      - name: Interface check
+        shell: bash
+        run: node tests/ui_smoke.mjs "$PWD/target/release/rig.exe" "C:/Program Files/Google/Chrome/Application/chrome.exe" "$PWD/screens"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screens-windows
+          path: screens
+          retention-days: 7
+
+  macos-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests
+        run: cargo test
+      - name: Release build
+        run: cargo build --release
+      - name: Program starts
+        run: target/release/rig --version
+      - name: Interface check
+        run: node tests/ui_smoke.mjs "$PWD/target/release/rig" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" "$PWD/screens"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screens-macos
+          path: screens
+          retention-days: 7
+
+  # Gantry is Linux-first; this keeps the code from drifting away from a Windows port.
+  windows-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Windows target
+        run: rustup target add x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Cargo check (Windows)
+        run: cargo check --target x86_64-pc-windows-gnu

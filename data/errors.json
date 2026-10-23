@@ -1,0 +1,1317 @@
+[
+  {
+    "id": "bepinex_missing_assembly",
+    "logs": [
+      "bepinex",
+      "player"
+    ],
+    "contains": [
+      "Could not load file or assembly",
+      "FileNotFoundException"
+    ],
+    "also": [
+      "assembly",
+      "Assembly",
+      ".dll"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A mod is missing a file it depends on",
+      "ro": "Unui mod îi lipsește un fișier de care depinde",
+      "it": "A un mod manca un file da cui dipende",
+      "fr": "Il manque un fichier dont un mod dépend",
+      "es": "A un mod le falta un archivo del que depende",
+      "ru": "Моду не хватает файла, от которого он зависит",
+      "de": "Einer Mod fehlt eine Datei, von der sie abhängt",
+      "pt": "A um mod falta um ficheiro de que depende",
+      "pl": "Modowi brakuje pliku, od którego zależy",
+      "tr": "Bir modun ihtiyaç duyduğu dosya eksik"
+    },
+    "cause": {
+      "en": "The log names a library (.dll) that is not installed: usually another mod the mod needs, or a mod made for another game version.",
+      "ro": "Jurnalul numește o bibliotecă (.dll) care nu este instalată: de obicei alt mod de care are nevoie modul, sau un mod făcut pentru altă versiune a jocului.",
+      "it": "Il log nomina una libreria (.dll) non installata: di solito un altro mod di cui ha bisogno, o un mod fatto per un'altra versione del gioco.",
+      "fr": "Le journal nomme une bibliothèque (.dll) qui n'est pas installée : en général un autre mod dont celui-ci a besoin, ou un mod fait pour une autre version du jeu.",
+      "es": "El registro nombra una biblioteca (.dll) que no está instalada: normalmente otro mod que necesita, o un mod hecho para otra versión del juego.",
+      "ru": "В журнале назван файл библиотеки (.dll), которого нет: обычно это другой мод, нужный этому, или мод для другой версии игры.",
+      "de": "Das Protokoll nennt eine Bibliothek (.dll), die nicht installiert ist: meist eine andere Mod, die benötigt wird, oder eine Mod für eine andere Spielversion.",
+      "pt": "O registo nomeia uma biblioteca (.dll) que não está instalada: normalmente outro mod de que precisa, ou um mod feito para outra versão do jogo.",
+      "pl": "Dziennik wskazuje bibliotekę (.dll), której nie ma: zwykle inny mod, którego ten potrzebuje, albo mod z innej wersji gry.",
+      "tr": "Günlük, yüklü olmayan bir kütüphaneyi (.dll) gösteriyor: genellikle modun ihtiyaç duyduğu başka bir mod ya da oyunun başka bir sürümü için yapılmış bir mod."
+    },
+    "fix": {
+      "en": "Open the mod's page (the ℹ button), read the Needs tab and install what it lists. Remove mods that were made for a different version of the game.",
+      "ro": "Deschide pagina modului (butonul ℹ), citește fila Necesită și instalează ce e listat. Elimină modurile făcute pentru altă versiune a jocului.",
+      "it": "Apri la pagina del mod (il pulsante ℹ), leggi la scheda Richiede e installa ciò che elenca. Rimuovi i mod fatti per un'altra versione del gioco.",
+      "fr": "Ouvre la page du mod (bouton ℹ), lis l'onglet Nécessite et installe ce qui y figure. Retire les mods faits pour une autre version du jeu.",
+      "es": "Abre la página del mod (botón ℹ), lee la pestaña Necesita e instala lo que indica. Quita los mods hechos para otra versión del juego.",
+      "ru": "Открой страницу мода (кнопка ℹ), прочитай вкладку «Требуется» и установи то, что там указано. Удали моды, сделанные для другой версии игры.",
+      "de": "Öffne die Seite der Mod (Schaltfläche ℹ), lies den Reiter Benötigt und installiere, was dort steht. Entferne Mods für eine andere Spielversion.",
+      "pt": "Abre a página do mod (botão ℹ), lê o separador Precisa de e instala o que lá está. Remove os mods feitos para outra versão do jogo.",
+      "pl": "Otwórz stronę moda (przycisk ℹ), przeczytaj kartę Wymaga i zainstaluj to, co na niej jest. Usuń mody zrobione pod inną wersję gry.",
+      "tr": "Modun sayfasını aç (ℹ düğmesi), Gerektirir sekmesini oku ve listelenenleri yükle. Oyunun başka bir sürümü için yapılmış modları kaldır."
+    }
+  },
+  {
+    "id": "bad_image",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player"
+    ],
+    "contains": [
+      "BadImageFormatException"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "A file was built for the wrong kind of game",
+      "ro": "Un fișier a fost făcut pentru alt tip de joc",
+      "it": "Un file è stato creato per un altro tipo di gioco",
+      "fr": "Un fichier a été conçu pour un autre type de jeu",
+      "es": "Un archivo se creó para otro tipo de juego",
+      "ru": "Файл создан для другого типа игры",
+      "de": "Eine Datei wurde für eine andere Art von Spiel gebaut",
+      "pt": "Um ficheiro foi feito para outro tipo de jogo",
+      "pl": "Plik został zbudowany pod inny rodzaj gry",
+      "tr": "Bir dosya başka türde bir oyun için yapılmış"
+    },
+    "cause": {
+      "en": "A loader or mod file does not match the game (32 against 64 bit, or Mono against IL2CPP).",
+      "ro": "Un fișier de încărcător sau de mod nu se potrivește cu jocul (32 față de 64 de biți, sau Mono față de IL2CPP).",
+      "it": "Un file del loader o di un mod non corrisponde al gioco (32 contro 64 bit, o Mono contro IL2CPP).",
+      "fr": "Un fichier de chargeur ou de mod ne correspond pas au jeu (32 contre 64 bits, ou Mono contre IL2CPP).",
+      "es": "Un archivo del cargador o de un mod no coincide con el juego (32 contra 64 bits, o Mono contra IL2CPP).",
+      "ru": "Файл загрузчика или мода не подходит к игре (32 бита против 64 или Mono против IL2CPP).",
+      "de": "Eine Loader- oder Mod-Datei passt nicht zum Spiel (32 gegen 64 Bit, oder Mono gegen IL2CPP).",
+      "pt": "Um ficheiro do carregador ou de um mod não corresponde ao jogo (32 contra 64 bits, ou Mono contra IL2CPP).",
+      "pl": "Plik loadera lub moda nie pasuje do gry (32 a 64 bity albo Mono a IL2CPP).",
+      "tr": "Bir yükleyici ya da mod dosyası oyunla uyuşmuyor (32 bit ile 64 bit, ya da Mono ile IL2CPP)."
+    },
+    "fix": {
+      "en": "Reinstall the loader Gantry recommends for this game (it detects 32/64 bit and Mono/IL2CPP) and remove mods built for another kind of game.",
+      "ro": "Reinstalează încărcătorul recomandat de Gantry pentru acest joc (detectează 32/64 de biți și Mono/IL2CPP) și elimină modurile făcute pentru alt tip de joc.",
+      "it": "Reinstalla il loader consigliato da Gantry per questo gioco (rileva 32/64 bit e Mono/IL2CPP) e rimuovi i mod fatti per un altro tipo di gioco.",
+      "fr": "Réinstalle le chargeur que Gantry recommande pour ce jeu (il détecte 32/64 bits et Mono/IL2CPP) et retire les mods faits pour un autre type de jeu.",
+      "es": "Reinstala el cargador que Gantry recomienda para este juego (detecta 32/64 bits y Mono/IL2CPP) y quita los mods hechos para otro tipo de juego.",
+      "ru": "Переустанови загрузчик, который Gantry рекомендует для этой игры (он определяет 32/64 бита и Mono/IL2CPP), и удали моды, сделанные для другого типа игры.",
+      "de": "Installiere den Loader neu, den Gantry für dieses Spiel empfiehlt (er erkennt 32/64 Bit und Mono/IL2CPP), und entferne Mods für eine andere Art von Spiel.",
+      "pt": "Reinstala o carregador que o Gantry recomenda para este jogo (deteta 32/64 bits e Mono/IL2CPP) e remove os mods feitos para outro tipo de jogo.",
+      "pl": "Zainstaluj ponownie loader polecany przez Gantry dla tej gry (wykrywa 32/64 bity oraz Mono/IL2CPP) i usuń mody zrobione pod inny rodzaj gry.",
+      "tr": "Gantry'nin bu oyun için önerdiği yükleyiciyi yeniden kur (32/64 bit ve Mono/IL2CPP'yi algılar) ve başka türde oyun için yapılmış modları kaldır."
+    }
+  },
+  {
+    "id": "bepinex_plugin_failed",
+    "logs": [
+      "bepinex"
+    ],
+    "contains": [
+      "Error loading [",
+      "Failed to load plugin",
+      "Could not load [BepInEx"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A BepInEx plugin failed to load",
+      "ro": "Un plugin BepInEx nu s-a putut încărca",
+      "it": "Un plugin BepInEx non si è caricato",
+      "fr": "Un plugin BepInEx n'a pas pu se charger",
+      "es": "Un plugin de BepInEx no se pudo cargar",
+      "ru": "Плагин BepInEx не удалось загрузить",
+      "de": "Ein BepInEx-Plugin konnte nicht geladen werden",
+      "pt": "Um plugin do BepInEx não conseguiu carregar",
+      "pl": "Nie udało się załadować wtyczki BepInEx",
+      "tr": "Bir BepInEx eklentisi yüklenemedi"
+    },
+    "cause": {
+      "en": "The plugin crashed while loading: it is usually made for another BepInEx version or another version of the game.",
+      "ro": "Pluginul s-a oprit cu eroare la încărcare: de obicei este făcut pentru altă versiune BepInEx sau altă versiune a jocului.",
+      "it": "Il plugin è andato in errore durante il caricamento: di solito è fatto per un'altra versione di BepInEx o del gioco.",
+      "fr": "Le plugin a planté au chargement : il est généralement fait pour une autre version de BepInEx ou du jeu.",
+      "es": "El plugin falló al cargarse: normalmente está hecho para otra versión de BepInEx o del juego.",
+      "ru": "Плагин упал при загрузке: обычно он сделан для другой версии BepInEx или игры.",
+      "de": "Das Plugin ist beim Laden abgestürzt: meist ist es für eine andere BepInEx- oder Spielversion gebaut.",
+      "pt": "O plugin falhou ao carregar: normalmente é feito para outra versão do BepInEx ou do jogo.",
+      "pl": "Wtyczka zawiesiła się przy ładowaniu: zwykle jest zrobiona pod inną wersję BepInEx lub gry.",
+      "tr": "Eklenti yüklenirken çöktü: genellikle başka bir BepInEx sürümü ya da oyun sürümü için yapılmıştır."
+    },
+    "fix": {
+      "en": "Update the mod. BepInEx 5 is for Mono games, BepInEx 6 for IL2CPP games; the switch is in the Compatibility window.",
+      "ro": "Actualizează modul. BepInEx 5 este pentru jocurile Mono, BepInEx 6 pentru cele IL2CPP; comutarea este în fereastra Compatibilitate.",
+      "it": "Aggiorna il mod. BepInEx 5 è per i giochi Mono, BepInEx 6 per quelli IL2CPP; il cambio si trova nella finestra Compatibilità.",
+      "fr": "Mets le mod à jour. BepInEx 5 est pour les jeux Mono, BepInEx 6 pour les jeux IL2CPP ; le changement se trouve dans la fenêtre Compatibilité.",
+      "es": "Actualiza el mod. BepInEx 5 es para juegos Mono y BepInEx 6 para IL2CPP; el cambio está en la ventana Compatibilidad.",
+      "ru": "Обнови мод. BepInEx 5 нужен для игр на Mono, BepInEx 6 — для игр на IL2CPP; переключатель находится в окне «Совместимость».",
+      "de": "Aktualisiere die Mod. BepInEx 5 ist für Mono-Spiele, BepInEx 6 für IL2CPP-Spiele; umgeschaltet wird im Fenster Kompatibilität.",
+      "pt": "Atualiza o mod. O BepInEx 5 é para jogos Mono, o BepInEx 6 para jogos IL2CPP; a troca está na janela Compatibilidade.",
+      "pl": "Zaktualizuj mod. BepInEx 5 jest dla gier Mono, BepInEx 6 dla gier IL2CPP; przełącznik jest w oknie Zgodność.",
+      "tr": "Modu güncelle. BepInEx 5 Mono oyunları, BepInEx 6 IL2CPP oyunları içindir; geçiş Uyumluluk penceresinde."
+    }
+  },
+  {
+    "id": "melon_version_mismatch",
+    "logs": [
+      "melonloader"
+    ],
+    "contains": [
+      "different version of MelonLoader",
+      "not compatible with this version of MelonLoader",
+      "made for MelonLoader"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A MelonLoader mod was made for another MelonLoader version",
+      "ro": "Un mod MelonLoader a fost făcut pentru altă versiune MelonLoader",
+      "it": "Un mod MelonLoader è fatto per un'altra versione di MelonLoader",
+      "fr": "Un mod MelonLoader est fait pour une autre version de MelonLoader",
+      "es": "Un mod de MelonLoader está hecho para otra versión de MelonLoader",
+      "ru": "Мод MelonLoader сделан для другой версии MelonLoader",
+      "de": "Eine MelonLoader-Mod wurde für eine andere MelonLoader-Version gebaut",
+      "pt": "Um mod do MelonLoader foi feito para outra versão do MelonLoader",
+      "pl": "Mod MelonLoadera został zrobiony pod inną wersję MelonLoadera",
+      "tr": "Bir MelonLoader modu başka bir MelonLoader sürümü için yapılmış"
+    },
+    "cause": {
+      "en": "MelonLoader mods are tied to the loader's version line (0.5, 0.6, 0.7...).",
+      "ro": "Modurile MelonLoader sunt legate de linia de versiuni a încărcătorului (0.5, 0.6, 0.7...).",
+      "it": "I mod MelonLoader sono legati alla linea di versioni del loader (0.5, 0.6, 0.7...).",
+      "fr": "Les mods MelonLoader sont liés à la série de versions du chargeur (0.5, 0.6, 0.7...).",
+      "es": "Los mods de MelonLoader están ligados a la línea de versiones del cargador (0.5, 0.6, 0.7...).",
+      "ru": "Моды MelonLoader привязаны к линейке версий загрузчика (0.5, 0.6, 0.7...).",
+      "de": "MelonLoader-Mods sind an die Versionslinie des Loaders gebunden (0.5, 0.6, 0.7...).",
+      "pt": "Os mods do MelonLoader estão ligados à linha de versões do carregador (0.5, 0.6, 0.7...).",
+      "pl": "Mody MelonLoadera są związane z linią wersji loadera (0.5, 0.6, 0.7...).",
+      "tr": "MelonLoader modları yükleyicinin sürüm hattına bağlıdır (0.5, 0.6, 0.7...)."
+    },
+    "fix": {
+      "en": "Update the mod, or install the MelonLoader version the mod's page asks for.",
+      "ro": "Actualizează modul sau instalează versiunea MelonLoader cerută de pagina modului.",
+      "it": "Aggiorna il mod oppure installa la versione di MelonLoader richiesta dalla pagina del mod.",
+      "fr": "Mets le mod à jour ou installe la version de MelonLoader demandée par la page du mod.",
+      "es": "Actualiza el mod o instala la versión de MelonLoader que pide la página del mod.",
+      "ru": "Обнови мод или установи версию MelonLoader, которую просит страница мода.",
+      "de": "Aktualisiere die Mod oder installiere die MelonLoader-Version, die die Seite der Mod verlangt.",
+      "pt": "Atualiza o mod ou instala a versão do MelonLoader que a página do mod pede.",
+      "pl": "Zaktualizuj mod albo zainstaluj wersję MelonLoadera, której wymaga strona moda.",
+      "tr": "Modu güncelle ya da modun sayfasının istediği MelonLoader sürümünü kur."
+    }
+  },
+  {
+    "id": "melon_il2cpp_failed",
+    "logs": [
+      "melonloader"
+    ],
+    "contains": [
+      "Il2CppAssemblyGenerator",
+      "Cpp2IL"
+    ],
+    "also": [
+      "Error",
+      "Fail",
+      "Exception"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "MelonLoader could not prepare the IL2CPP game files",
+      "ro": "MelonLoader nu a putut pregăti fișierele jocului IL2CPP",
+      "it": "MelonLoader non è riuscito a preparare i file del gioco IL2CPP",
+      "fr": "MelonLoader n'a pas pu préparer les fichiers du jeu IL2CPP",
+      "es": "MelonLoader no pudo preparar los archivos del juego IL2CPP",
+      "ru": "MelonLoader не смог подготовить файлы игры на IL2CPP",
+      "de": "MelonLoader konnte die IL2CPP-Spieldateien nicht vorbereiten",
+      "pt": "O MelonLoader não conseguiu preparar os ficheiros do jogo IL2CPP",
+      "pl": "MelonLoader nie zdołał przygotować plików gry IL2CPP",
+      "tr": "MelonLoader IL2CPP oyun dosyalarını hazırlayamadı"
+    },
+    "cause": {
+      "en": "Its first-start step (Il2CppAssemblyGenerator) failed. This happens when the first start was interrupted, or with some Unity versions.",
+      "ro": "Pasul de la prima pornire (Il2CppAssemblyGenerator) a eșuat. Se întâmplă când prima pornire a fost întreruptă sau cu unele versiuni Unity.",
+      "it": "Il passaggio del primo avvio (Il2CppAssemblyGenerator) è fallito. Succede se il primo avvio è stato interrotto, o con alcune versioni di Unity.",
+      "fr": "Son étape du premier lancement (Il2CppAssemblyGenerator) a échoué. Cela arrive quand le premier lancement a été interrompu, ou avec certaines versions d'Unity.",
+      "es": "Su paso del primer inicio (Il2CppAssemblyGenerator) falló. Ocurre si el primer inicio se interrumpió, o con algunas versiones de Unity.",
+      "ru": "Шаг первого запуска (Il2CppAssemblyGenerator) не удался. Так бывает, если первый запуск прервали, или с некоторыми версиями Unity.",
+      "de": "Der Schritt beim ersten Start (Il2CppAssemblyGenerator) ist fehlgeschlagen. Das passiert, wenn der erste Start unterbrochen wurde, oder bei manchen Unity-Versionen.",
+      "pt": "O passo do primeiro arranque (Il2CppAssemblyGenerator) falhou. Acontece quando o primeiro arranque foi interrompido, ou com algumas versões do Unity.",
+      "pl": "Krok pierwszego uruchomienia (Il2CppAssemblyGenerator) się nie powiódł. Zdarza się, gdy pierwszy start przerwano, albo przy niektórych wersjach Unity.",
+      "tr": "İlk açılış adımı (Il2CppAssemblyGenerator) başarısız oldu. İlk açılış yarıda kesildiyse ya da bazı Unity sürümlerinde olur."
+    },
+    "fix": {
+      "en": "Delete the MelonLoader/Dependencies folder in the game and start the game again; if it keeps failing, switch to BepInEx 6 in the Compatibility window.",
+      "ro": "Șterge folderul MelonLoader/Dependencies din joc și pornește jocul din nou; dacă tot eșuează, treci la BepInEx 6 în fereastra Compatibilitate.",
+      "it": "Elimina la cartella MelonLoader/Dependencies nel gioco e riavvia il gioco; se continua a fallire, passa a BepInEx 6 nella finestra Compatibilità.",
+      "fr": "Supprime le dossier MelonLoader/Dependencies dans le jeu et relance-le ; s'il échoue encore, passe à BepInEx 6 dans la fenêtre Compatibilité.",
+      "es": "Borra la carpeta MelonLoader/Dependencies del juego y vuelve a iniciarlo; si sigue fallando, cambia a BepInEx 6 en la ventana Compatibilidad.",
+      "ru": "Удали папку MelonLoader/Dependencies в папке игры и запусти игру снова; если всё равно не работает, перейди на BepInEx 6 в окне «Совместимость».",
+      "de": "Lösche den Ordner MelonLoader/Dependencies im Spiel und starte das Spiel erneut; schlägt es weiter fehl, wechsle im Fenster Kompatibilität zu BepInEx 6.",
+      "pt": "Apaga a pasta MelonLoader/Dependencies no jogo e arranca o jogo outra vez; se continuar a falhar, passa para o BepInEx 6 na janela Compatibilidade.",
+      "pl": "Usuń folder MelonLoader/Dependencies w grze i uruchom grę ponownie; jeśli nadal zawodzi, przełącz się na BepInEx 6 w oknie Zgodność.",
+      "tr": "Oyundaki MelonLoader/Dependencies klasörünü sil ve oyunu yeniden başlat; yine başarısız olursa Uyumluluk penceresinde BepInEx 6'ya geç."
+    }
+  },
+  {
+    "id": "il2cpp_metadata",
+    "logs": [
+      "player",
+      "melonloader",
+      "bepinex"
+    ],
+    "contains": [
+      "global-metadata.dat"
+    ],
+    "also": [
+      "not found",
+      "mismatch",
+      "Fail",
+      "invalid",
+      "Invalid"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The game's IL2CPP data does not match",
+      "ro": "Datele IL2CPP ale jocului nu se potrivesc",
+      "it": "I dati IL2CPP del gioco non corrispondono",
+      "fr": "Les données IL2CPP du jeu ne correspondent pas",
+      "es": "Los datos IL2CPP del juego no coinciden",
+      "ru": "Данные IL2CPP игры не совпадают",
+      "de": "Die IL2CPP-Daten des Spiels passen nicht",
+      "pt": "Os dados IL2CPP do jogo não correspondem",
+      "pl": "Dane IL2CPP gry nie pasują",
+      "tr": "Oyunun IL2CPP verileri uyuşmuyor"
+    },
+    "cause": {
+      "en": "The game was updated or its files are damaged, so the loader cannot read its metadata.",
+      "ro": "Jocul a fost actualizat sau fișierele lui sunt deteriorate, așa că încărcătorul nu îi poate citi metadatele.",
+      "it": "Il gioco è stato aggiornato o i suoi file sono danneggiati, quindi il loader non riesce a leggerne i metadati.",
+      "fr": "Le jeu a été mis à jour ou ses fichiers sont abîmés, donc le chargeur ne peut pas lire ses métadonnées.",
+      "es": "El juego se actualizó o sus archivos están dañados, así que el cargador no puede leer sus metadatos.",
+      "ru": "Игра обновилась или её файлы повреждены, поэтому загрузчик не может прочитать её метаданные.",
+      "de": "Das Spiel wurde aktualisiert oder seine Dateien sind beschädigt, daher kann der Loader die Metadaten nicht lesen.",
+      "pt": "O jogo foi atualizado ou os seus ficheiros estão danificados, por isso o carregador não consegue ler os metadados.",
+      "pl": "Gra została zaktualizowana lub jej pliki są uszkodzone, więc loader nie może odczytać jej metadanych.",
+      "tr": "Oyun güncellendi ya da dosyaları bozuk, bu yüzden yükleyici meta verilerini okuyamıyor."
+    },
+    "fix": {
+      "en": "Verify the game's files in Steam, then reinstall the loader.",
+      "ro": "Verifică fișierele jocului în Steam, apoi reinstalează încărcătorul.",
+      "it": "Verifica i file del gioco in Steam, poi reinstalla il loader.",
+      "fr": "Vérifie les fichiers du jeu dans Steam, puis réinstalle le chargeur.",
+      "es": "Verifica los archivos del juego en Steam y reinstala el cargador.",
+      "ru": "Проверь файлы игры в Steam, затем переустанови загрузчик.",
+      "de": "Überprüfe die Spieldateien in Steam und installiere dann den Loader neu.",
+      "pt": "Verifica os ficheiros do jogo no Steam e depois reinstala o carregador.",
+      "pl": "Zweryfikuj pliki gry w Steam, a potem zainstaluj loader ponownie.",
+      "tr": "Steam'de oyun dosyalarını doğrula, sonra yükleyiciyi yeniden kur."
+    }
+  },
+  {
+    "id": "vcrun_missing",
+    "logs": [
+      "proton",
+      "player"
+    ],
+    "contains": [
+      "err:module:import_dll"
+    ],
+    "also": [
+      "MSVCP",
+      "VCRUNTIME",
+      "msvcp",
+      "vcruntime",
+      "d3dcompiler",
+      "xaudio",
+      "XAudio",
+      "mfplat"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "A Windows runtime library is missing in the game's Wine prefix",
+      "ro": "Lipsește o bibliotecă Windows din prefixul Wine al jocului",
+      "it": "Manca una libreria runtime di Windows nel prefisso Wine del gioco",
+      "fr": "Une bibliothèque d'exécution Windows manque dans le préfixe Wine du jeu",
+      "es": "Falta una biblioteca de ejecución de Windows en el prefijo Wine del juego",
+      "ru": "В префиксе Wine игры не хватает библиотеки среды выполнения Windows",
+      "de": "Im Wine-Präfix des Spiels fehlt eine Windows-Laufzeitbibliothek",
+      "pt": "Falta uma biblioteca de execução do Windows no prefixo Wine do jogo",
+      "pl": "W prefiksie Wine gry brakuje biblioteki uruchomieniowej Windows",
+      "tr": "Oyunun Wine prefix'inde bir Windows çalışma zamanı kütüphanesi eksik"
+    },
+    "cause": {
+      "en": "The game or a mod needs the Visual C++ runtime (or another Windows library) that the prefix does not have.",
+      "ro": "Jocul sau un mod are nevoie de runtime-ul Visual C++ (sau altă bibliotecă Windows) pe care prefixul nu îl are.",
+      "it": "Il gioco o un mod richiede il runtime Visual C++ (o un'altra libreria Windows) che il prefisso non ha.",
+      "fr": "Le jeu ou un mod a besoin du runtime Visual C++ (ou d'une autre bibliothèque Windows) que le préfixe n'a pas.",
+      "es": "El juego o un mod necesita el runtime de Visual C++ (u otra biblioteca de Windows) que el prefijo no tiene.",
+      "ru": "Игре или моду нужна среда Visual C++ (или другая библиотека Windows), которой в префиксе нет.",
+      "de": "Das Spiel oder eine Mod braucht die Visual-C++-Laufzeit (oder eine andere Windows-Bibliothek), die das Präfix nicht hat.",
+      "pt": "O jogo ou um mod precisa do runtime do Visual C++ (ou de outra biblioteca do Windows) que o prefixo não tem.",
+      "pl": "Gra lub mod potrzebuje środowiska Visual C++ (albo innej biblioteki Windows), którego prefiks nie ma.",
+      "tr": "Oyun ya da bir mod, prefix'te bulunmayan Visual C++ çalışma zamanına (veya başka bir Windows kütüphanesine) ihtiyaç duyuyor."
+    },
+    "fix": {
+      "en": "Use a newer Proton or GE-Proton (they ship the runtimes) from the Compatibility window, or install vcrun2022 into the prefix with protontricks.",
+      "ro": "Folosește un Proton sau GE-Proton mai nou (au runtime-urile incluse) din fereastra Compatibilitate sau instalează vcrun2022 în prefix cu protontricks.",
+      "it": "Usa un Proton o GE-Proton più recente (includono i runtime) dalla finestra Compatibilità, oppure installa vcrun2022 nel prefisso con protontricks.",
+      "fr": "Utilise un Proton ou GE-Proton plus récent (ils fournissent les runtimes) depuis la fenêtre Compatibilité, ou installe vcrun2022 dans le préfixe avec protontricks.",
+      "es": "Usa un Proton o GE-Proton más nuevo (incluyen los runtimes) desde la ventana Compatibilidad, o instala vcrun2022 en el prefijo con protontricks.",
+      "ru": "Используй более новый Proton или GE-Proton (в них есть эти библиотеки) в окне «Совместимость» либо установи vcrun2022 в префикс через protontricks.",
+      "de": "Nutze ein neueres Proton oder GE-Proton (sie bringen die Laufzeiten mit) im Fenster Kompatibilität oder installiere vcrun2022 mit protontricks ins Präfix.",
+      "pt": "Usa um Proton ou GE-Proton mais recente (trazem os runtimes) na janela Compatibilidade, ou instala o vcrun2022 no prefixo com o protontricks.",
+      "pl": "Użyj nowszego Protona lub GE-Proton (zawierają te biblioteki) w oknie Zgodność albo zainstaluj vcrun2022 w prefiksie przez protontricks.",
+      "tr": "Uyumluluk penceresinden daha yeni bir Proton ya da GE-Proton kullan (çalışma zamanlarını içerir) veya vcrun2022'yi protontricks ile prefix'e kur."
+    }
+  },
+  {
+    "id": "vulkan_failed",
+    "logs": [
+      "proton",
+      "player"
+    ],
+    "contains": [
+      "vkCreateInstance",
+      "VK_ERROR_INCOMPATIBLE_DRIVER",
+      "No Vulkan",
+      "Failed to create Vulkan",
+      "DXVK: Failed to"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "Graphics (Vulkan) did not start",
+      "ro": "Grafica (Vulkan) nu a pornit",
+      "it": "La grafica (Vulkan) non si è avviata",
+      "fr": "Le graphisme (Vulkan) n'a pas démarré",
+      "es": "Los gráficos (Vulkan) no se iniciaron",
+      "ru": "Графика (Vulkan) не запустилась",
+      "de": "Die Grafik (Vulkan) ist nicht gestartet",
+      "pt": "Os gráficos (Vulkan) não arrancaram",
+      "pl": "Grafika (Vulkan) nie wystartowała",
+      "tr": "Grafik (Vulkan) başlamadı"
+    },
+    "cause": {
+      "en": "The game or DXVK could not create a Vulkan device: a missing or old graphics driver, or a missing Vulkan package.",
+      "ro": "Jocul sau DXVK nu a putut crea un dispozitiv Vulkan: driver grafic lipsă sau vechi, ori pachet Vulkan lipsă.",
+      "it": "Il gioco o DXVK non è riuscito a creare un dispositivo Vulkan: driver grafico mancante o vecchio, oppure pacchetto Vulkan mancante.",
+      "fr": "Le jeu ou DXVK n'a pas pu créer de périphérique Vulkan : pilote graphique absent ou ancien, ou paquet Vulkan manquant.",
+      "es": "El juego o DXVK no pudo crear un dispositivo Vulkan: controlador gráfico ausente o antiguo, o falta el paquete de Vulkan.",
+      "ru": "Игра или DXVK не смогли создать устройство Vulkan: графический драйвер отсутствует или устарел, либо нет пакета Vulkan.",
+      "de": "Das Spiel oder DXVK konnte kein Vulkan-Gerät erstellen: Grafiktreiber fehlt oder ist alt, oder das Vulkan-Paket fehlt.",
+      "pt": "O jogo ou o DXVK não conseguiu criar um dispositivo Vulkan: controlador gráfico em falta ou antigo, ou pacote Vulkan em falta.",
+      "pl": "Gra lub DXVK nie zdołały utworzyć urządzenia Vulkan: brak sterownika grafiki lub jest stary, albo brakuje pakietu Vulkan.",
+      "tr": "Oyun ya da DXVK bir Vulkan aygıtı oluşturamadı: ekran kartı sürücüsü eksik ya da eski, veya Vulkan paketi eksik."
+    },
+    "fix": {
+      "en": "Update your graphics driver and the Vulkan packages of your distribution; try another Proton version in the Compatibility window.",
+      "ro": "Actualizează driverul grafic și pachetele Vulkan ale distribuției tale; încearcă altă versiune Proton în fereastra Compatibilitate.",
+      "it": "Aggiorna il driver grafico e i pacchetti Vulkan della tua distribuzione; prova un'altra versione di Proton nella finestra Compatibilità.",
+      "fr": "Mets à jour ton pilote graphique et les paquets Vulkan de ta distribution ; essaie une autre version de Proton dans la fenêtre Compatibilité.",
+      "es": "Actualiza tu controlador gráfico y los paquetes de Vulkan de tu distribución; prueba otra versión de Proton en la ventana Compatibilidad.",
+      "ru": "Обнови графический драйвер и пакеты Vulkan своего дистрибутива; попробуй другую версию Proton в окне «Совместимость».",
+      "de": "Aktualisiere deinen Grafiktreiber und die Vulkan-Pakete deiner Distribution; probiere eine andere Proton-Version im Fenster Kompatibilität.",
+      "pt": "Atualiza o teu controlador gráfico e os pacotes Vulkan da tua distribuição; experimenta outra versão do Proton na janela Compatibilidade.",
+      "pl": "Zaktualizuj sterownik grafiki i pakiety Vulkan swojej dystrybucji; wypróbuj inną wersję Protona w oknie Zgodność.",
+      "tr": "Ekran kartı sürücünü ve dağıtımının Vulkan paketlerini güncelle; Uyumluluk penceresinde başka bir Proton sürümü dene."
+    }
+  },
+  {
+    "id": "ue4ss_object_array",
+    "logs": [
+      "ue4ss"
+    ],
+    "contains": [
+      "GUObjectArray",
+      "UObjectArray"
+    ],
+    "also": [
+      "Fail",
+      "Unable",
+      "not found",
+      "Could not"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "UE4SS could not find the game's object table",
+      "ro": "UE4SS nu a găsit tabela de obiecte a jocului",
+      "it": "UE4SS non ha trovato la tabella degli oggetti del gioco",
+      "fr": "UE4SS n'a pas trouvé la table d'objets du jeu",
+      "es": "UE4SS no encontró la tabla de objetos del juego",
+      "ru": "UE4SS не нашёл таблицу объектов игры",
+      "de": "UE4SS hat die Objekttabelle des Spiels nicht gefunden",
+      "pt": "O UE4SS não encontrou a tabela de objetos do jogo",
+      "pl": "UE4SS nie znalazł tablicy obiektów gry",
+      "tr": "UE4SS oyunun nesne tablosunu bulamadı"
+    },
+    "cause": {
+      "en": "UE4SS is set for another Unreal Engine version, or the game was updated.",
+      "ro": "UE4SS este setat pentru altă versiune de Unreal Engine sau jocul a fost actualizat.",
+      "it": "UE4SS è impostato per un'altra versione di Unreal Engine, oppure il gioco è stato aggiornato.",
+      "fr": "UE4SS est réglé pour une autre version d'Unreal Engine, ou le jeu a été mis à jour.",
+      "es": "UE4SS está configurado para otra versión de Unreal Engine, o el juego se actualizó.",
+      "ru": "UE4SS настроен на другую версию Unreal Engine, или игра обновилась.",
+      "de": "UE4SS ist auf eine andere Unreal-Engine-Version eingestellt, oder das Spiel wurde aktualisiert.",
+      "pt": "O UE4SS está definido para outra versão do Unreal Engine, ou o jogo foi atualizado.",
+      "pl": "UE4SS jest ustawiony na inną wersję Unreal Engine albo gra została zaktualizowana.",
+      "tr": "UE4SS başka bir Unreal Engine sürümüne ayarlı ya da oyun güncellendi."
+    },
+    "fix": {
+      "en": "Run Self-Heal (Tools) so Gantry detects the engine version again; after a game update a newer UE4SS may be needed.",
+      "ro": "Rulează Auto-reparare (Unelte) ca Gantry să detecteze din nou versiunea motorului; după o actualizare a jocului poate fi nevoie de un UE4SS mai nou.",
+      "it": "Esegui Auto-riparazione (Strumenti) così Gantry rileva di nuovo la versione del motore; dopo un aggiornamento del gioco può servire un UE4SS più recente.",
+      "fr": "Lance Auto-réparation (Outils) pour que Gantry détecte de nouveau la version du moteur ; après une mise à jour du jeu, un UE4SS plus récent peut être nécessaire.",
+      "es": "Ejecuta Autorreparación (Herramientas) para que Gantry detecte otra vez la versión del motor; tras una actualización del juego puede hacer falta un UE4SS más nuevo.",
+      "ru": "Запусти «Автоисправление» (Инструменты), чтобы Gantry заново определил версию движка; после обновления игры может понадобиться более новый UE4SS.",
+      "de": "Starte Selbstheilung (Werkzeuge), damit Gantry die Engine-Version neu erkennt; nach einem Spiel-Update kann ein neueres UE4SS nötig sein.",
+      "pt": "Executa Autocorreção (Ferramentas) para o Gantry detetar outra vez a versão do motor; depois de uma atualização do jogo pode ser preciso um UE4SS mais recente.",
+      "pl": "Uruchom Samonaprawa (Narzędzia), aby Gantry ponownie wykrył wersję silnika; po aktualizacji gry może być potrzebny nowszy UE4SS.",
+      "tr": "Gantry'nin motor sürümünü yeniden algılaması için Kendini Onar (Araçlar) çalıştır; oyun güncellemesinden sonra daha yeni bir UE4SS gerekebilir."
+    }
+  },
+  {
+    "id": "game_crashed",
+    "logs": [
+      "ue4ss",
+      "player"
+    ],
+    "contains": [
+      "EXCEPTION_ACCESS_VIOLATION",
+      "Unhandled Exception: EXCEPTION",
+      "Fatal error!"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The game crashed",
+      "ro": "Jocul s-a oprit cu o eroare gravă",
+      "it": "Il gioco è andato in crash",
+      "fr": "Le jeu a planté",
+      "es": "El juego se cerró con un error grave",
+      "ru": "Игра вылетела",
+      "de": "Das Spiel ist abgestürzt",
+      "pt": "O jogo bloqueou",
+      "pl": "Gra się zawiesiła",
+      "tr": "Oyun çöktü"
+    },
+    "cause": {
+      "en": "The log ends with a crash. After a game update or a new mod, a mod is the usual cause.",
+      "ro": "Jurnalul se termină cu un crash. După o actualizare a jocului sau un mod nou, de obicei vinovat este un mod.",
+      "it": "Il log finisce con un crash. Dopo un aggiornamento del gioco o un nuovo mod, di solito la causa è un mod.",
+      "fr": "Le journal se termine par un plantage. Après une mise à jour du jeu ou un nouveau mod, la cause est généralement un mod.",
+      "es": "El registro termina con un cierre inesperado. Tras una actualización del juego o un mod nuevo, la causa suele ser un mod.",
+      "ru": "Журнал заканчивается сбоем. После обновления игры или нового мода обычно виноват мод.",
+      "de": "Das Protokoll endet mit einem Absturz. Nach einem Spiel-Update oder einer neuen Mod ist meist eine Mod die Ursache.",
+      "pt": "O registo termina com um bloqueio. Depois de uma atualização do jogo ou de um mod novo, a causa costuma ser um mod.",
+      "pl": "Dziennik kończy się awarią. Po aktualizacji gry lub nowym modzie zwykle winny jest mod.",
+      "tr": "Günlük bir çökmeyle bitiyor. Oyun güncellemesinden ya da yeni bir modtan sonra genellikle sebep bir moddur."
+    },
+    "fix": {
+      "en": "Open the Crash Detective: it switches mods off and on in rounds until it finds the one that crashes the game.",
+      "ro": "Deschide Crash Detective: oprește și pornește modurile în runde până găsește pe cel care blochează jocul.",
+      "it": "Apri Crash Detective: spegne e riaccende i mod a turni finché trova quello che manda in crash il gioco.",
+      "fr": "Ouvre Crash Detective : il désactive et réactive les mods par tours jusqu'à trouver celui qui fait planter le jeu.",
+      "es": "Abre Crash Detective: apaga y enciende los mods por rondas hasta encontrar el que cierra el juego.",
+      "ru": "Открой «Crash Detective»: он выключает и включает моды по кругам, пока не найдёт тот, что роняет игру.",
+      "de": "Öffne den Absturzdetektiv: Er schaltet Mods in Runden aus und an, bis er die findet, die das Spiel zum Absturz bringt.",
+      "pt": "Abre o Detetive de Falhas: desliga e liga os mods por rondas até encontrar o que bloqueia o jogo.",
+      "pl": "Otwórz Detektywa awarii: wyłącza i włącza mody w rundach, aż znajdzie ten, który wywołuje awarię.",
+      "tr": "Çökme Dedektifi aracını aç: oyunu çökerten modu bulana kadar modları turlar halinde kapatıp açar."
+    }
+  },
+  {
+    "id": "disk_full",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player",
+      "ue4ss",
+      "proton"
+    ],
+    "contains": [
+      "No space left on device",
+      "There is not enough space on the disk",
+      "ENOSPC"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The disk is full",
+      "ro": "Discul este plin",
+      "it": "Il disco è pieno",
+      "fr": "Le disque est plein",
+      "es": "El disco está lleno",
+      "ru": "Диск заполнен",
+      "de": "Der Datenträger ist voll",
+      "pt": "O disco está cheio",
+      "pl": "Dysk jest pełny",
+      "tr": "Disk dolu"
+    },
+    "cause": {
+      "en": "The game or a mod could not write a file.",
+      "ro": "Jocul sau un mod nu a putut scrie un fișier.",
+      "it": "Il gioco o un mod non è riuscito a scrivere un file.",
+      "fr": "Le jeu ou un mod n'a pas pu écrire un fichier.",
+      "es": "El juego o un mod no pudo escribir un archivo.",
+      "ru": "Игре или моду не удалось записать файл.",
+      "de": "Das Spiel oder eine Mod konnte eine Datei nicht schreiben.",
+      "pt": "O jogo ou um mod não conseguiu gravar um ficheiro.",
+      "pl": "Gra lub mod nie zdołały zapisać pliku.",
+      "tr": "Oyun ya da bir mod bir dosyayı yazamadı."
+    },
+    "fix": {
+      "en": "Free space on the drive with the game or the library (Tools, Backup and disk shows what Gantry itself uses).",
+      "ro": "Eliberează spațiu pe unitatea cu jocul sau cu biblioteca (Unelte, Copie de siguranță și disc arată ce folosește Gantry însuși).",
+      "it": "Libera spazio sull'unità con il gioco o con la libreria (Strumenti, Backup e disco mostra cosa usa Gantry stesso).",
+      "fr": "Libère de l'espace sur le disque du jeu ou de la bibliothèque (Outils, Sauvegarde et disque montre ce que Gantry utilise lui-même).",
+      "es": "Libera espacio en la unidad del juego o de la biblioteca (Herramientas, Copia y disco muestra lo que usa el propio Gantry).",
+      "ru": "Освободи место на диске с игрой или библиотекой (Инструменты, «Резервные копии и диск» показывает, что занимает сам Gantry).",
+      "de": "Schaffe Platz auf dem Laufwerk mit dem Spiel oder der Bibliothek (Werkzeuge, Sicherung & Speicher zeigt, was Gantry selbst belegt).",
+      "pt": "Liberta espaço na unidade com o jogo ou a biblioteca (Ferramentas, Backup e disco mostra o que o próprio Gantry usa).",
+      "pl": "Zwolnij miejsce na dysku z grą lub biblioteką (Narzędzia, Kopia i dysk pokazuje, czego używa sam Gantry).",
+      "tr": "Oyunun ya da kitaplığın bulunduğu sürücüde yer aç (Araçlar, Yedek ve disk Gantry'nin kendisinin neyi kullandığını gösterir)."
+    }
+  },
+  {
+    "id": "permission_denied",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player"
+    ],
+    "contains": [
+      "UnauthorizedAccessException",
+      "Access to the path"
+    ],
+    "also": [
+      "denied",
+      "Denied",
+      "UnauthorizedAccess"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A file could not be written (permission denied)",
+      "ro": "Un fișier nu a putut fi scris (permisiune refuzată)",
+      "it": "Non è stato possibile scrivere un file (permesso negato)",
+      "fr": "Un fichier n'a pas pu être écrit (autorisation refusée)",
+      "es": "No se pudo escribir un archivo (permiso denegado)",
+      "ru": "Не удалось записать файл (доступ запрещён)",
+      "de": "Eine Datei konnte nicht geschrieben werden (Zugriff verweigert)",
+      "pt": "Não foi possível gravar um ficheiro (permissão negada)",
+      "pl": "Nie udało się zapisać pliku (odmowa dostępu)",
+      "tr": "Bir dosya yazılamadı (izin reddedildi)"
+    },
+    "cause": {
+      "en": "The game or a mod is not allowed to write there: a read-only drive, or a folder that belongs to another user.",
+      "ro": "Jocul sau un mod nu are voie să scrie acolo: o unitate doar pentru citire sau un folder care aparține altui utilizator.",
+      "it": "Il gioco o un mod non ha il permesso di scrivere lì: un'unità di sola lettura o una cartella di un altro utente.",
+      "fr": "Le jeu ou un mod n'a pas le droit d'écrire là : un disque en lecture seule, ou un dossier appartenant à un autre utilisateur.",
+      "es": "El juego o un mod no tiene permiso para escribir ahí: una unidad de solo lectura o una carpeta de otro usuario.",
+      "ru": "Игре или моду нельзя писать туда: диск только для чтения или папка другого пользователя.",
+      "de": "Das Spiel oder eine Mod darf dort nicht schreiben: ein schreibgeschütztes Laufwerk oder ein Ordner eines anderen Benutzers.",
+      "pt": "O jogo ou um mod não tem permissão para gravar ali: uma unidade só de leitura ou uma pasta de outro utilizador.",
+      "pl": "Gra lub mod nie ma prawa tam zapisywać: dysk tylko do odczytu albo folder innego użytkownika.",
+      "tr": "Oyun ya da bir mod oraya yazamaz: salt okunur bir sürücü ya da başka bir kullanıcıya ait bir klasör."
+    },
+    "fix": {
+      "en": "Make sure the game folder is yours and its drive is not mounted read-only.",
+      "ro": "Asigură-te că folderul jocului este al tău și că unitatea lui nu este montată doar pentru citire.",
+      "it": "Assicurati che la cartella del gioco sia tua e che la sua unità non sia montata in sola lettura.",
+      "fr": "Assure-toi que le dossier du jeu t'appartient et que son disque n'est pas monté en lecture seule.",
+      "es": "Asegúrate de que la carpeta del juego es tuya y de que su unidad no está montada en solo lectura.",
+      "ru": "Убедись, что папка игры принадлежит тебе, а её диск не смонтирован только для чтения.",
+      "de": "Stelle sicher, dass der Spielordner dir gehört und sein Laufwerk nicht schreibgeschützt eingebunden ist.",
+      "pt": "Garante que a pasta do jogo é tua e que a unidade dela não está montada só para leitura.",
+      "pl": "Upewnij się, że folder gry należy do ciebie, a jego dysk nie jest zamontowany tylko do odczytu.",
+      "tr": "Oyun klasörünün sana ait olduğundan ve sürücüsünün salt okunur bağlanmadığından emin ol."
+    }
+  },
+  {
+    "id": "anti_cheat_blocked",
+    "logs": [
+      "player",
+      "ue4ss",
+      "proton"
+    ],
+    "contains": [
+      "EasyAntiCheat",
+      "BattlEye",
+      "BEService"
+    ],
+    "also": [
+      "not running",
+      "Fail",
+      "fail",
+      "Error",
+      "mismatch",
+      "modif",
+      "Launch"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "Anti-cheat is blocking the game",
+      "ro": "Anti-cheat blochează jocul",
+      "it": "L'anti-cheat sta bloccando il gioco",
+      "fr": "L'anti-triche bloque le jeu",
+      "es": "El antitrampas está bloqueando el juego",
+      "ru": "Античит блокирует игру",
+      "de": "Der Anti-Cheat blockiert das Spiel",
+      "pt": "O anti-batota está a bloquear o jogo",
+      "pl": "Anti-cheat blokuje grę",
+      "tr": "Hile koruması oyunu engelliyor"
+    },
+    "cause": {
+      "en": "The game checks its files and does not allow modified ones (and could ban the account).",
+      "ro": "Jocul își verifică fișierele și nu le acceptă pe cele modificate (și ar putea bana contul).",
+      "it": "Il gioco controlla i suoi file e non accetta quelli modificati (e potrebbe bannare l'account).",
+      "fr": "Le jeu vérifie ses fichiers et refuse ceux qui sont modifiés (et pourrait bannir le compte).",
+      "es": "El juego comprueba sus archivos y no admite los modificados (y podría banear la cuenta).",
+      "ru": "Игра проверяет свои файлы и не допускает изменённые (и может заблокировать аккаунт).",
+      "de": "Das Spiel prüft seine Dateien und lässt veränderte nicht zu (und könnte das Konto sperren).",
+      "pt": "O jogo verifica os seus ficheiros e não aceita os modificados (e pode banir a conta).",
+      "pl": "Gra sprawdza swoje pliki i nie dopuszcza zmodyfikowanych (może też zablokować konto).",
+      "tr": "Oyun dosyalarını denetler ve değiştirilmiş olanlara izin vermez (hesabı da banlayabilir)."
+    },
+    "fix": {
+      "en": "Play without mods: the Play menu's 'Play without mods' puts the original files back for the session.",
+      "ro": "Joacă fără moduri: «Joacă fără moduri» din meniul Joacă pune fișierele originale la loc pe durata sesiunii.",
+      "it": "Gioca senza mod: «Gioca senza mod» nel menu Gioca rimette i file originali per la sessione.",
+      "fr": "Joue sans mods : « Jouer sans mods » dans le menu Jouer remet les fichiers d'origine pour la session.",
+      "es": "Juega sin mods: «Jugar sin mods» en el menú Jugar devuelve los archivos originales durante la sesión.",
+      "ru": "Играй без модов: пункт «Играть без модов» в меню «Играть» возвращает оригинальные файлы на время сессии.",
+      "de": "Spiele ohne Mods: „Ohne Mods spielen“ im Menü Spielen stellt die Originaldateien für die Sitzung wieder her.",
+      "pt": "Joga sem mods: «Jogar sem mods» no menu Jogar repõe os ficheiros originais durante a sessão.",
+      "pl": "Graj bez modów: „Graj bez modów” w menu Graj przywraca na czas sesji oryginalne pliki.",
+      "tr": "Modsuz oyna: Oyna menüsündeki “Modsuz oyna” oturum boyunca özgün dosyaları geri koyar."
+    }
+  },
+  {
+    "id": "bepinex_missing_dependency",
+    "logs": [
+      "bepinex"
+    ],
+    "contains": [
+      "because it has missing dependencies"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A mod needs another mod that is not installed",
+      "ro": "Un mod are nevoie de alt mod care nu este instalat",
+      "it": "Un mod richiede un altro mod che non è installato",
+      "fr": "Un mod a besoin d'un autre mod qui n'est pas installé",
+      "es": "Un mod necesita otro mod que no está instalado",
+      "ru": "Моду нужен другой мод, который не установлен",
+      "de": "Eine Mod braucht eine andere Mod, die nicht installiert ist",
+      "pt": "Um mod precisa de outro mod que não está instalado",
+      "pl": "Mod potrzebuje innego moda, którego nie ma",
+      "tr": "Bir mod, kurulu olmayan başka bir moda ihtiyaç duyuyor"
+    },
+    "cause": {
+      "en": "BepInEx skipped a mod because the mods it depends on are missing; the line names them.",
+      "ro": "BepInEx a sărit peste un mod pentru că lipsesc modurile de care depinde; linia le numește.",
+      "it": "BepInEx ha saltato un mod perché mancano i mod da cui dipende; la riga li nomina.",
+      "fr": "BepInEx a ignoré un mod car les mods dont il dépend sont absents ; la ligne les nomme.",
+      "es": "BepInEx omitió un mod porque faltan los mods de los que depende; la línea los nombra.",
+      "ru": "BepInEx пропустил мод, потому что нет модов, от которых он зависит; в строке они названы.",
+      "de": "BepInEx hat eine Mod übersprungen, weil die Mods fehlen, von denen sie abhängt; die Zeile nennt sie.",
+      "pt": "O BepInEx ignorou um mod porque faltam os mods de que ele depende; a linha nomeia-os.",
+      "pl": "BepInEx pominął mod, bo brakuje modów, od których zależy; linia je wymienia.",
+      "tr": "BepInEx, bağlı olduğu modlar eksik olduğu için bir modu atladı; satır bunları adlandırıyor."
+    },
+    "fix": {
+      "en": "Open the mod's page (the ℹ button), read the Needs tab and install the mods it lists, then start again.",
+      "ro": "Deschide pagina modului (butonul ℹ), citește fila Necesită, instalează modurile listate și pornește din nou.",
+      "it": "Apri la pagina del mod (il pulsante ℹ), leggi la scheda Richiede, installa i mod elencati e riavvia.",
+      "fr": "Ouvre la page du mod (bouton ℹ), lis l'onglet Nécessite, installe les mods listés puis relance.",
+      "es": "Abre la página del mod (botón ℹ), lee la pestaña Necesita, instala los mods que indica y vuelve a iniciar.",
+      "ru": "Открой страницу мода (кнопка ℹ), прочитай вкладку «Требуется», установи перечисленные моды и запусти снова.",
+      "de": "Öffne die Seite der Mod (Schaltfläche ℹ), lies den Reiter Benötigt, installiere die genannten Mods und starte neu.",
+      "pt": "Abre a página do mod (botão ℹ), lê o separador Precisa de, instala os mods listados e arranca outra vez.",
+      "pl": "Otwórz stronę moda (przycisk ℹ), przeczytaj kartę Wymaga, zainstaluj wymienione mody i uruchom ponownie.",
+      "tr": "Modun sayfasını aç (ℹ düğmesi), Gerektirir sekmesini oku, listelenen modları kur ve yeniden başlat."
+    }
+  },
+  {
+    "id": "bepinex_wrong_version",
+    "logs": [
+      "bepinex"
+    ],
+    "contains": [
+      "targets a wrong version of BepInEx"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A mod was made for another BepInEx version",
+      "ro": "Un mod a fost făcut pentru altă versiune BepInEx",
+      "it": "Un mod è fatto per un'altra versione di BepInEx",
+      "fr": "Un mod est fait pour une autre version de BepInEx",
+      "es": "Un mod está hecho para otra versión de BepInEx",
+      "ru": "Мод сделан для другой версии BepInEx",
+      "de": "Eine Mod wurde für eine andere BepInEx-Version gebaut",
+      "pt": "Um mod foi feito para outra versão do BepInEx",
+      "pl": "Mod został zrobiony pod inną wersję BepInEx",
+      "tr": "Bir mod başka bir BepInEx sürümü için yapılmış"
+    },
+    "cause": {
+      "en": "BepInEx warns that the mod targets a different BepInEx version and might not work.",
+      "ro": "BepInEx avertizează că modul țintește altă versiune BepInEx și s-ar putea să nu funcționeze.",
+      "it": "BepInEx avverte che il mod punta a un'altra versione di BepInEx e potrebbe non funzionare.",
+      "fr": "BepInEx prévient que le mod vise une autre version de BepInEx et pourrait ne pas fonctionner.",
+      "es": "BepInEx avisa de que el mod apunta a otra versión de BepInEx y puede no funcionar.",
+      "ru": "BepInEx предупреждает, что мод рассчитан на другую версию BepInEx и может не работать.",
+      "de": "BepInEx warnt, dass die Mod auf eine andere BepInEx-Version zielt und eventuell nicht funktioniert.",
+      "pt": "O BepInEx avisa que o mod visa outra versão do BepInEx e pode não funcionar.",
+      "pl": "BepInEx ostrzega, że mod jest przeznaczony dla innej wersji BepInEx i może nie działać.",
+      "tr": "BepInEx, modun başka bir BepInEx sürümünü hedeflediğini ve çalışmayabileceğini bildiriyor."
+    },
+    "fix": {
+      "en": "Update the mod. BepInEx 5 is for Mono games, BepInEx 6 for IL2CPP games; the switch is in the Compatibility window.",
+      "ro": "Actualizează modul. BepInEx 5 este pentru jocurile Mono, BepInEx 6 pentru cele IL2CPP; comutarea este în fereastra Compatibilitate.",
+      "it": "Aggiorna il mod. BepInEx 5 è per i giochi Mono, BepInEx 6 per quelli IL2CPP; il cambio si trova nella finestra Compatibilità.",
+      "fr": "Mets le mod à jour. BepInEx 5 est pour les jeux Mono, BepInEx 6 pour les jeux IL2CPP ; le changement se trouve dans la fenêtre Compatibilité.",
+      "es": "Actualiza el mod. BepInEx 5 es para juegos Mono y BepInEx 6 para IL2CPP; el cambio está en la ventana Compatibilidad.",
+      "ru": "Обнови мод. BepInEx 5 нужен для игр на Mono, BepInEx 6 — для игр на IL2CPP; переключатель находится в окне «Совместимость».",
+      "de": "Aktualisiere die Mod. BepInEx 5 ist für Mono-Spiele, BepInEx 6 für IL2CPP-Spiele; umgeschaltet wird im Fenster Kompatibilität.",
+      "pt": "Atualiza o mod. O BepInEx 5 é para jogos Mono, o BepInEx 6 para jogos IL2CPP; a troca está na janela Compatibilidade.",
+      "pl": "Zaktualizuj mod. BepInEx 5 jest dla gier Mono, BepInEx 6 dla gier IL2CPP; przełącznik jest w oknie Zgodność.",
+      "tr": "Modu güncelle. BepInEx 5 Mono oyunları, BepInEx 6 IL2CPP oyunları içindir; geçiş Uyumluluk penceresinde."
+    }
+  },
+  {
+    "id": "harmony_failed",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player"
+    ],
+    "contains": [
+      "HarmonyException",
+      "Patching exception in method"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A mod could not hook into the game",
+      "ro": "Un mod nu s-a putut conecta la joc",
+      "it": "Un mod non è riuscito ad agganciarsi al gioco",
+      "fr": "Un mod n'a pas pu s'accrocher au jeu",
+      "es": "Un mod no pudo engancharse al juego",
+      "ru": "Мод не смог встроиться в игру",
+      "de": "Eine Mod konnte sich nicht ins Spiel einklinken",
+      "pt": "Um mod não conseguiu ligar-se ao jogo",
+      "pl": "Mod nie zdołał podpiąć się do gry",
+      "tr": "Bir mod oyuna bağlanamadı"
+    },
+    "cause": {
+      "en": "A mod tried to change a part of the game's code that is not there any more (usually after a game update) or that another mod already changed.",
+      "ro": "Un mod a încercat să schimbe o parte din codul jocului care nu mai există (de obicei după o actualizare) sau pe care alt mod a schimbat-o deja.",
+      "it": "Un mod ha provato a cambiare una parte del codice del gioco che non esiste più (di solito dopo un aggiornamento) o che un altro mod ha già cambiato.",
+      "fr": "Un mod a essayé de modifier une partie du code du jeu qui n'existe plus (souvent après une mise à jour) ou qu'un autre mod a déjà modifiée.",
+      "es": "Un mod intentó cambiar una parte del código del juego que ya no existe (normalmente tras una actualización) o que otro mod ya cambió.",
+      "ru": "Мод попытался изменить часть кода игры, которой больше нет (обычно после обновления) или которую уже изменил другой мод.",
+      "de": "Eine Mod wollte einen Teil des Spielcodes ändern, der nicht mehr existiert (meist nach einem Update) oder den schon eine andere Mod geändert hat.",
+      "pt": "Um mod tentou alterar uma parte do código do jogo que já não existe (normalmente após uma atualização) ou que outro mod já alterou.",
+      "pl": "Mod próbował zmienić fragment kodu gry, którego już nie ma (zwykle po aktualizacji) albo który zmienił już inny mod.",
+      "tr": "Bir mod, oyun kodunun artık var olmayan (genellikle güncellemeden sonra) ya da başka bir modun zaten değiştirdiği bir bölümünü değiştirmeye çalıştı."
+    },
+    "fix": {
+      "en": "Update the mod, or use the Crash Detective to find which mod it is and switch it off.",
+      "ro": "Actualizează modul sau folosește Crash Detective ca să afli ce mod este și oprește-l.",
+      "it": "Aggiorna il mod, oppure usa Crash Detective per scoprire quale mod è e spegnerlo.",
+      "fr": "Mets le mod à jour, ou utilise Crash Detective pour trouver de quel mod il s'agit et le désactiver.",
+      "es": "Actualiza el mod, o usa Crash Detective para averiguar cuál es y apagarlo.",
+      "ru": "Обнови мод или используй «Crash Detective», чтобы найти, какой это мод, и выключить его.",
+      "de": "Aktualisiere die Mod oder finde mit dem Absturzdetektiv heraus, welche es ist, und schalte sie aus.",
+      "pt": "Atualiza o mod, ou usa o Detetive de Falhas para descobrir qual é e desligá-lo.",
+      "pl": "Zaktualizuj mod albo użyj Detektywa awarii, by znaleźć, który to mod, i go wyłączyć.",
+      "tr": "Modu güncelle ya da hangi mod olduğunu bulup kapatmak için Çökme Dedektifi aracını kullan."
+    }
+  },
+  {
+    "id": "missing_method",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player"
+    ],
+    "contains": [
+      "MissingMethodException",
+      "MissingFieldException",
+      "MissingMemberException"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A mod does not fit this version of the game",
+      "ro": "Un mod nu se potrivește cu această versiune a jocului",
+      "it": "Un mod non è adatto a questa versione del gioco",
+      "fr": "Un mod ne convient pas à cette version du jeu",
+      "es": "Un mod no encaja con esta versión del juego",
+      "ru": "Мод не подходит к этой версии игры",
+      "de": "Eine Mod passt nicht zu dieser Spielversion",
+      "pt": "Um mod não serve para esta versão do jogo",
+      "pl": "Mod nie pasuje do tej wersji gry",
+      "tr": "Bir mod bu oyun sürümüne uymuyor"
+    },
+    "cause": {
+      "en": "The mod calls something that does not exist in this version of the game or of another mod: it was made for a different version.",
+      "ro": "Modul apelează ceva ce nu există în această versiune a jocului sau a altui mod: a fost făcut pentru altă versiune.",
+      "it": "Il mod chiama qualcosa che non esiste in questa versione del gioco o di un altro mod: è fatto per un'altra versione.",
+      "fr": "Le mod appelle quelque chose qui n'existe pas dans cette version du jeu ou d'un autre mod : il est fait pour une autre version.",
+      "es": "El mod llama a algo que no existe en esta versión del juego o de otro mod: está hecho para otra versión.",
+      "ru": "Мод обращается к тому, чего нет в этой версии игры или другого мода: он сделан для другой версии.",
+      "de": "Die Mod ruft etwas auf, das es in dieser Version des Spiels oder einer anderen Mod nicht gibt: Sie wurde für eine andere Version gebaut.",
+      "pt": "O mod chama algo que não existe nesta versão do jogo ou de outro mod: foi feito para outra versão.",
+      "pl": "Mod wywołuje coś, czego nie ma w tej wersji gry lub innego moda: został zrobiony pod inną wersję.",
+      "tr": "Mod, bu oyun sürümünde ya da başka bir modda bulunmayan bir şeyi çağırıyor: başka bir sürüm için yapılmış."
+    },
+    "fix": {
+      "en": "Update the mod (or the mod it needs). After a game update, wait for the mod's author to release a new build.",
+      "ro": "Actualizează modul (sau modul de care are nevoie). După o actualizare a jocului, așteaptă ca autorul modului să lanseze o versiune nouă.",
+      "it": "Aggiorna il mod (o il mod di cui ha bisogno). Dopo un aggiornamento del gioco, aspetta che l'autore pubblichi una nuova versione.",
+      "fr": "Mets le mod à jour (ou le mod dont il a besoin). Après une mise à jour du jeu, attends que l'auteur publie une nouvelle version.",
+      "es": "Actualiza el mod (o el mod que necesita). Tras una actualización del juego, espera a que su autor publique una versión nueva.",
+      "ru": "Обнови мод (или мод, который ему нужен). После обновления игры дождись, пока автор выпустит новую версию.",
+      "de": "Aktualisiere die Mod (oder die Mod, die sie braucht). Warte nach einem Spiel-Update, bis der Autor eine neue Version veröffentlicht.",
+      "pt": "Atualiza o mod (ou o mod de que precisa). Depois de uma atualização do jogo, espera que o autor publique uma versão nova.",
+      "pl": "Zaktualizuj mod (albo mod, którego potrzebuje). Po aktualizacji gry poczekaj, aż autor wyda nową wersję.",
+      "tr": "Modu (veya ihtiyaç duyduğu modu) güncelle. Oyun güncellemesinden sonra yazarın yeni bir sürüm yayınlamasını bekle."
+    }
+  },
+  {
+    "id": "type_load",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player"
+    ],
+    "contains": [
+      "ReflectionTypeLoadException",
+      "TypeLoadException",
+      "Could not resolve type"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A mod uses a part that is missing or has changed",
+      "ro": "Un mod folosește o parte care lipsește sau s-a schimbat",
+      "it": "Un mod usa una parte mancante o cambiata",
+      "fr": "Un mod utilise une partie manquante ou modifiée",
+      "es": "Un mod usa una parte que falta o ha cambiado",
+      "ru": "Мод использует часть, которой нет или которая изменилась",
+      "de": "Eine Mod nutzt einen Teil, der fehlt oder sich geändert hat",
+      "pt": "Um mod usa uma parte que falta ou mudou",
+      "pl": "Mod używa elementu, którego brakuje lub który się zmienił",
+      "tr": "Bir mod, eksik ya da değişmiş bir parçayı kullanıyor"
+    },
+    "cause": {
+      "en": "The mod needs a class from the game or from another mod, and the one installed is a different version.",
+      "ro": "Modul are nevoie de o clasă din joc sau din alt mod, iar cea instalată este într-o versiune diferită.",
+      "it": "Il mod richiede una classe del gioco o di un altro mod, e quella installata è di una versione diversa.",
+      "fr": "Le mod a besoin d'une classe du jeu ou d'un autre mod, et celle qui est installée est d'une autre version.",
+      "es": "El mod necesita una clase del juego o de otro mod, y la instalada es de otra versión.",
+      "ru": "Моду нужен класс из игры или другого мода, а установлен класс другой версии.",
+      "de": "Die Mod braucht eine Klasse aus dem Spiel oder einer anderen Mod, und die installierte ist eine andere Version.",
+      "pt": "O mod precisa de uma classe do jogo ou de outro mod, e a instalada é de outra versão.",
+      "pl": "Mod potrzebuje klasy z gry lub innego moda, a zainstalowana jest w innej wersji.",
+      "tr": "Mod, oyundan ya da başka bir moddan bir sınıfa ihtiyaç duyuyor ve kurulu olan farklı bir sürüm."
+    },
+    "fix": {
+      "en": "Update the mod and the mods it needs; remove mods made for another version of the game.",
+      "ro": "Actualizează modul și modurile de care are nevoie; elimină modurile făcute pentru altă versiune a jocului.",
+      "it": "Aggiorna il mod e i mod di cui ha bisogno; rimuovi i mod fatti per un'altra versione del gioco.",
+      "fr": "Mets à jour le mod et ceux dont il a besoin ; retire les mods faits pour une autre version du jeu.",
+      "es": "Actualiza el mod y los mods que necesita; quita los mods hechos para otra versión del juego.",
+      "ru": "Обнови мод и нужные ему моды; удали моды, сделанные для другой версии игры.",
+      "de": "Aktualisiere die Mod und die Mods, die sie braucht; entferne Mods für eine andere Spielversion.",
+      "pt": "Atualiza o mod e os mods de que precisa; remove os mods feitos para outra versão do jogo.",
+      "pl": "Zaktualizuj mod i mody, których potrzebuje; usuń mody zrobione pod inną wersję gry.",
+      "tr": "Modu ve ihtiyaç duyduğu modları güncelle; oyunun başka bir sürümü için yapılmış modları kaldır."
+    }
+  },
+  {
+    "id": "dll_not_found",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player"
+    ],
+    "contains": [
+      "DllNotFoundException"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A mod needs a library file that is not there",
+      "ro": "Un mod are nevoie de un fișier-bibliotecă care lipsește",
+      "it": "Un mod richiede un file libreria che manca",
+      "fr": "Un mod a besoin d'un fichier de bibliothèque absent",
+      "es": "Un mod necesita un archivo de biblioteca que falta",
+      "ru": "Моду нужен файл библиотеки, которого нет",
+      "de": "Eine Mod braucht eine Bibliotheksdatei, die fehlt",
+      "pt": "Um mod precisa de um ficheiro de biblioteca que falta",
+      "pl": "Modowi brakuje pliku biblioteki",
+      "tr": "Bir mod, bulunmayan bir kütüphane dosyasına ihtiyaç duyuyor"
+    },
+    "cause": {
+      "en": "A mod tried to load a library (a .dll) that is missing from the game folder or cannot be loaded in this Wine prefix.",
+      "ro": "Un mod a încercat să încarce o bibliotecă (.dll) care lipsește din folderul jocului sau nu poate fi încărcată în acest prefix Wine.",
+      "it": "Un mod ha provato a caricare una libreria (.dll) che manca nella cartella del gioco o non può essere caricata in questo prefisso Wine.",
+      "fr": "Un mod a essayé de charger une bibliothèque (.dll) absente du dossier du jeu ou qui ne peut pas être chargée dans ce préfixe Wine.",
+      "es": "Un mod intentó cargar una biblioteca (.dll) que falta en la carpeta del juego o que no se puede cargar en este prefijo Wine.",
+      "ru": "Мод попытался загрузить библиотеку (.dll), которой нет в папке игры или которую нельзя загрузить в этом префиксе Wine.",
+      "de": "Eine Mod wollte eine Bibliothek (.dll) laden, die im Spielordner fehlt oder in diesem Wine-Präfix nicht geladen werden kann.",
+      "pt": "Um mod tentou carregar uma biblioteca (.dll) que falta na pasta do jogo ou não pode ser carregada neste prefixo Wine.",
+      "pl": "Mod próbował załadować bibliotekę (.dll), której brakuje w folderze gry albo której nie można załadować w tym prefiksie Wine.",
+      "tr": "Bir mod, oyun klasöründe bulunmayan ya da bu Wine prefix'inde yüklenemeyen bir kütüphaneyi (.dll) yüklemeye çalıştı."
+    },
+    "fix": {
+      "en": "Reinstall the mod from its original download so that all its files are placed; check its page for extra requirements.",
+      "ro": "Reinstalează modul din descărcarea originală ca toate fișierele lui să fie puse la loc; verifică pagina lui pentru cerințe suplimentare.",
+      "it": "Reinstalla il mod dal download originale così che tutti i suoi file siano al loro posto; controlla la sua pagina per requisiti aggiuntivi.",
+      "fr": "Réinstalle le mod depuis son téléchargement d'origine pour que tous ses fichiers soient en place ; vérifie sa page pour d'autres prérequis.",
+      "es": "Reinstala el mod desde su descarga original para que todos sus archivos queden en su sitio; mira su página por si pide algo más.",
+      "ru": "Переустанови мод из исходной загрузки, чтобы все его файлы оказались на месте; проверь на его странице дополнительные требования.",
+      "de": "Installiere die Mod aus dem ursprünglichen Download neu, damit alle Dateien an ihren Platz kommen; prüfe ihre Seite auf weitere Voraussetzungen.",
+      "pt": "Reinstala o mod a partir da transferência original para que todos os ficheiros fiquem no sítio; vê a página dele para requisitos extra.",
+      "pl": "Zainstaluj mod ponownie z oryginalnego pobrania, aby wszystkie jego pliki trafiły na miejsce; sprawdź jego stronę pod kątem dodatkowych wymagań.",
+      "tr": "Modu özgün indirmesinden yeniden kur ki tüm dosyaları yerine konsun; ek gereksinimler için sayfasına bak."
+    }
+  },
+  {
+    "id": "config_syntax",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player"
+    ],
+    "contains": [
+      "JsonReaderException",
+      "JsonSerializationException",
+      "XmlException",
+      "Unexpected character encountered while parsing"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A mod's settings file is damaged",
+      "ro": "Fișierul de setări al unui mod este deteriorat",
+      "it": "Il file di impostazioni di un mod è danneggiato",
+      "fr": "Le fichier de réglages d'un mod est abîmé",
+      "es": "El archivo de ajustes de un mod está dañado",
+      "ru": "Файл настроек мода повреждён",
+      "de": "Die Einstellungsdatei einer Mod ist beschädigt",
+      "pt": "O ficheiro de definições de um mod está danificado",
+      "pl": "Plik ustawień moda jest uszkodzony",
+      "tr": "Bir modun ayar dosyası bozuk"
+    },
+    "cause": {
+      "en": "A settings or data file has a typo or was cut off, so the mod cannot read it.",
+      "ro": "Un fișier de setări sau de date are o greșeală sau a fost tăiat, așa că modul nu îl poate citi.",
+      "it": "Un file di impostazioni o dati ha un errore di battitura o è stato troncato, quindi il mod non riesce a leggerlo.",
+      "fr": "Un fichier de réglages ou de données a une faute de frappe ou a été coupé, donc le mod ne peut pas le lire.",
+      "es": "Un archivo de ajustes o datos tiene una errata o quedó cortado, así que el mod no puede leerlo.",
+      "ru": "В файле настроек или данных опечатка, или он обрезан, поэтому мод не может его прочитать.",
+      "de": "Eine Einstellungs- oder Datendatei hat einen Tippfehler oder wurde abgeschnitten, deshalb kann die Mod sie nicht lesen.",
+      "pt": "Um ficheiro de definições ou dados tem um erro de escrita ou ficou cortado, por isso o mod não o consegue ler.",
+      "pl": "W pliku ustawień lub danych jest literówka albo został ucięty, więc mod nie może go odczytać.",
+      "tr": "Bir ayar ya da veri dosyasında yazım hatası var veya yarım kalmış, bu yüzden mod onu okuyamıyor."
+    },
+    "fix": {
+      "en": "Open Mod Settings, pick that mod's file and press Restore original; Gantry keeps the first version of every file it edits.",
+      "ro": "Deschide Setări moduri, alege fișierul acelui mod și apasă «Restaurează originalul»; Gantry păstrează prima versiune a fiecărui fișier pe care îl editează.",
+      "it": "Apri Impostazioni mod, scegli il file di quel mod e premi «Ripristina originale»; Gantry conserva la prima versione di ogni file che modifica.",
+      "fr": "Ouvre Réglages des mods, choisis le fichier de ce mod et appuie sur « Restaurer l'original » ; Gantry garde la première version de chaque fichier qu'il modifie.",
+      "es": "Abre Ajustes de mods, elige el archivo de ese mod y pulsa «Restaurar original»; Gantry conserva la primera versión de cada archivo que edita.",
+      "ru": "Открой «Настройки модов», выбери файл этого мода и нажми «Восстановить оригинал»; Gantry хранит первую версию каждого редактируемого файла.",
+      "de": "Öffne Mod-Einstellungen, wähle die Datei dieser Mod und klicke auf „Original wiederherstellen“; Gantry behält die erste Version jeder Datei, die es bearbeitet.",
+      "pt": "Abre Configurações do mod, escolhe o ficheiro desse mod e carrega em «Restaurar o original»; o Gantry guarda a primeira versão de cada ficheiro que edita.",
+      "pl": "Otwórz Ustawienia modów, wybierz plik tego moda i naciśnij „Przywróć oryginał”; Gantry zachowuje pierwszą wersję każdego edytowanego pliku.",
+      "tr": "Mod ayarları bölümünü aç, o modun dosyasını seç ve “Orijinali geri yükle” düğmesine bas; Gantry düzenlediği her dosyanın ilk sürümünü saklar."
+    }
+  },
+  {
+    "id": "out_of_memory",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player",
+      "proton"
+    ],
+    "contains": [
+      "OutOfMemoryException",
+      "std::bad_alloc",
+      "out of memory"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The game ran out of memory",
+      "ro": "Jocului i s-a terminat memoria",
+      "it": "Al gioco è finita la memoria",
+      "fr": "Le jeu a manqué de mémoire",
+      "es": "Al juego se le acabó la memoria",
+      "ru": "Игре не хватило памяти",
+      "de": "Dem Spiel ist der Speicher ausgegangen",
+      "pt": "Ao jogo acabou a memória",
+      "pl": "Grze zabrakło pamięci",
+      "tr": "Oyunun belleği bitti"
+    },
+    "cause": {
+      "en": "The game or a mod asked for more memory than was available, so it stopped. Large texture or model mods are a common cause.",
+      "ro": "Jocul sau un mod a cerut mai multă memorie decât era disponibilă, așa că s-a oprit. Modurile mari de texturi sau modele sunt o cauză frecventă.",
+      "it": "Il gioco o un mod ha chiesto più memoria di quella disponibile, quindi si è fermato. I mod grandi di texture o modelli sono una causa comune.",
+      "fr": "Le jeu ou un mod a demandé plus de mémoire que disponible, il s'est donc arrêté. Les gros mods de textures ou de modèles en sont une cause fréquente.",
+      "es": "El juego o un mod pidió más memoria de la disponible, así que se detuvo. Los mods grandes de texturas o modelos son una causa común.",
+      "ru": "Игра или мод запросили больше памяти, чем было доступно, и остановились. Частая причина — крупные моды текстур или моделей.",
+      "de": "Das Spiel oder eine Mod forderte mehr Speicher an als vorhanden war und hielt an. Große Textur- oder Modell-Mods sind eine häufige Ursache.",
+      "pt": "O jogo ou um mod pediu mais memória do que a disponível, por isso parou. Mods grandes de texturas ou modelos são uma causa comum.",
+      "pl": "Gra lub mod zażądały więcej pamięci, niż było dostępne, więc się zatrzymały. Częstą przyczyną są duże mody tekstur lub modeli.",
+      "tr": "Oyun ya da bir mod mevcut olandan fazla bellek istedi ve durdu. Büyük doku ya da model modları sık görülen bir nedendir."
+    },
+    "fix": {
+      "en": "Close other programs, lower the game's texture quality and switch off the biggest mods. 32-bit games can use more memory with the large-address tweak in the Compatibility window.",
+      "ro": "Închide alte programe, scade calitatea texturilor din joc și oprește cele mai mari moduri. Jocurile pe 32 de biți pot folosi mai multă memorie cu ajustarea «large address» din fereastra Compatibilitate.",
+      "it": "Chiudi altri programmi, abbassa la qualità delle texture del gioco e spegni i mod più grandi. I giochi a 32 bit possono usare più memoria con la regolazione «large address» nella finestra Compatibilità.",
+      "fr": "Ferme d'autres programmes, baisse la qualité des textures du jeu et désactive les plus gros mods. Les jeux 32 bits peuvent utiliser plus de mémoire avec le réglage « large address » de la fenêtre Compatibilité.",
+      "es": "Cierra otros programas, baja la calidad de texturas del juego y apaga los mods más grandes. Los juegos de 32 bits pueden usar más memoria con el ajuste «large address» de la ventana Compatibilidad.",
+      "ru": "Закрой другие программы, понизь качество текстур в игре и выключи самые большие моды. 32-битные игры могут использовать больше памяти с настройкой «large address» в окне «Совместимость».",
+      "de": "Schließe andere Programme, senke die Texturqualität des Spiels und schalte die größten Mods aus. 32-Bit-Spiele können mit der Einstellung „large address“ im Fenster Kompatibilität mehr Speicher nutzen.",
+      "pt": "Fecha outros programas, baixa a qualidade das texturas do jogo e desliga os maiores mods. Os jogos de 32 bits podem usar mais memória com o ajuste «large address» na janela Compatibilidade.",
+      "pl": "Zamknij inne programy, obniż jakość tekstur w grze i wyłącz największe mody. Gry 32-bitowe mogą używać więcej pamięci dzięki ustawieniu „large address” w oknie Zgodność.",
+      "tr": "Diğer programları kapat, oyunun doku kalitesini düşür ve en büyük modları kapat. 32 bit oyunlar Uyumluluk penceresindeki “large address” ayarıyla daha fazla bellek kullanabilir."
+    }
+  },
+  {
+    "id": "stack_overflow",
+    "logs": [
+      "bepinex",
+      "melonloader",
+      "player",
+      "proton"
+    ],
+    "contains": [
+      "StackOverflowException",
+      "stack overflow"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The game got stuck in an endless loop",
+      "ro": "Jocul s-a blocat într-o buclă fără sfârșit",
+      "it": "Il gioco è rimasto bloccato in un ciclo infinito",
+      "fr": "Le jeu s'est coincé dans une boucle infinie",
+      "es": "El juego se atascó en un bucle infinito",
+      "ru": "Игра застряла в бесконечном цикле",
+      "de": "Das Spiel hängt in einer Endlosschleife",
+      "pt": "O jogo ficou preso num ciclo infinito",
+      "pl": "Gra utknęła w nieskończonej pętli",
+      "tr": "Oyun sonsuz bir döngüye takıldı"
+    },
+    "cause": {
+      "en": "Something kept calling itself until the program ran out of stack space; the cause is almost always a mod.",
+      "ro": "Ceva s-a apelat singur la nesfârșit până când programul a rămas fără spațiu de stivă; cauza este aproape întotdeauna un mod.",
+      "it": "Qualcosa ha continuato a richiamare sé stesso finché il programma ha esaurito lo spazio dello stack; la causa è quasi sempre un mod.",
+      "fr": "Quelque chose s'est appelé lui-même sans fin jusqu'à épuiser la pile ; la cause est presque toujours un mod.",
+      "es": "Algo se llamó a sí mismo sin parar hasta agotar el espacio de pila; la causa casi siempre es un mod.",
+      "ru": "Что-то вызывало само себя, пока у программы не закончилась память стека; причина почти всегда в моде.",
+      "de": "Etwas rief sich immer wieder selbst auf, bis der Stapelspeicher voll war; die Ursache ist fast immer eine Mod.",
+      "pt": "Algo chamou-se a si próprio sem parar até acabar o espaço da pilha; a causa é quase sempre um mod.",
+      "pl": "Coś wywoływało samo siebie, aż skończyło się miejsce na stosie; przyczyną jest niemal zawsze mod.",
+      "tr": "Bir şey kendini çağırmaya devam etti ve yığın alanı tükendi; neden neredeyse her zaman bir moddur."
+    },
+    "fix": {
+      "en": "Use the Crash Detective to find the mod, or switch off the mods you added last.",
+      "ro": "Folosește Crash Detective ca să găsești modul sau oprește modurile adăugate cel mai recent.",
+      "it": "Usa Crash Detective per trovare il mod, oppure spegni i mod aggiunti per ultimi.",
+      "fr": "Utilise Crash Detective pour trouver le mod, ou désactive les mods ajoutés en dernier.",
+      "es": "Usa Crash Detective para encontrar el mod, o apaga los que añadiste al final.",
+      "ru": "Используй «Crash Detective», чтобы найти мод, или выключи моды, добавленные последними.",
+      "de": "Finde die Mod mit dem Absturzdetektiv oder schalte die zuletzt hinzugefügten Mods aus.",
+      "pt": "Usa Detetive de Falhas para encontrar o mod, ou desliga os que adicionaste por último.",
+      "pl": "Użyj Detektywa awarii, by znaleźć mod, albo wyłącz mody dodane jako ostatnie.",
+      "tr": "Modu bulmak için Çökme Dedektifi aracını kullan ya da en son eklediğin modları kapat."
+    }
+  },
+  {
+    "id": "steam_not_running",
+    "logs": [
+      "player",
+      "proton"
+    ],
+    "contains": [
+      "SteamAPI_Init() failed",
+      "Steam must be running to play this game"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "The game cannot reach Steam",
+      "ro": "Jocul nu poate ajunge la Steam",
+      "it": "Il gioco non riesce a raggiungere Steam",
+      "fr": "Le jeu ne peut pas joindre Steam",
+      "es": "El juego no puede conectar con Steam",
+      "ru": "Игра не может связаться со Steam",
+      "de": "Das Spiel erreicht Steam nicht",
+      "pt": "O jogo não consegue contactar o Steam",
+      "pl": "Gra nie może połączyć się ze Steam",
+      "tr": "Oyun Steam'e ulaşamıyor"
+    },
+    "cause": {
+      "en": "The game asked Steam for its services, but Steam is not running or not signed in.",
+      "ro": "Jocul a cerut serviciile Steam, dar Steam nu rulează sau nu este autentificat.",
+      "it": "Il gioco ha chiesto i servizi a Steam, ma Steam non è in esecuzione o non ha effettuato l'accesso.",
+      "fr": "Le jeu a demandé ses services à Steam, mais Steam n'est pas lancé ou pas connecté.",
+      "es": "El juego pidió sus servicios a Steam, pero Steam no está en ejecución o no ha iniciado sesión.",
+      "ru": "Игра запросила службы Steam, но Steam не запущен или не выполнен вход.",
+      "de": "Das Spiel hat Steam um seine Dienste gebeten, aber Steam läuft nicht oder ist nicht angemeldet.",
+      "pt": "O jogo pediu os serviços ao Steam, mas o Steam não está a correr ou não tem sessão iniciada.",
+      "pl": "Gra poprosiła Steam o usługi, ale Steam nie działa albo nie jest zalogowany.",
+      "tr": "Oyun Steam'den hizmetlerini istedi, ancak Steam çalışmıyor ya da oturum açık değil."
+    },
+    "fix": {
+      "en": "Start Steam and sign in, then launch the game again.",
+      "ro": "Pornește Steam și autentifică-te, apoi lansează jocul din nou.",
+      "it": "Avvia Steam e accedi, poi lancia di nuovo il gioco.",
+      "fr": "Lance Steam et connecte-toi, puis relance le jeu.",
+      "es": "Inicia Steam e inicia sesión, y vuelve a lanzar el juego.",
+      "ru": "Запусти Steam и войди в аккаунт, затем снова запусти игру.",
+      "de": "Starte Steam und melde dich an, dann starte das Spiel erneut.",
+      "pt": "Arranca o Steam e inicia sessão, depois lança o jogo outra vez.",
+      "pl": "Uruchom Steam i zaloguj się, potem uruchom grę ponownie.",
+      "tr": "Steam'i başlat ve oturum aç, sonra oyunu yeniden başlat."
+    }
+  },
+  {
+    "id": "proton_unimplemented",
+    "logs": [
+      "proton",
+      "player"
+    ],
+    "contains": [
+      "unimplemented function"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The game needs a Windows function that Wine does not have yet",
+      "ro": "Jocul are nevoie de o funcție Windows pe care Wine încă nu o are",
+      "it": "Il gioco richiede una funzione di Windows che Wine non ha ancora",
+      "fr": "Le jeu a besoin d'une fonction Windows que Wine n'a pas encore",
+      "es": "El juego necesita una función de Windows que Wine aún no tiene",
+      "ru": "Игре нужна функция Windows, которой в Wine ещё нет",
+      "de": "Das Spiel braucht eine Windows-Funktion, die Wine noch nicht hat",
+      "pt": "O jogo precisa de uma função do Windows que o Wine ainda não tem",
+      "pl": "Gra potrzebuje funkcji Windows, której Wine jeszcze nie ma",
+      "tr": "Oyun, Wine'ın henüz sahip olmadığı bir Windows işlevine ihtiyaç duyuyor"
+    },
+    "cause": {
+      "en": "Proton's Wine layer does not implement a function that the game or a mod calls, so the game stops.",
+      "ro": "Stratul Wine al lui Proton nu implementează o funcție apelată de joc sau de un mod, așa că jocul se oprește.",
+      "it": "Il livello Wine di Proton non implementa una funzione richiamata dal gioco o da un mod, quindi il gioco si ferma.",
+      "fr": "La couche Wine de Proton n'implémente pas une fonction appelée par le jeu ou un mod, donc le jeu s'arrête.",
+      "es": "La capa Wine de Proton no implementa una función que llama el juego o un mod, así que el juego se detiene.",
+      "ru": "Слой Wine в Proton не реализует функцию, которую вызывает игра или мод, поэтому игра останавливается.",
+      "de": "Protons Wine-Schicht implementiert eine Funktion nicht, die das Spiel oder eine Mod aufruft, daher bleibt das Spiel stehen.",
+      "pt": "A camada Wine do Proton não implementa uma função que o jogo ou um mod chama, por isso o jogo para.",
+      "pl": "Warstwa Wine w Protonie nie implementuje funkcji wywoływanej przez grę lub mod, więc gra się zatrzymuje.",
+      "tr": "Proton'un Wine katmanı, oyunun ya da bir modun çağırdığı bir işlevi uygulamıyor, bu yüzden oyun duruyor."
+    },
+    "fix": {
+      "en": "Try a newer Proton or GE-Proton in the Compatibility window; if a mod was added just before, switch it off.",
+      "ro": "Încearcă un Proton sau GE-Proton mai nou în fereastra Compatibilitate; dacă tocmai ai adăugat un mod, oprește-l.",
+      "it": "Prova un Proton o GE-Proton più recente nella finestra Compatibilità; se hai appena aggiunto un mod, spegnilo.",
+      "fr": "Essaie un Proton ou GE-Proton plus récent dans la fenêtre Compatibilité ; si un mod vient d'être ajouté, désactive-le.",
+      "es": "Prueba un Proton o GE-Proton más nuevo en la ventana Compatibilidad; si acabas de añadir un mod, apágalo.",
+      "ru": "Попробуй более новый Proton или GE-Proton в окне «Совместимость»; если перед этим добавили мод, выключи его.",
+      "de": "Probiere ein neueres Proton oder GE-Proton im Fenster Kompatibilität; wurde kurz davor eine Mod hinzugefügt, schalte sie aus.",
+      "pt": "Experimenta um Proton ou GE-Proton mais recente na janela Compatibilidade; se acabaste de adicionar um mod, desliga-o.",
+      "pl": "Wypróbuj nowszy Proton lub GE-Proton w oknie Zgodność; jeśli tuż przedtem dodano mod, wyłącz go.",
+      "tr": "Uyumluluk penceresinde daha yeni bir Proton ya da GE-Proton dene; hemen önce bir mod eklendiyse onu kapat."
+    }
+  },
+  {
+    "id": "proton_kernel32",
+    "logs": [
+      "proton"
+    ],
+    "contains": [
+      "could not load kernel32.dll"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The game's Wine prefix is broken",
+      "ro": "Prefixul Wine al jocului este stricat",
+      "it": "Il prefisso Wine del gioco è rotto",
+      "fr": "Le préfixe Wine du jeu est cassé",
+      "es": "El prefijo Wine del juego está roto",
+      "ru": "Префикс Wine игры сломан",
+      "de": "Das Wine-Präfix des Spiels ist kaputt",
+      "pt": "O prefixo Wine do jogo está estragado",
+      "pl": "Prefiks Wine gry jest uszkodzony",
+      "tr": "Oyunun Wine prefix'i bozuk"
+    },
+    "cause": {
+      "en": "Wine could not load its core library, which means the prefix (the game's own Windows folder) is damaged or was made by an incompatible Proton.",
+      "ro": "Wine nu și-a putut încărca biblioteca de bază, adică prefixul (folderul Windows propriu al jocului) este deteriorat sau a fost creat de un Proton incompatibil.",
+      "it": "Wine non è riuscito a caricare la sua libreria principale, quindi il prefisso (la cartella Windows del gioco) è danneggiato o creato da un Proton incompatibile.",
+      "fr": "Wine n'a pas pu charger sa bibliothèque principale : le préfixe (le dossier Windows propre au jeu) est abîmé ou a été créé par un Proton incompatible.",
+      "es": "Wine no pudo cargar su biblioteca principal: el prefijo (la carpeta Windows propia del juego) está dañado o lo creó un Proton incompatible.",
+      "ru": "Wine не смог загрузить свою основную библиотеку: префикс (собственная папка Windows игры) повреждён или создан несовместимым Proton.",
+      "de": "Wine konnte seine Kernbibliothek nicht laden: Das Präfix (der eigene Windows-Ordner des Spiels) ist beschädigt oder stammt von einem inkompatiblen Proton.",
+      "pt": "O Wine não conseguiu carregar a sua biblioteca principal: o prefixo (a pasta Windows própria do jogo) está danificado ou foi criado por um Proton incompatível.",
+      "pl": "Wine nie zdołał załadować swojej głównej biblioteki: prefiks (własny folder Windows gry) jest uszkodzony albo utworzył go niezgodny Proton.",
+      "tr": "Wine çekirdek kütüphanesini yükleyemedi: prefix (oyunun kendi Windows klasörü) hasarlı ya da uyumsuz bir Proton tarafından oluşturulmuş."
+    },
+    "fix": {
+      "en": "Back up the saves (Save Guard does it before every launch), then delete the game's compatdata folder so Proton builds a new prefix. Avoid switching Proton versions back and forth on the same prefix.",
+      "ro": "Fă copii ale salvărilor (Save Guard o face înainte de fiecare lansare), apoi șterge folderul compatdata al jocului ca Proton să construiască un prefix nou. Evită să schimbi des versiunile Proton pe același prefix.",
+      "it": "Fai una copia dei salvataggi (Save Guard la fa prima di ogni avvio), poi elimina la cartella compatdata del gioco così Proton crea un prefisso nuovo. Evita di cambiare avanti e indietro versione di Proton sullo stesso prefisso.",
+      "fr": "Sauvegarde les parties (Save Guard le fait avant chaque lancement), puis supprime le dossier compatdata du jeu pour que Proton crée un nouveau préfixe. Évite de changer sans cesse de version de Proton sur le même préfixe.",
+      "es": "Haz copia de las partidas (Save Guard lo hace antes de cada inicio) y borra la carpeta compatdata del juego para que Proton cree un prefijo nuevo. Evita cambiar de versión de Proton una y otra vez sobre el mismo prefijo.",
+      "ru": "Сделай копию сохранений («Save Guard» делает её перед каждым запуском), затем удали папку compatdata игры, чтобы Proton создал новый префикс. Не меняй версии Proton туда-сюда на одном префиксе.",
+      "de": "Sichere die Spielstände (Spielstandschutz tut das vor jedem Start), lösche dann den compatdata-Ordner des Spiels, damit Proton ein neues Präfix baut. Wechsle nicht ständig die Proton-Version auf demselben Präfix.",
+      "pt": "Faz cópia dos saves (Proteção de saves fá-lo antes de cada arranque) e apaga a pasta compatdata do jogo para o Proton criar um prefixo novo. Evita mudar de versão do Proton para trás e para a frente no mesmo prefixo.",
+      "pl": "Zrób kopię zapisów (Ochrona zapisów robi ją przed każdym uruchomieniem), potem usuń folder compatdata gry, aby Proton zbudował nowy prefiks. Unikaj przełączania wersji Protona w tę i z powrotem na tym samym prefiksie.",
+      "tr": "Kayıtları yedekle (Kayıt Koruması bunu her açılıştan önce yapar), sonra Proton yeni bir prefix oluştursun diye oyunun compatdata klasörünü sil. Aynı prefix'te Proton sürümlerini sürekli değiştirmekten kaçın."
+    }
+  },
+  {
+    "id": "ue4ss_scan_failed",
+    "logs": [
+      "ue4ss"
+    ],
+    "contains": [
+      "Failed to find"
+    ],
+    "also": [
+      "FName",
+      "GNatives",
+      "StaticConstructObject",
+      "ProcessEvent",
+      "GMalloc",
+      "UObject::"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "UE4SS cannot find parts of the game it needs",
+      "ro": "UE4SS nu găsește părți din joc de care are nevoie",
+      "it": "UE4SS non trova parti del gioco di cui ha bisogno",
+      "fr": "UE4SS ne trouve pas des parties du jeu dont il a besoin",
+      "es": "UE4SS no encuentra partes del juego que necesita",
+      "ru": "UE4SS не находит нужные ему части игры",
+      "de": "UE4SS findet Teile des Spiels nicht, die es braucht",
+      "pt": "O UE4SS não encontra partes do jogo de que precisa",
+      "pl": "UE4SS nie może znaleźć potrzebnych części gry",
+      "tr": "UE4SS ihtiyaç duyduğu oyun bölümlerini bulamıyor"
+    },
+    "cause": {
+      "en": "UE4SS locates the game's internals by byte patterns; a newer game version can break them, so Lua and Blueprint mods may not work.",
+      "ro": "UE4SS găsește părțile interne ale jocului după tipare de octeți; o versiune nouă a jocului le poate strica, deci modurile Lua și Blueprint pot să nu meargă.",
+      "it": "UE4SS individua le parti interne del gioco con schemi di byte; una versione nuova del gioco può romperli, quindi i mod Lua e Blueprint potrebbero non funzionare.",
+      "fr": "UE4SS repère les éléments internes du jeu par des motifs d'octets ; une nouvelle version du jeu peut les casser, donc les mods Lua et Blueprint peuvent ne pas marcher.",
+      "es": "UE4SS localiza las partes internas del juego con patrones de bytes; una versión nueva del juego puede romperlos, así que los mods Lua y Blueprint pueden no funcionar.",
+      "ru": "UE4SS находит внутренние части игры по байтовым шаблонам; новая версия игры может их сломать, и тогда моды Lua и Blueprint могут не работать.",
+      "de": "UE4SS findet das Innere des Spiels über Bytemuster; eine neue Spielversion kann sie zerstören, dann funktionieren Lua- und Blueprint-Mods eventuell nicht.",
+      "pt": "O UE4SS localiza o interior do jogo por padrões de bytes; uma versão nova do jogo pode quebrá-los, e os mods Lua e Blueprint podem não funcionar.",
+      "pl": "UE4SS znajduje wnętrze gry po wzorcach bajtów; nowa wersja gry może je zepsuć, wtedy mody Lua i Blueprint mogą nie działać.",
+      "tr": "UE4SS oyunun iç kısımlarını bayt desenleriyle bulur; yeni bir oyun sürümü bunları bozabilir, bu durumda Lua ve Blueprint modları çalışmayabilir."
+    },
+    "fix": {
+      "en": "Run Self-Heal (Tools), then try the newest UE4SS (experimental) build; for a brand-new game version, wait for UE4SS to catch up.",
+      "ro": "Rulează Auto-reparare (Unelte), apoi încearcă cea mai nouă versiune UE4SS (experimentală); pentru o versiune foarte nouă a jocului, așteaptă ca UE4SS să ajungă din urmă.",
+      "it": "Esegui Auto-riparazione (Strumenti), poi prova l'ultima build di UE4SS (sperimentale); per una versione del gioco appena uscita, aspetta che UE4SS si aggiorni.",
+      "fr": "Lance Auto-réparation (Outils), puis essaie la dernière version (expérimentale) d'UE4SS ; pour une version du jeu toute récente, attends qu'UE4SS suive.",
+      "es": "Ejecuta Autorreparación (Herramientas) y prueba la última versión (experimental) de UE4SS; para una versión del juego recién salida, espera a que UE4SS se ponga al día.",
+      "ru": "Запусти «Автоисправление» (Инструменты), затем попробуй самую новую (экспериментальную) сборку UE4SS; для совсем новой версии игры дождись, пока UE4SS подтянется.",
+      "de": "Starte Selbstheilung (Werkzeuge) und probiere dann den neuesten (experimentellen) UE4SS-Build; bei einer ganz neuen Spielversion warte, bis UE4SS nachzieht.",
+      "pt": "Executa Autocorreção (Ferramentas) e experimenta a versão mais recente (experimental) do UE4SS; para uma versão do jogo acabada de sair, espera que o UE4SS se atualize.",
+      "pl": "Uruchom Samonaprawa (Narzędzia), potem wypróbuj najnowszą (eksperymentalną) wersję UE4SS; przy zupełnie nowej wersji gry poczekaj, aż UE4SS nadrobi.",
+      "tr": "Kendini Onar (Araçlar) çalıştır, sonra UE4SS'nin en yeni (deneysel) sürümünü dene; yepyeni bir oyun sürümü için UE4SS'nin yetişmesini bekle."
+    }
+  }
+]

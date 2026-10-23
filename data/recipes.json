@@ -1,0 +1,767 @@
+{
+  "games": [
+    {
+      "appid": "632360",
+      "name": "Risk of Rain 2",
+      "loader": "bepinex5",
+      "thunderstore": "riskofrain2",
+      "starter": [
+        {
+          "source": "thunderstore",
+          "id": "TeamMoonstorm-Starstorm2",
+          "why": "A big content mod: new survivors, items and mechanics."
+        },
+        {
+          "source": "thunderstore",
+          "id": "EnforcerGang-Enforcer",
+          "why": "The Enforcer from Risk of Rain 1 as a new survivor."
+        },
+        {
+          "source": "thunderstore",
+          "id": "KingEnderBrine-ScrollableLobbyUI",
+          "why": "Scrolling in the lobby menus."
+        },
+        {
+          "source": "thunderstore",
+          "id": "KingEnderBrine-ProperSave",
+          "why": "Save your run and continue later."
+        },
+        {
+          "source": "thunderstore",
+          "id": "DropPod-LookingGlass",
+          "why": "Shows statistics for items and the player."
+        }
+      ]
+    },
+    {
+      "appid": "1966720",
+      "name": "Lethal Company",
+      "loader": "bepinex5",
+      "thunderstore": "lethal-company",
+      "saves": [
+        "{appdata_locallow}/ZeekerssRBLX/Lethal Company"
+      ]
+    },
+    {
+      "appid": "892970",
+      "name": "Valheim",
+      "loader": "bepinex5",
+      "thunderstore": "valheim",
+      "saves": [
+        "{appdata_locallow}/IronGate/Valheim"
+      ]
+    },
+    {
+      "appid": "2881650",
+      "name": "Content Warning",
+      "loader": "bepinex5",
+      "thunderstore": "content-warning",
+      "saves": [
+        "{appdata_locallow}/Landfall Games/Content Warning"
+      ]
+    },
+    {
+      "appid": "3241660",
+      "name": "R.E.P.O.",
+      "loader": "bepinex5",
+      "thunderstore": "repo",
+      "saves": [
+        "{appdata_locallow}/semiwork/Repo/saves"
+      ]
+    },
+    {
+      "appid": "3164500",
+      "name": "Schedule I",
+      "loader": "melonloader",
+      "thunderstore": "schedule-i",
+      "nexus": "schedule1",
+      "notes": "MelonLoader's first start can take several minutes with an empty window. If it never finishes, switch to BepInEx 6 in the Compatibility window.",
+      "saves": [
+        "{appdata_locallow}/TVGS/Schedule I/Saves"
+      ]
+    },
+    {
+      "appid": "945360",
+      "name": "Among Us",
+      "loader": "bepinex6",
+      "thunderstore": "among-us",
+      "nexus": "amongus",
+      "saves": [
+        "{appdata_locallow}/Innersloth/Among Us"
+      ]
+    },
+    {
+      "appid": "264710",
+      "name": "Subnautica",
+      "loader": "bepinex5",
+      "thunderstore": "subnautica",
+      "saves": [
+        "{game}/SNAppData/SavedGames"
+      ]
+    },
+    {
+      "appid": "848450",
+      "name": "Subnautica: Below Zero",
+      "loader": "bepinex5",
+      "thunderstore": "subnautica-below-zero",
+      "saves": [
+        "{game}/SNAppData/SavedGames"
+      ]
+    },
+    {
+      "appid": "1229490",
+      "name": "ULTRAKILL",
+      "loader": "bepinex5",
+      "thunderstore": "ultrakill",
+      "starter": [
+        {
+          "source": "thunderstore",
+          "id": "xzxADIxzx-Jaket",
+          "why": "Multiplayer for ULTRAKILL."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Hydraxous-UltraFunGuns",
+          "why": "Goofy extra weapons."
+        },
+        {
+          "source": "thunderstore",
+          "id": "ZedDev-USTManager",
+          "why": "Change the soundtrack."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Flazhik-CybergrindMusicExplorer",
+          "why": "A music player for the Cyber Grind."
+        }
+      ],
+      "nexus": "ultrakill",
+      "saves": [
+        "{game}/Saves"
+      ]
+    },
+    {
+      "appid": "1592190",
+      "name": "BONELAB",
+      "loader": "melonloader",
+      "thunderstore": "bonelab",
+      "saves": [
+        "{appdata_locallow}/Stress Level Zero/BONELAB/Saves"
+      ]
+    },
+    {
+      "appid": "493520",
+      "name": "GTFO",
+      "loader": "bepinex6",
+      "thunderstore": "gtfo"
+    },
+    {
+      "appid": "1326470",
+      "name": "Sons Of The Forest",
+      "loader": "bepinex6",
+      "thunderstore": "sons-of-the-forest",
+      "saves": [
+        "{appdata_locallow}/Endnight/SonsOfTheForest/Saves"
+      ]
+    },
+    {
+      "appid": "1092790",
+      "name": "Inscryption",
+      "loader": "bepinex5",
+      "thunderstore": "inscryption"
+    },
+    {
+      "appid": "1366540",
+      "name": "Dyson Sphere Program",
+      "loader": "bepinex5",
+      "thunderstore": "dyson-sphere-program",
+      "saves": [
+        "{documents}/Dyson Sphere Program"
+      ]
+    },
+    {
+      "appid": "1262560",
+      "name": "Need for Speed: Most Wanted (2012)",
+      "nexus": "needforspeedmostwanted2012",
+      "folders": [
+        {
+          "ext": [
+            "bndl",
+            "bin"
+          ],
+          "folder": "VEHICLES"
+        }
+      ],
+      "notes": "Car mods are pairs of .BNDL files that replace the game's own in the VEHICLES folder. Gantry finds the folder from the file names.",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "55",
+          "why": "Realistic visuals: sharper textures, better shadows and reflections."
+        },
+        {
+          "source": "nexus",
+          "id": "57",
+          "why": "A ReShade preset for a more natural look."
+        },
+        {
+          "source": "nexus",
+          "id": "1",
+          "why": "Initial RE 2.0, a big all-round overhaul."
+        },
+        {
+          "source": "nexus",
+          "id": "11",
+          "why": "A popular extra car to drive: the Toyota Supra A90."
+        },
+        {
+          "source": "nexus",
+          "id": "77",
+          "why": "A 100% save if you want everything unlocked from the start."
+        }
+      ],
+      "saves": [
+        "{documents}/Criterion Games/Need For Speed(TM) Most Wanted/Save"
+      ]
+    },
+    {
+      "appid": "1030840",
+      "name": "Mafia: Definitive Edition",
+      "nexus": "mafiadefinitiveedition",
+      "notes": "Mods for this game are made for the first Mafia (2020), not Mafia III.",
+      "saves": [
+        "{documents}/My Games/Mafia Definitive Edition/Data"
+      ]
+    },
+    {
+      "appid": "360430",
+      "name": "Mafia III: Definitive Edition",
+      "nexus": "mafia3definitiveedition",
+      "notes": "Many Mafia III mods need Script Hook, which is on the starter list.",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "57",
+          "why": "Script Hook: many other mods need it."
+        },
+        {
+          "source": "nexus",
+          "id": "8",
+          "why": "MAFIA 3 Redone: the most popular overhaul."
+        },
+        {
+          "source": "nexus",
+          "id": "10",
+          "why": "HDR realism: better colours and lighting."
+        },
+        {
+          "source": "nexus",
+          "id": "24",
+          "why": "Less Grind: fewer repetitive tasks."
+        },
+        {
+          "source": "nexus",
+          "id": "50",
+          "why": "Skips the start-up videos."
+        }
+      ],
+      "saves": [
+        "{appdata_local}/2K Games/Mafia III/Data"
+      ]
+    },
+    {
+      "appid": "244210",
+      "name": "Assetto Corsa",
+      "nexus": "assettocorsa",
+      "notes": "Most Assetto Corsa add-ons (cars, tracks) are not on Nexus Mods; Nexus has graphics presets and small tools.",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "89",
+          "why": "A very popular realistic ReShade preset."
+        },
+        {
+          "source": "nexus",
+          "id": "55",
+          "why": "Natural colours for the whole game."
+        },
+        {
+          "source": "nexus",
+          "id": "3",
+          "why": "A clean, simple HUD."
+        },
+        {
+          "source": "nexus",
+          "id": "53",
+          "why": "A camera made for drifting."
+        }
+      ],
+      "saves": [
+        "{documents}/Assetto Corsa/cfg",
+        "{documents}/Assetto Corsa/setups"
+      ]
+    },
+    {
+      "appid": "2660460",
+      "name": "Aviassembly",
+      "nexus": "aviassembly",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "8",
+          "why": "A menu for tweaking the game."
+        },
+        {
+          "source": "nexus",
+          "id": "3",
+          "why": "A smoother camera."
+        },
+        {
+          "source": "nexus",
+          "id": "7",
+          "why": "Quality-of-life fixes for the editor."
+        }
+      ]
+    },
+    {
+      "appid": "2406770",
+      "name": "Bodycam",
+      "nexus": "bodycam",
+      "notes": "Bodycam is an Unreal Engine game: most mods need UE4SS (Tools → Full Setup).",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "14",
+          "why": "RE-UE4SS for Bodycam: the loader most other mods need."
+        },
+        {
+          "source": "nexus",
+          "id": "7",
+          "why": "A frame-rate booster."
+        },
+        {
+          "source": "nexus",
+          "id": "16",
+          "why": "Tweaks that help the frame rate."
+        },
+        {
+          "source": "nexus",
+          "id": "3",
+          "why": "A realistic ReShade preset."
+        }
+      ]
+    },
+    {
+      "appid": "1080110",
+      "name": "F1 2020",
+      "nexus": "f12020",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "9",
+          "why": "Classic and modern helmets."
+        },
+        {
+          "source": "nexus",
+          "id": "8",
+          "why": "Classic race suits."
+        },
+        {
+          "source": "nexus",
+          "id": "1",
+          "why": "More classic cars."
+        },
+        {
+          "source": "nexus",
+          "id": "11",
+          "why": "Unlimited team money."
+        }
+      ]
+    },
+    {
+      "appid": "204100",
+      "name": "Max Payne 3",
+      "nexus": "maxpayne3",
+      "notes": "Many Max Payne 3 mods need Script Hook, which is on the starter list.",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "5",
+          "why": "Script Hook: many other mods need it."
+        },
+        {
+          "source": "nexus",
+          "id": "19",
+          "why": "More realistic blood."
+        },
+        {
+          "source": "nexus",
+          "id": "32",
+          "why": "Realistic ragdolls."
+        },
+        {
+          "source": "nexus",
+          "id": "72",
+          "why": "A new set of gun sounds."
+        },
+        {
+          "source": "nexus",
+          "id": "8",
+          "why": "Removes most of the flashy screen effects."
+        }
+      ],
+      "saves": [
+        "{documents}/Rockstar Games/Max Payne 3/Profiles"
+      ]
+    },
+    {
+      "appid": "1962700",
+      "name": "Subnautica 2",
+      "nexus": "subnautica2",
+      "notes": "Subnautica 2 is an Unreal Engine game: most mods need UE4SS (Tools → Full Setup).",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "36",
+          "why": "UE4SS for Subnautica 2: the loader most other mods need."
+        },
+        {
+          "source": "nexus",
+          "id": "41",
+          "why": "Console commands."
+        },
+        {
+          "source": "nexus",
+          "id": "51",
+          "why": "A performance mod."
+        },
+        {
+          "source": "nexus",
+          "id": "116",
+          "why": "A simple minimap."
+        },
+        {
+          "source": "nexus",
+          "id": "64",
+          "why": "Toggle cheats on and off."
+        }
+      ],
+      "saves": [
+        "{appdata_local}/Subnautica2/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "2358720",
+      "name": "Black Myth: Wukong",
+      "nexus": "blackmythwukong",
+      "notes": "Black Myth: Wukong is an Unreal Engine game: most mods need UE4SS (Tools → Full Setup).",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "19",
+          "why": "RE-UE4SS: the mod loader most other mods need."
+        },
+        {
+          "source": "nexus",
+          "id": "13",
+          "why": "Better performance and visuals."
+        },
+        {
+          "source": "nexus",
+          "id": "60",
+          "why": "A simple map."
+        },
+        {
+          "source": "nexus",
+          "id": "133",
+          "why": "Signature bypass: lets mods load."
+        }
+      ],
+      "saves": [
+        "{appdata_local}/b1/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "12210",
+      "name": "Grand Theft Auto IV: The Complete Edition",
+      "nexus": "gta4",
+      "notes": "GTA IV mods usually need the ASI loader (it comes with Fusion Fix).",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "716",
+          "why": "Fusion Fix: many fixes in one."
+        },
+        {
+          "source": "nexus",
+          "id": "178",
+          "why": "iCEnhancer: natural graphics."
+        },
+        {
+          "source": "nexus",
+          "id": "282",
+          "why": "Higher resolution vehicles."
+        },
+        {
+          "source": "nexus",
+          "id": "195",
+          "why": "Realistic handling and physics."
+        }
+      ],
+      "saves": [
+        "{documents}/Rockstar Games/GTA IV/Profiles",
+        "{appdata_local}/Rockstar Games/GTA IV/savegames"
+      ]
+    },
+    {
+      "appid": "2239550",
+      "name": "Watch Dogs: Legion",
+      "nexus": "watchdogslegion",
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "16",
+          "why": "More operatives with a prestige look."
+        },
+        {
+          "source": "nexus",
+          "id": "12",
+          "why": "Extra clothes."
+        },
+        {
+          "source": "nexus",
+          "id": "53",
+          "why": "No hack cooldowns."
+        },
+        {
+          "source": "nexus",
+          "id": "56",
+          "why": "Reveals the map."
+        }
+      ]
+    },
+    {
+      "appid": "2073850",
+      "name": "THE FINALS",
+      "notes": "THE FINALS is an online game with anti-cheat: Gantry will not put mods into it."
+    },
+    {
+      "appid": "489830",
+      "name": "The Elder Scrolls V: Skyrim Special Edition",
+      "nexus": "skyrimspecialedition",
+      "saves": [
+        "{documents}/My Games/Skyrim Special Edition/Saves"
+      ]
+    },
+    {
+      "appid": "72850",
+      "name": "The Elder Scrolls V: Skyrim",
+      "nexus": "skyrim",
+      "saves": [
+        "{documents}/My Games/Skyrim/Saves"
+      ]
+    },
+    {
+      "appid": "377160",
+      "name": "Fallout 4",
+      "nexus": "fallout4",
+      "saves": [
+        "{documents}/My Games/Fallout4/Saves"
+      ]
+    },
+    {
+      "appid": "1716740",
+      "name": "Starfield",
+      "nexus": "starfield",
+      "saves": [
+        "{documents}/My Games/Starfield/Saves"
+      ]
+    },
+    {
+      "appid": "22380",
+      "name": "Fallout: New Vegas",
+      "nexus": "newvegas",
+      "saves": [
+        "{documents}/My Games/FalloutNV/Saves"
+      ]
+    },
+    {
+      "appid": "22300",
+      "name": "Fallout 3",
+      "nexus": "fallout3",
+      "saves": [
+        "{documents}/My Games/Fallout3/Saves"
+      ]
+    },
+    {
+      "appid": "2623190",
+      "name": "The Elder Scrolls IV: Oblivion Remastered",
+      "nexus": "oblivionremastered",
+      "saves": [
+        "{documents}/My Games/Oblivion Remastered/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "1091500",
+      "name": "Cyberpunk 2077",
+      "nexus": "cyberpunk2077",
+      "saves": [
+        "{saved_games}/CD Projekt Red/Cyberpunk 2077"
+      ]
+    },
+    {
+      "appid": "292030",
+      "name": "The Witcher 3: Wild Hunt",
+      "nexus": "witcher3",
+      "saves": [
+        "{documents}/The Witcher 3/gamesaves"
+      ]
+    },
+    {
+      "appid": "413150",
+      "name": "Stardew Valley",
+      "nexus": "stardewvalley",
+      "saves": [
+        "{appdata_roaming}/StardewValley/Saves"
+      ]
+    },
+    {
+      "appid": "294100",
+      "name": "RimWorld",
+      "nexus": "rimworld",
+      "saves": [
+        "{appdata_locallow}/Ludeon Studios/RimWorld by Ludeon Studios/Saves"
+      ]
+    },
+    {
+      "appid": "367520",
+      "name": "Hollow Knight",
+      "nexus": "hollowknight",
+      "saves": [
+        "{appdata_locallow}/Team Cherry/Hollow Knight"
+      ]
+    },
+    {
+      "appid": "220200",
+      "name": "Kerbal Space Program",
+      "nexus": "kerbalspaceprogram",
+      "saves": [
+        "{game}/saves"
+      ]
+    },
+    {
+      "appid": "1174180",
+      "name": "Red Dead Redemption 2",
+      "nexus": "reddeadredemption2",
+      "saves": [
+        "{documents}/Rockstar Games/Red Dead Redemption 2/Profiles"
+      ]
+    },
+    {
+      "appid": "1593500",
+      "name": "God of War",
+      "nexus": "godofwar",
+      "saves": [
+        "{saved_games}/God of War"
+      ]
+    },
+    {
+      "appid": "1151640",
+      "name": "Horizon Zero Dawn",
+      "nexus": "horizonzerodawn",
+      "saves": [
+        "{documents}/Horizon Zero Dawn/Saved Game"
+      ]
+    },
+    {
+      "appid": "1245620",
+      "name": "Elden Ring",
+      "nexus": "eldenring",
+      "saves": [
+        "{appdata_roaming}/EldenRing"
+      ],
+      "notes": "Elden Ring uses Easy Anti-Cheat. Gantry will not put mods into a game that has it; mods for this game are meant to be played offline, started without the anti-cheat."
+    },
+    {
+      "appid": "3527290",
+      "name": "PEAK",
+      "loader": "bepinex5",
+      "thunderstore": "peak"
+    },
+    {
+      "appid": "3405340",
+      "name": "Megabonk",
+      "loader": "bepinex6",
+      "thunderstore": "megabonk",
+      "saves": [
+        "{appdata_locallow}/Ved/Megabonk/Saves"
+      ]
+    },
+    {
+      "appid": "1313140",
+      "name": "Cult of the Lamb",
+      "loader": "bepinex5",
+      "thunderstore": "cult-of-the-lamb",
+      "saves": [
+        "{appdata_locallow}/Massive Monster/Cult Of The Lamb/saves"
+      ]
+    },
+    {
+      "appid": "1557740",
+      "name": "ROUNDS",
+      "loader": "bepinex5",
+      "thunderstore": "rounds"
+    },
+    {
+      "appid": "1625450",
+      "name": "Muck",
+      "loader": "bepinex5",
+      "thunderstore": "muck"
+    },
+    {
+      "appid": "636480",
+      "name": "Ravenfield",
+      "loader": "bepinex5",
+      "thunderstore": "ravenfield",
+      "saves": [
+        "{appdata_locallow}/SteelRaven7/RavenfieldSteam"
+      ]
+    },
+    {
+      "appid": "2768430",
+      "name": "ATLYSS",
+      "loader": "bepinex5",
+      "thunderstore": "atlyss",
+      "saves": [
+        "{game}/ATLYSS_Data/profileCollections"
+      ]
+    },
+    {
+      "appid": "311690",
+      "name": "Enter the Gungeon",
+      "loader": "bepinex5",
+      "thunderstore": "enter-the-gungeon",
+      "saves": [
+        "{appdata_locallow}/Dodge Roll/Enter the Gungeon"
+      ]
+    },
+    {
+      "appid": "386940",
+      "name": "Ultimate Chicken Horse",
+      "loader": "bepinex5",
+      "thunderstore": "ultimate-chicken-horse",
+      "saves": [
+        "{appdata_locallow}/Clever Endeavour Games/Ultimate Chicken Horse"
+      ]
+    },
+    {
+      "appid": "823500",
+      "name": "BONEWORKS",
+      "loader": "melonloader",
+      "thunderstore": "boneworks",
+      "saves": [
+        "{appdata_locallow}/Stress Level Zero/BONEWORKS"
+      ]
+    }
+  ]
+}
