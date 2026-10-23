@@ -140,6 +140,16 @@ pub fn fetch_with(url: &str, dest: &Path, user_agent: Option<&str>, source: &str
                 }
                 let done = std::fs::metadata(dest).map(|m| m.len()).unwrap_or(0);
                 let total = announced_size(&headers);
+                // a file that cannot fit is stopped at once, not when the drive is full
+                if total > 0 {
+                    if let Some(free) = dest.parent().and_then(crate::fsutil::free_bytes) {
+                        if total.saturating_add(256 << 20) > free.saturating_add(done) {
+                            let _ = child.kill();
+                            let _ = child.wait();
+                            break Err(format!("Not enough free space for {}: it needs about {} and only {} is free there. Free some space and try again.", dest.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(), crate::fsutil::size_text(total + (256 << 20)), crate::fsutil::size_text(free)));
+                        }
+                    }
+                }
                 let dt = last.0.elapsed();
                 let speed = if dt >= Duration::from_millis(700) {
                     let s = (done.saturating_sub(last.1) as f64 / dt.as_secs_f64()) as u64;

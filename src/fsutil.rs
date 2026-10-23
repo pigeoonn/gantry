@@ -264,6 +264,34 @@ pub fn is_same_file(a: &Path, b: &Path) -> bool {
 }
 
 /// Can files be created in this directory by the current user?
+/// Free room, in bytes, on the drive that holds `dir` (None where the system does not say).
+pub fn free_bytes(dir: &Path) -> Option<u64> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let c = std::ffi::CString::new(dir.as_os_str().as_bytes()).ok()?;
+        let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(c.as_ptr(), &mut s) } != 0 {
+            return None;
+        }
+        Some((s.f_bavail as u64).saturating_mul(s.f_frsize as u64))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        None
+    }
+}
+
+/// A size for a message: "2.4 GB", "310 MB".
+pub fn size_text(n: u64) -> String {
+    if n >= 1 << 30 {
+        format!("{:.1} GB", n as f64 / (1u64 << 30) as f64)
+    } else {
+        format!("{} MB", n.div_ceil(1 << 20))
+    }
+}
+
 pub fn can_write(dir: &Path) -> bool {
     #[cfg(unix)]
     {

@@ -4696,7 +4696,8 @@
     const why = p.placed_by === 'readme' ? t('Its own instructions point to this folder.') : p.placed_by === 'pack' ? t('The support entry for this game says files of this kind go there.') : t('The game already has files with these names there.');
     document.getElementById('placeBody').innerHTML =
       `<div>${why}</div><div class="place-list">${p.folders.map(([dir, n]) => `<div><b>${escapeHtml(dir || t('(the game folder)'))}</b> <span>${tp(n, '{} file', '{} files')}</span></div>`).join('')}</div>` +
-      (p.notes ? `<div style="color:var(--text-muted)">${t('Its readme is kept for you to read; it is not copied into the game.')}</div>` : '');
+      (p.notes ? `<div style="color:var(--text-muted)">${t('Its readme is kept for you to read; it is not copied into the game.')}</div>` : '') +
+      (p.more ? `<div style="color:var(--text-muted)">${tp(p.more, '{} more mod is waiting for the same question.', '{} more mods are waiting for the same question.')}</div>` : '');
     m.classList.add('open');
   }
 

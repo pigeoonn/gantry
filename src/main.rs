@@ -206,6 +206,8 @@ pub struct AppState {
     /// Tests point the tool search at temporary folders (`compatibilitytools.d` style).
     pub tools_dirs: Option<Vec<PathBuf>>,
     pub pending_install: Option<PendingInstall>,
+    /// More mods whose place had to be guessed, waiting their turn for the same question.
+    pub pending_queue: std::collections::VecDeque<PendingInstall>,
     /// Installer scripts waiting for answers, oldest first.
     pub pending_fomod: Vec<PendingFomod>,
     /// Where game shortcuts are written (tests point it at a temporary folder; None = the real home).
@@ -638,6 +640,7 @@ impl AppState {
             covers_allow_http: false,
             tools_dirs: None,
             pending_install: None,
+            pending_queue: std::collections::VecDeque::new(),
             pending_fomod: Vec::new(),
             shortcut_home: None,
             health: Default::default(),
@@ -768,7 +771,7 @@ impl AppState {
             "meta": self.meta_json(),
             "health": self.health,
             "pending_fomod": self.pending_fomod.first().map(|p| json!({ "name": if p.module.name.is_empty() { p.fname.clone() } else { p.module.name.clone() }, "image": p.module.image, "queue": self.pending_fomod.len() })),
-            "pending_install": self.pending_install.as_ref().map(|p| json!({ "name": p.name, "placed_by": p.preview.placed_by, "target": p.preview.target, "files": p.preview.files, "folders": p.preview.folders.iter().take(6).collect::<Vec<_>>(), "notes": p.preview.notes })),
+            "pending_install": self.pending_install.as_ref().map(|p| json!({ "name": p.name, "placed_by": p.preview.placed_by, "target": p.preview.target, "files": p.preview.files, "folders": p.preview.folders.iter().take(6).collect::<Vec<_>>(), "notes": p.preview.notes, "more": self.pending_queue.len() })),
             "unity": self.games.get(self.selected_idx).filter(|g| g.is_installed).and_then(|g| loaders::detect(Path::new(&g.game_dir)).map(|u| json!({ "il2cpp": u.il2cpp, "x64": u.x64, "loader": u.loader, "recommended": recipes::find(&self.recipes, &g.appid, &g.steam_appid).map(|r| r.loader.clone()).unwrap_or_default() }))),
             "language": if i18n::valid(&self.config.language) { self.config.language.as_str() } else { i18n::DEFAULT_LANG },
             "logs": self.logs,
@@ -1335,6 +1338,22 @@ fn stop_game_processes(game: Option<&GameEntry>, pid: u32, proton: Option<&Path>
             let pat = regex::escape(&exe_name);
             let _ = run_quiet(Command::new("pkill").args(["-9", "-i", "-f", &pat]));
         }
+    }
+}
+
+/// Room an archive needs once unpacked (twice its size, plus a margin, is a safe guess for game files) before it is
+/// unpacked, so a nearly full drive is told so instead of being filled to the brim.
+fn ensure_room(archive: &Path, dest_dir: &Path) -> Result<(), String> {
+    let size = fs::metadata(archive).map(|m| m.len()).unwrap_or(0);
+    let need = size.saturating_mul(2).saturating_add(256 << 20);
+    match fsutil::free_bytes(dest_dir) {
+        Some(free) if free < need => Err(format!(
+            "Not enough free space for {}: it needs about {} and only {} is free there. Free some space and try again.",
+            archive.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            fsutil::size_text(need),
+            fsutil::size_text(free)
+        )),
+        _ => Ok(()),
     }
 }
 
@@ -3168,6 +3187,10 @@ fn add_to_library(state: &SharedState, g: &GameEntry, p: &Path, consume: bool, f
     let is_archive = ARCHIVE_EXTS.contains(&ext.as_str());
     if is_archive {
         log(state, "INFO", format!("Extracting archive: {}...", fname));
+        if let Err(e) = ensure_room(p, &stage) {
+            log(state, "ERR", e);
+            return true;
+        }
         if !extract_archive(p, &stage) {
             log(state, "ERR", format!("Failed to extract '{}' (need 7z, bsdtar, unzip or unrar installed).", fname));
             return true;
@@ -3216,12 +3239,18 @@ fn add_staged(state: &SharedState, g: &GameEntry, lib: deploy::Library, stage: P
     }
     // when Gantry has to guess where the files go, a mod the user added by hand waits for an OK
     let by_hand = opts.nexus.is_none() && opts.thunder.is_none() && opts.replaces.is_none() && opts.name.is_none() && opts.target.is_none();
-    if by_hand && !read_state(state).config.no_install_preview && read_state(state).pending_install.is_none() {
+    if by_hand && !read_state(state).config.no_install_preview {
         if let Ok(pv) = lib.preview(&stage) {
             if !pv.placed_by.is_empty() {
                 log(state, "INFO", format!("'{}' is waiting for your OK on where its files go.", name));
                 let mut st = write_state(state);
-                st.pending_install = Some(PendingInstall { appid: g.appid.clone(), stage: stage.clone(), name, fname: fname.to_string(), version, opts_nexus: opts.nexus.clone(), preview: pv });
+                let item = PendingInstall { appid: g.appid.clone(), stage: stage.clone(), name, fname: fname.to_string(), version, opts_nexus: opts.nexus.clone(), preview: pv };
+                // one question at a time: the others wait behind it
+                if st.pending_install.is_none() {
+                    st.pending_install = Some(item);
+                } else {
+                    st.pending_queue.push_back(item);
+                }
                 st.notifier.bump();
                 std::mem::forget(_guard); // the files stay until the user answers
                 return true;
@@ -3392,8 +3421,13 @@ fn finish_library_add(state: &SharedState, g: &GameEntry, lib: &deploy::Library,
 /// The user's answer to "is this the right place?": install there, install into a folder of their
 /// choosing, or drop the mod.
 fn install_confirm(state: &SharedState, accept: bool, target: &str) {
-    let Some(p) = write_state(state).pending_install.take() else { return };
-    write_state(state).notifier.bump();
+    let p = {
+        let mut st = write_state(state);
+        let Some(p) = st.pending_install.take() else { return };
+        st.pending_install = st.pending_queue.pop_front();
+        st.notifier.bump();
+        p
+    };
     let _cleanup = DirGuard(p.stage.clone());
     if !accept {
         log(state, "INFO", format!("'{}' was not added.", p.name));
@@ -3482,6 +3516,9 @@ fn install_archive(
     };
     let stage = stage_guard.0.clone();
 
+    if let Err(e) = ensure_room(p, &stage) {
+        return log(state, "ERR", e);
+    }
     if !extract_archive(p, &stage) {
         log(
             state,
@@ -9645,6 +9682,55 @@ mod tests {
         assert!(issues().contains(&"launch_option".to_string()), "version.dll needs Wine's override and Steam does not have it: {:?}", issues());
         api(&h, "/api/steam_launch_apply", json!({}));
         wait_until("options applied", || !issues().contains(&"launch_option".to_string()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_archive_that_cannot_fit_is_refused_before_anything_is_unpacked() {
+        let d = fsutil::testutil::TempDir::new("room");
+        let small = d.join("small.zip");
+        fs::write(&small, b"PK").unwrap();
+        assert!(ensure_room(&small, &d.join("")).is_ok());
+        // a file of 64 TB (sparse: it takes no room) cannot be unpacked anywhere
+        let huge = d.join("huge.zip");
+        fs::File::create(&huge).unwrap().set_len(1 << 46).unwrap();
+        let e = ensure_room(&huge, &d.join("")).unwrap_err();
+        assert!(e.starts_with("Not enough free space for huge.zip") && e.contains("TB") == false && e.contains("GB"), "{e}");
+        assert!(fsutil::free_bytes(&d.join("")).unwrap_or(0) > 0);
+        assert_eq!(fsutil::size_text(5 << 20), "5 MB");
+        assert_eq!(fsutil::size_text(3 << 30), "3.0 GB");
+    }
+
+    #[test]
+    fn several_mods_that_need_a_guess_each_get_their_question_in_turn() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("previewqueue");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("VEHICLES")).unwrap();
+        for n in ["VEH_1_HI.BNDL", "VEH_1_LO.BNDL", "VEH_2_HI.BNDL", "VEH_2_LO.BNDL"] {
+            fs::write(dir.join("VEHICLES").join(n), "ORIGINAL").unwrap();
+        }
+        let state = || api(&h, "/api/state", json!({}));
+        let mods = || state()["library"]["mods"].as_array().map(|m| m.len()).unwrap_or(0);
+        let zip = |tag: &str, a: &str, b: &str| {
+            let p = h._dir.join(&format!("{tag}-mod.zip"));
+            fs::write(&p, zip_of(&h, tag, &[(&format!("Replace/{a}"), "NEW"), (&format!("Replace/{b}"), "NEW")])).unwrap();
+            p
+        };
+        install_to_library_from_path(zip("a", "VEH_1_HI.BNDL", "VEH_1_LO.BNDL"), false, Arc::clone(&h.state));
+        wait_until("the first question", || !state()["pending_install"].is_null());
+        install_to_library_from_path(zip("b", "VEH_2_HI.BNDL", "VEH_2_LO.BNDL"), false, Arc::clone(&h.state));
+        wait_until("the second waits behind it", || state()["pending_install"]["more"] == 1);
+        assert_eq!(mods(), 0, "nothing is placed on a guess without an answer");
+        api(&h, "/api/install_confirm", json!({ "accept": true }));
+        wait_until("the first was added and the second asks", || mods() == 1 && !state()["pending_install"].is_null() && state()["pending_install"]["more"] == 0);
+        api(&h, "/api/install_confirm", json!({ "accept": false }));
+        wait_until("answered", || state()["pending_install"].is_null());
+        assert_eq!(mods(), 1, "the one that was refused was not added");
+        assert_eq!(fs::read_to_string(dir.join("VEHICLES/VEH_2_HI.BNDL")).unwrap(), "ORIGINAL");
     }
 
     #[test]
