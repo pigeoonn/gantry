@@ -138,7 +138,7 @@ mod tests {
         let l = list(&[d.join("none"), root.clone()], "620", &sessions);
         assert_eq!(l.iter().map(|s| (s.name.as_str(), s.kind)).collect::<Vec<_>>(), vec![("20260103_1.jpg", "unknown"), ("20260102_1.jpg", "plain"), ("20260104_1.jpg", "modded"), ("20260101_1.jpg", "modded")]);
         assert!(l[0].thumb.is_some() && l[1].thumb.is_none());
-        assert!(list(&[root.clone()], "../620", &sessions).is_empty() && list(&[root], "999", &sessions).is_empty());
+        assert!(list(std::slice::from_ref(&root), "../620", &sessions).is_empty() && list(&[root], "999", &sessions).is_empty());
     }
 
     #[test]
