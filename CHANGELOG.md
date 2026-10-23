@@ -1,5 +1,22 @@
 # Changes
 
+## 5.2.0
+
+The first update after the public beta.
+
+- **Updates are noticed.** Beta releases are marked as pre-releases, which the old update check could not see: from this
+  version on Gantry tells you when a newer one exists. (Versions before 5.2.0 need updating by hand once.)
+- **276 games instead of 55.** Each was checked against Nexus Mods' own list and a save-location database
+  (`tools/build_recipes.py` makes them): the store works for them and their saves are protected. Games with anti-cheat
+  or with mods outside the game folder are left out.
+- **Save for later:** a heart on every store card, a *Saved* view, and *More → Copy the mod list* for sharing a setup.
+- **`rig --doctor`** prints the state of every installed game, handy for a bug report. Settings has *Report a problem*
+  and *Ask for a game* buttons that open a pre-filled GitHub form.
+- **Quick folders:** saves and Wine prefix buttons next to the game folder, and command-palette entries for the new things.
+- The window opens at the size you left it.
+- A knowledge-base entry that raised a false alarm on a harmless Wine warning was made precise; the interface checks
+  on Windows are steadier; the README is a proper front page (the long version is `docs/REFERENCE.md`).
+
 ## 5.1.0
 
 A big release: a store for mods, modpacks, a game page that looks finished, and much more care for the things that
@@ -38,11 +55,6 @@ Portuguese, Polish and Turkish.
   and Play waits instead of starting half-updated files); Steam Cloud games get a heads-up next to per-profile saves;
   *Tools → Workshop* lists the Steam Workshop items a game has installed; the overview shows *Trending for your games*;
   Settings can cap download speed and make new downloads wait until a game closes.
-- The game list Gantry knows grew from 55 to 276 games, each checked against Nexus Mods' own list and a save-location
-  database (`tools/build_recipes.py` makes them); games with anti-cheat or with mods outside the game folder are left out.
-- `rig --doctor` prints the state of every installed game (also handy to attach to a bug report); Settings has
-  *Report a problem* and *Ask for a game* buttons that open a pre-filled GitHub form; the window opens at the size you
-  left it; the update check now sees beta releases.
 - Mod Settings keeps a file's byte order mark and Windows line endings when saving, and refuses files that are not UTF-8
   instead of garbling them. GitHub links ending in `#readme` or `?tab=...` are understood and a rate limit is named.
   Fixed a possible crash in cover look-up for names with letters such as İ. Faster MD5 for large downloads.
