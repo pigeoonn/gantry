@@ -205,6 +205,8 @@ mod tests {
     /// diagnostics, brand names and layout labels.
     const EXEMPT: &[&str] = &[
         "UserLocalConfigStore is not a block",
+        "Gantry {} on {}",
+        "Steam or custom",
         "Complete Edition",
         "Definitive Edition",
         "Deluxe Edition",

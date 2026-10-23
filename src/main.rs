@@ -1997,15 +1997,16 @@ fn issue(code: &'static str, level: &'static str, fix: &'static str, args: Vec<S
 
 /// What Steam is doing with this game's files (idle for games that do not come from Steam).
 fn steam_update_of(g: &GameEntry) -> steamlib::UpdateState {
-    #[cfg(test)]
-    if let Some(running) = TEST_STEAM_RUNNING.with(|c| c.get()) {
-        return steam_update_with(g, running);
+    if cfg!(test) {
+        if let Some(running) = TEST_STEAM_RUNNING.with(|c| c.get()) {
+            return steam_update_with(g, running);
+        }
     }
     steam_update_with(g, procs::steam_running())
 }
 
-// Tests say whether Steam "runs" (the real answer depends on the machine they run on).
-#[cfg(test)]
+// Tests say whether Steam "runs" (the real answer depends on the machine they run on). Not behind cfg(test): the
+// checks that split this file into program and tests look for the first such marker.
 thread_local! {
     static TEST_STEAM_RUNNING: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
@@ -2393,19 +2394,43 @@ fn nexus_install_needs(state: &SharedState, appid: &str, lib_id: &str) {
 /// Gantry's own home on GitHub.
 const SELF_REPO: (&str, &str) = ("pigeoonn", "gantry");
 
+/// The address of Gantry's issue form with what the form asks first already filled in: the version and system for a
+/// bug, the game for a game request. Nothing else leaves the computer, and the person still has to press Submit.
+fn issue_url(game_request: bool, system: &str, game: &str) -> String {
+    let (template, field, value) = if game_request { ("game.yml", "game", game) } else { ("bug.yml", "version", system) };
+    format!("https://github.com/{}/{}/issues/new?template={}&{}={}", SELF_REPO.0, SELF_REPO.1, template, field, fsutil::url_encode(value))
+}
+
 /// Is there a newer Gantry than the one running? `(newest tag, its page)` when there is.
+/// Betas are marked as pre-releases, and GitHub's "latest release" ignores those, so the whole list is read.
 fn newer_gantry(state: &SharedState) -> Option<(String, String)> {
     let api = read_state(state).github_api.clone();
-    let out = Command::new("curl")
-        .args(["-sSL", "--max-time", "20", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Gantry"])
-        .arg(format!("{}/repos/{}/{}/releases/latest", api, SELF_REPO.0, SELF_REPO.1))
-        .stdin(Stdio::null())
-        .output()
-        .ok()?;
-    let v = serde_json::from_slice::<Value>(&out.stdout).ok()?;
-    let tag = v.get("tag_name")?.as_str()?.to_string();
-    let url = v.get("html_url").and_then(Value::as_str).unwrap_or("").to_string();
-    (thunderstore::version_newer(tag.trim_start_matches('v'), env!("CARGO_PKG_VERSION")) && url.starts_with("https://github.com/")).then_some((tag, url))
+    let get = |path: String| -> Option<Value> {
+        let out = Command::new("curl")
+            .args(["-sSL", "--max-time", "20", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Gantry"])
+            .arg(format!("{}/repos/{}/{}/{}", api, SELF_REPO.0, SELF_REPO.1, path))
+            .stdin(Stdio::null())
+            .output()
+            .ok()?;
+        serde_json::from_slice::<Value>(&out.stdout).ok()
+    };
+    let mut releases: Vec<Value> = match get("releases?per_page=10".into()) {
+        Some(Value::Array(a)) => a,
+        _ => Vec::new(),
+    };
+    if releases.is_empty() {
+        releases.extend(get("releases/latest".into()));
+    }
+    let mut best: Option<(String, String)> = None;
+    for r in releases.iter().filter(|r| r.get("draft").and_then(Value::as_bool) != Some(true)) {
+        let Some(tag) = r.get("tag_name").and_then(Value::as_str) else { continue };
+        let url = r.get("html_url").and_then(Value::as_str).unwrap_or("");
+        let v = tag.trim_start_matches('v');
+        if url.starts_with("https://github.com/") && thunderstore::version_newer(v, env!("CARGO_PKG_VERSION")) && best.as_ref().map(|(b, _)| thunderstore::version_newer(v, b.trim_start_matches('v'))).unwrap_or(true) {
+            best = Some((tag.to_string(), url.to_string()));
+        }
+    }
+    best
 }
 
 /// Check for a newer Gantry once a day and say so once per version. Quiet when GitHub does not answer.
@@ -4314,6 +4339,12 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 "thunder_page" if page.starts_with("https://thunderstore.io/") && !page.contains(char::is_whitespace) => Some(page),
                 // a link from a mod's own page (the page only ever offers http and https ones)
                 "web" => richtext::safe_url(&page),
+                // a pre-filled issue form (the person reads it and presses Submit themselves)
+                "report" => {
+                    let os = if cfg!(target_os = "linux") { fs::read_to_string("/etc/os-release").ok().and_then(|t| t.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=").map(|v| v.trim_matches('"').to_string()))).unwrap_or_else(|| platform::OS.to_string()) } else { platform::OS.to_string() };
+                    let game = selected_game(state).map(|g| format!("{} ({})", g.name, if g.source.is_empty() { "Steam or custom".to_string() } else { g.source.clone() })).unwrap_or_default();
+                    Some(issue_url(body_str(body, "kind") == "game", &format!("Gantry {} on {}", env!("CARGO_PKG_VERSION"), os), &game))
+                }
                 _ => None,
             };
             if let (Some(u), false) = (url, cfg!(test)) {
@@ -11227,6 +11258,19 @@ mod tests {
     }
 
     #[test]
+    fn the_issue_form_opens_with_the_version_or_the_game_filled_in() {
+        let bug = issue_url(false, "Gantry 5.1.0 on Arch Linux", "ignored");
+        assert_eq!(bug, "https://github.com/pigeoonn/gantry/issues/new?template=bug.yml&version=Gantry%205.1.0%20on%20Arch%20Linux");
+        let game = issue_url(true, "ignored", "Mafia III & more (Steam or custom)");
+        assert!(game.starts_with("https://github.com/pigeoonn/gantry/issues/new?template=game.yml&game=Mafia%20III%20%26%20more"), "{game}");
+        assert!(!game.contains(' ') && !game.contains("ignored"));
+        // the button only ever reaches GitHub
+        let h = harness("issueform");
+        api(&h, "/api/open_link", json!({ "which": "report", "kind": "bug" }));
+        api(&h, "/api/open_link", json!({ "which": "report", "kind": "game" }));
+    }
+
+    #[test]
     fn a_newer_gantry_release_is_noticed_and_an_older_or_equal_one_is_not() {
         let h = harness("selfupdate");
         for (tag, newer) in [("v99.0.0", true), ("v5.0.0", false), ("v0.1.0", false)] {
@@ -11239,6 +11283,10 @@ mod tests {
         api(&h, "/api/self_update_check", json!({}));
         wait_until("noticed", || api(&h, "/api/state", json!({}))["new_version"] == "v99.0.0");
         assert_eq!(api(&h, "/api/state", json!({}))["app_version"], env!("CARGO_PKG_VERSION"));
+        // a beta is a pre-release, which GitHub's "latest" answer leaves out: the list has it
+        let (base, _) = github::fake::start_prerelease_only("pigeoonn", "gantry", "v99.1.0");
+        h.state.write().unwrap().github_api = base;
+        assert_eq!(newer_gantry(&h.state).map(|(t, _)| t).as_deref(), Some("v99.1.0"));
         // nothing answers (a private repository, no connection): quietly no news
         h.state.write().unwrap().github_api = "http://127.0.0.1:1".into();
         assert!(newer_gantry(&h.state).is_none());

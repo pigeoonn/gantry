@@ -121,6 +121,27 @@ pub mod fake {
         start_tagged(owner, repo, "v1", files)
     }
 
+    /// A repository whose only release is a pre-release: `releases/latest` says 404, the list has it.
+    pub fn start_prerelease_only(owner: &str, repo: &str, tag: &str) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", server.server_addr().to_ip().unwrap());
+        let hits = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (h2, o, r, tag) = (hits.clone(), owner.to_string(), repo.to_string(), tag.to_string());
+        std::thread::spawn(move || {
+            for req in server.incoming_requests() {
+                let url = req.url().to_string();
+                h2.lock().unwrap().push(url.clone());
+                if url.starts_with(&format!("/repos/{o}/{r}/releases?")) {
+                    let body = format!(r#"[{{"tag_name":"{tag}","prerelease":true,"draft":false,"html_url":"https://github.com/{o}/{r}/releases/tag/{tag}","assets":[]}},{{"tag_name":"v99.9.9","draft":true,"html_url":"https://github.com/{o}/{r}/releases/tag/v99.9.9","assets":[]}}]"#);
+                    let _ = req.respond(tiny_http::Response::from_string(body));
+                } else {
+                    let _ = req.respond(tiny_http::Response::from_string(r#"{"message":"Not Found"}"#).with_status_code(404));
+                }
+            }
+        });
+        (base, hits)
+    }
+
     pub fn start_tagged(owner: &str, repo: &str, tag: &str, files: Vec<(&str, Vec<u8>)>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
         let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
         let base = format!("http://{}", server.server_addr().to_ip().unwrap());
