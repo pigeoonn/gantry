@@ -44,6 +44,72 @@ pub fn parse_repo(input: &str) -> Option<(String, String)> {
     (part_ok(o) && part_ok(r)).then(|| (o.to_string(), r.to_string()))
 }
 
+/// Where a mod came from on GitHub: the repository, the release it was taken from and the file of that release.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GithubRef {
+    pub owner: String,
+    pub repo: String,
+    pub tag: String,
+    pub asset: String,
+}
+
+impl GithubRef {
+    /// The reference a download address stands for (`https://github.com/<owner>/<repo>/releases/download/<tag>/<file>`).
+    pub fn from_download(url: &str) -> Option<GithubRef> {
+        let rest = url.strip_prefix("https://github.com/")?;
+        let mut it = rest.split('/');
+        let (owner, repo, releases, download, tag, asset) = (it.next()?, it.next()?, it.next()?, it.next()?, it.next()?, it.next()?);
+        if releases != "releases" || download != "download" || it.next().is_some() || !part_ok(owner) || !part_ok(repo) || tag.is_empty() || asset.is_empty() {
+            return None;
+        }
+        Some(GithubRef { owner: owner.into(), repo: repo.into(), tag: tag.into(), asset: asset.into() })
+    }
+
+    /// Is this the same file of the same repository (whatever the release)?
+    pub fn same_file_as(&self, other: &GithubRef) -> bool {
+        self.owner.eq_ignore_ascii_case(&other.owner) && self.repo.eq_ignore_ascii_case(&other.repo) && shape(&self.asset) == shape(&other.asset)
+    }
+
+    /// `owner/repo`.
+    pub fn repo_name(&self) -> String {
+        format!("{}/{}", self.owner, self.repo)
+    }
+}
+
+/// A file name with its version taken out, to tell "Cool-1.2.zip" and "Cool-1.3.zip" are the same file of a new release.
+fn shape(name: &str) -> String {
+    let lower = name.to_lowercase();
+    let mut out = String::new();
+    let mut chars = lower.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c.is_ascii_digit() {
+            while chars.peek().map(|n| n.is_ascii_digit() || *n == '.').unwrap_or(false) {
+                chars.next();
+            }
+            out.push('#');
+        } else if c.is_alphanumeric() || c == '.' {
+            out.push(c);
+        } else if !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    // a "v" in front of a version ("v1.2") is part of the version
+    out.replace("_v#", "_#").replace("v#", "#").replace("__", "_").trim_matches('_').to_string()
+}
+
+/// The file of a newer release that stands for `old` (the file the mod was installed from): the one with the same shape
+/// of name, or the only mod file the release has. `None` when it cannot be told.
+pub fn matching_asset(old: &str, assets: &[Asset]) -> Option<Asset> {
+    let files = mod_files(assets);
+    let want = shape(old);
+    let same: Vec<&Asset> = files.iter().filter(|a| shape(&a.name) == want).collect();
+    match (same.as_slice(), files.as_slice()) {
+        ([one], _) => Some((*one).clone()),
+        ([], [only]) => Some(only.clone()),
+        _ => None,
+    }
+}
+
 /// Files of a release that are mods or contain mods.
 pub fn mod_files(assets: &[Asset]) -> Vec<Asset> {
     let ok = |n: &str| {
@@ -184,6 +250,30 @@ mod tests {
         for bad in ["", "owner", "https://evil.example/owner/repo", "https://github.com/owner", "https://github.com/../x", "a b/c", "https://github.com/ow ner/repo", "x.y/z"] {
             assert_eq!(parse_repo(bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn a_download_address_becomes_a_reference_and_nothing_else_does() {
+        let r = GithubRef::from_download("https://github.com/owner/Cool-Mod/releases/download/v1.2.0/Cool-Mod-1.2.0.zip").unwrap();
+        assert_eq!((r.repo_name().as_str(), r.tag.as_str(), r.asset.as_str()), ("owner/Cool-Mod", "v1.2.0", "Cool-Mod-1.2.0.zip"));
+        for bad in ["https://evil.example/owner/repo/releases/download/v1/x.zip", "https://github.com/owner/repo/archive/v1.zip", "https://github.com/owner/repo/releases/download/v1", "https://github.com/../x/releases/download/v1/a.zip", "https://github.com/o/r/releases/download/v1/a/b.zip", ""] {
+            assert!(GithubRef::from_download(bad).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_same_file_of_a_newer_release_is_recognised_by_the_shape_of_its_name() {
+        let a = |n: &str| Asset { name: n.into(), url: format!("https://github.com/o/r/releases/download/v2/{n}"), size: 1 };
+        assert_eq!(shape("Cool-Mod-1.2.0.zip"), shape("Cool-Mod-v1.10.3.zip"));
+        assert_ne!(shape("Cool-Mod-1.2.0.zip"), shape("Cool-Mod-Extras-1.2.0.zip"));
+        let release = [a("Cool-Mod-1.3.0.zip"), a("Cool-Mod-Extras-1.3.0.zip"), a("source.zip"), a("notes.txt")];
+        assert_eq!(matching_asset("Cool-Mod-1.2.0.zip", &release).unwrap().name, "Cool-Mod-1.3.0.zip");
+        assert_eq!(matching_asset("Cool-Mod-Extras-1.2.0.zip", &release).unwrap().name, "Cool-Mod-Extras-1.3.0.zip");
+        // the file was renamed, but there is only one mod file: that one
+        assert_eq!(matching_asset("old-name.zip", &[a("brand-new-name-2.0.zip")]).unwrap().name, "brand-new-name-2.0.zip");
+        // several candidates and none the same: it cannot be told
+        assert!(matching_asset("old-name.zip", &[a("one.zip"), a("two.zip")]).is_none());
+        assert!(matching_asset("x.zip", &[]).is_none());
     }
 
     #[test]

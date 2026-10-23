@@ -14,3 +14,9 @@ stays available, so a rollback can be undone too.
 **Mods with an installer (FOMOD).** Instead of dropping files into the library, Gantry shows the installer's pages: pick
 an option to read what it does, *Next*, *Install*. Required options are ticked, impossible ones greyed out. Your answers
 are saved and reused when the mod updates. A damaged script falls back to adding the files as they are, with a note in the log.
+
+## Mods from GitHub
+A mod installed from a repository's release (the *GitHub* tab of *Find mods*) remembers the repository and the file. Gantry
+checks for newer releases together with the other updates; the update button downloads the file with the same kind of name
+from the new release and replaces the mod. If the new release has several files and none is clearly the same one, Gantry
+says so and leaves it to you.

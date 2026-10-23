@@ -213,6 +213,7 @@ pub struct AppState {
     pub steam_lib: SteamLibState,
     /// The home page's "trending for your games" shelf and when it was made (it is kept for a few minutes).
     pub home_trending: Option<(Instant, Value)>,
+    pub github_updates: Vec<GithubUpdate>,
     /// `LastPlayed` per Steam appid (seconds), read from Steam's own config.
     pub steam_played: std::collections::HashMap<String, u64>,
     pub thunder: ThunderState,
@@ -231,6 +232,25 @@ impl Default for ThunderState {
     fn default() -> Self {
         Self { base: thunderstore::DEFAULT_BASE.into(), allow_http: false, updates: Vec::new() }
     }
+}
+
+/// A newer release of a mod that came from GitHub.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct GithubUpdate {
+    pub appid: String,
+    pub game: String,
+    pub lib_id: String,
+    pub name: String,
+    pub installed_version: String,
+    pub new_version: String,
+    pub kind: &'static str,
+    pub repo: String,
+    /// Where the new file is (empty when the release has several files and none is clearly the same one).
+    #[serde(skip)]
+    pub url: String,
+    /// What the mod will be remembered as once the new file is in.
+    #[serde(skip)]
+    pub new_ref: Option<github::GithubRef>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -584,6 +604,7 @@ impl AppState {
             health: Default::default(),
             steam_lib: SteamLibState::default(),
             home_trending: None,
+            github_updates: Vec::new(),
             steam_played: Default::default(),
             thunder: ThunderState::default(),
         }
@@ -727,7 +748,7 @@ impl AppState {
             "nexus": self.nexus_json(),
             "steam_lib": self.steam_lib_json(),
             "last_played": self.last_played_json(),
-            "thunder_updates": self.thunder.updates,
+            "thunder_updates": self.thunder.updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null)).chain(self.github_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).collect::<Vec<_>>(),
         })
     }
 
@@ -847,6 +868,7 @@ fn refresh_mods_shared(state: &SharedState) {
 /// Forget listed updates whose mod was updated, replaced or removed since.
 fn prune_updates(state: &SharedState) {
     prune_thunder_updates(state);
+    prune_github_updates(state);
     let (rows, games) = {
         let st = read_state(state);
         if st.nexus.updates.is_empty() {
@@ -897,6 +919,29 @@ fn prune_thunder_updates(state: &SharedState) {
     if keep.len() != rows.len() {
         let mut st = write_state(state);
         st.thunder.updates = keep;
+        st.notifier.bump();
+    }
+}
+
+/// Forget GitHub updates whose mod was updated or removed since.
+fn prune_github_updates(state: &SharedState) {
+    let (rows, games) = {
+        let st = read_state(state);
+        if st.github_updates.is_empty() {
+            return;
+        }
+        (st.github_updates.clone(), st.games.clone())
+    };
+    let keep: Vec<GithubUpdate> = rows
+        .iter()
+        .filter(|r| {
+            games.iter().find(|g| g.appid == r.appid).and_then(library_of).map(|l| l.mods().iter().any(|m| m.id == r.lib_id && m.github.as_ref().map(|g| g.tag.trim_start_matches('v') == r.installed_version).unwrap_or(false))).unwrap_or(false)
+        })
+        .cloned()
+        .collect();
+    if keep.len() != rows.len() {
+        let mut st = write_state(state);
+        st.github_updates = keep;
         st.notifier.bump();
     }
 }
@@ -1329,6 +1374,8 @@ struct InstallOpts {
     verified: String,
     /// Where the file came from on Thunderstore; also names the mod.
     thunder: Option<thunderstore::ThunderRef>,
+    /// Where the file came from on GitHub.
+    github: Option<github::GithubRef>,
     name: Option<String>,
     /// Thunderstore packages the mod needs (`Owner-Name`).
     depends: Vec<String>,
@@ -2688,6 +2735,15 @@ fn spawn_self_update_check(state: Weak<RwLock<AppState>>) {
 
 /// Download one file of a GitHub release and add it to the selected game's library.
 fn github_install(state: &SharedState, repo: &str, url: &str) {
+    let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
+        return log(state, "WARN", "Select an installed game first.");
+    };
+    github_install_for(state, &g, repo, url, github::GithubRef::from_download(url));
+}
+
+/// Download one file of a GitHub release into `g`'s library. A file of the same repository that is already there is
+/// replaced (that is an update), and the mod remembers where it came from so it can be checked for newer releases.
+fn github_install_for(state: &SharedState, g: &GameEntry, repo: &str, url: &str, reference: Option<github::GithubRef>) {
     let Some((o, r)) = github::parse_repo(repo) else {
         return log(state, "ERR", "That does not look like a GitHub repository.");
     };
@@ -2695,9 +2751,6 @@ fn github_install(state: &SharedState, repo: &str, url: &str) {
     if !github::download_ok(url, &o, &r, allow.as_deref()) {
         return log(state, "ERR", "Refusing a download that is not from that repository's releases.");
     }
-    let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
-        return log(state, "WARN", "Select an installed game first.");
-    };
     let name = url.rsplit('/').next().unwrap_or("download.zip");
     if name.is_empty() || name.contains("..") || name.contains('\\') {
         return log(state, "ERR", "That file name is not allowed.");
@@ -2720,7 +2773,10 @@ fn github_install(state: &SharedState, repo: &str, url: &str) {
         let _ = fs::remove_dir_all(&dir);
         return log(state, "ERR", "The download failed (check your connection).");
     }
-    install_routed(dest, true, Arc::clone(state), InstallOpts { game: Some(g), to_library: true, ..Default::default() });
+    // a file that is not under github.com/<owner>/<repo>/releases/download (a mirror) simply is not tracked
+    let replaces = reference.as_ref().and_then(|new| library_of(g)?.mods().into_iter().find(|m| m.github.as_ref().map(|old| old.same_file_as(new)).unwrap_or(false)).map(|m| m.id));
+    let version = reference.as_ref().map(|r| r.tag.trim_start_matches('v').to_string()).unwrap_or_default();
+    install_routed(dest, true, Arc::clone(state), InstallOpts { game: Some(g.clone()), to_library: true, github: reference, replaces, version, ..Default::default() });
 }
 
 /// What the compatibility window shows for the selected game.
@@ -3136,6 +3192,9 @@ fn finish_library_add(state: &SharedState, g: &GameEntry, lib: &deploy::Library,
             if let Some(r) = &opts.thunder {
                 let _ = lib.set_thunderstore(&m.id, r.clone());
                 let _ = lib.set_depends(&m.id, opts.depends.clone());
+            }
+            if let Some(r) = &opts.github {
+                let _ = lib.set_github(&m.id, r.clone());
             }
             if let Some(answers) = &opts.fomod {
                 let _ = lib.set_fomod(&m.id, answers.clone());
@@ -4386,6 +4445,14 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                         Ok(m) => log(&state_bg, "OK", m),
                         Err(e) => log(&state_bg, "ERR", e),
                     },
+                    (None, Some(g)) => {
+                        // looked up first: a lock taken inside the `match` line would be held while the update runs
+                        let found = read_state(&state_bg).github_updates.iter().find(|u| u.appid == appid && u.lib_id == id).cloned();
+                        match found {
+                            Some(u) => github_update_apply(&state_bg, &g, &u),
+                            None => log(&state_bg, "WARN", "That update is no longer listed. Check for updates again."),
+                        }
+                    }
                     _ => log(&state_bg, "WARN", "That update is no longer listed. Check for updates again."),
                 }
             });
@@ -7152,7 +7219,7 @@ fn spawn_update_checker(state: Weak<RwLock<AppState>>) {
             // one quiet desktop message when there is more to update than the last time we said
             let (n, lang, summary) = {
                 let s = read_state(&st);
-                (s.nexus.updates.len() + s.thunder.updates.len(), s.config.language.clone(), update_summary(&s.nexus.updates, &s.thunder.updates))
+                (s.nexus.updates.len() + s.thunder.updates.len() + s.github_updates.len(), s.config.language.clone(), update_summary(&s.nexus.updates, &s.thunder.updates))
             };
             if n > told {
                 add_note(&st, "updates", if n == 1 { "1 mod update available on Nexus Mods.".to_string() } else { format!("{} mod updates available on Nexus Mods.", n) }, "");
@@ -7236,7 +7303,8 @@ fn update_all(state: &SharedState) {
         let st = read_state(state);
         (st.thunder.updates.clone(), st.nexus.updates.clone(), st.nexus.user.as_ref().map(|u| u.premium).unwrap_or(false))
     };
-    if thunder.is_empty() && nexus_rows.is_empty() {
+    let github_rows = read_state(state).github_updates.clone();
+    if thunder.is_empty() && nexus_rows.is_empty() && github_rows.is_empty() {
         return log(state, "OK", "All mods are up to date.");
     }
     let game_of = |appid: &str| read_state(state).games.iter().find(|g| g.appid == appid).cloned();
@@ -7250,6 +7318,11 @@ fn update_all(state: &SharedState) {
             }
             Err(e) => log(state, "ERR", e),
         }
+    }
+    for u in github_rows.iter().filter(|u| !u.url.is_empty()) {
+        let Some(g) = game_of(&u.appid) else { continue };
+        github_update_apply(state, &g, u);
+        done += 1;
     }
     let mut waiting = 0;
     for u in &nexus_rows {
@@ -7270,6 +7343,57 @@ fn update_all(state: &SharedState) {
 }
 
 /// Ask Thunderstore about every library mod that came from there. Replaces the list of known updates.
+/// Look at the repositories mods were installed from and list the ones with a newer release.
+fn check_github_updates(state: &SharedState) -> usize {
+    let (games, api, allow) = {
+        let st = read_state(state);
+        (st.games.iter().filter(|g| g.is_installed).cloned().collect::<Vec<_>>(), st.github_api.clone(), st.github_allow.clone())
+    };
+    let mut latest: std::collections::HashMap<String, Option<github::Release>> = Default::default();
+    let mut rows: Vec<GithubUpdate> = Vec::new();
+    for g in &games {
+        let Some(lib) = library_of(g) else { continue };
+        for m in lib.mods() {
+            let Some(r) = m.github.clone().filter(|_| m.update_rule != "never") else { continue };
+            let rel = latest.entry(r.repo_name().to_lowercase()).or_insert_with(|| github::latest(&r.owner, &r.repo, &api, allow.as_deref()).ok());
+            let Some(rel) = rel else { continue };
+            if !thunderstore::version_newer(rel.tag.trim_start_matches('v'), r.tag.trim_start_matches('v')) {
+                continue;
+            }
+            let asset = github::matching_asset(&r.asset, &rel.assets);
+            rows.push(GithubUpdate {
+                appid: g.appid.clone(),
+                game: g.name.clone(),
+                lib_id: m.id.clone(),
+                name: m.name.clone(),
+                installed_version: r.tag.trim_start_matches('v').to_string(),
+                new_version: rel.tag.trim_start_matches('v').to_string(),
+                kind: "github",
+                repo: r.repo_name(),
+                url: asset.as_ref().map(|a| a.url.clone()).unwrap_or_default(),
+                new_ref: asset.map(|a| github::GithubRef { owner: r.owner.clone(), repo: r.repo.clone(), tag: rel.tag.clone(), asset: a.name }),
+            });
+        }
+    }
+    let n = rows.len();
+    let mut st = write_state(state);
+    st.github_updates = rows;
+    st.notifier.bump();
+    if n > 0 {
+        st.log("INFO", if n == 1 { "1 GitHub update is available.".to_string() } else { format!("{} GitHub updates are available.", n) });
+    }
+    n
+}
+
+/// Install the newer release of one mod from GitHub.
+fn github_update_apply(state: &SharedState, g: &GameEntry, row: &GithubUpdate) {
+    if row.url.is_empty() {
+        return log(state, "WARN", format!("The new release of {} has several files and Gantry cannot tell which one replaces yours: pick it in the GitHub tab.", row.name));
+    }
+    github_install_for(state, g, &row.repo, &row.url, row.new_ref.clone());
+    refresh_mods_shared(state);
+}
+
 fn check_thunder_updates(state: &SharedState) -> Result<usize, String> {
     let games: Vec<GameEntry> = read_state(state).games.iter().filter(|g| g.is_installed).cloned().collect();
     let mut rows: Vec<ThunderUpdate> = Vec::new();
@@ -7305,7 +7429,9 @@ fn check_thunder_updates(state: &SharedState) -> Result<usize, String> {
     if n > 0 {
         st.log("INFO", if n == 1 { "1 Thunderstore update is available.".to_string() } else { format!("{} Thunderstore updates are available.", n) });
     }
-    Ok(n)
+    drop(st);
+    let github_n = check_github_updates(state);
+    Ok(n + github_n)
 }
 
 /// Hand an `nxm://` link to the Gantry that is already running (it owns the window and the key).
@@ -11786,6 +11912,61 @@ mod tests {
         let (c, _) = http(&h, "GET", &format!("/api/screenshot?n=0&t={}", h.token), &[], b"");
         assert_eq!(c, 200);
         assert_eq!(http(&h, "GET", "/api/screenshot?n=0", &[], b"").0, 403);
+    }
+
+    #[test]
+    fn a_mod_from_github_is_checked_for_a_newer_release_and_replaced_by_it() {
+        if fsutil::find_in_path("bsdtar").is_none() || fsutil::find_in_path("curl").is_none() {
+            return;
+        }
+        let h = harness("ghupdate");
+        let _dir = add_plain_game(&h);
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        let stage = h._dir.join("gh-stage");
+        fs::create_dir_all(stage.join("Data")).unwrap();
+        fs::write(stage.join("Data/cool.esp"), "V1").unwrap();
+        let m = lib.add_with(&stage, "Cool Mod", "Cool-Mod-1.0.0.zip", None, "1.0.0").unwrap();
+        lib.set_github(&m.id, github::GithubRef { owner: "owner".into(), repo: "Cool-Mod".into(), tag: "v1.0.0".into(), asset: "Cool-Mod-1.0.0.zip".into() }).unwrap();
+        refresh_mods_shared(&h.state);
+        // the release is the same: nothing to do
+        let (base, _) = github::fake::start_tagged("owner", "Cool-Mod", "v1.0.0", vec![("Cool-Mod-1.0.0.zip", zip_of(&h, "gh1", &[("Data/cool.esp", "V1")]))]);
+        {
+            let mut st = h.state.write().unwrap();
+            st.github_api = base.clone();
+            st.github_allow = Some(base);
+        }
+        assert_eq!(check_github_updates(&h.state), 0);
+        // a newer one, with the same file under a new name
+        let (base, _) = github::fake::start_tagged("owner", "Cool-Mod", "v1.1.0", vec![("Cool-Mod-1.1.0.zip", zip_of(&h, "gh2", &[("Data/cool.esp", "V2")])), ("source.zip", b"x".to_vec())]);
+        {
+            let mut st = h.state.write().unwrap();
+            st.github_api = base.clone();
+            st.github_allow = Some(base);
+        }
+        assert_eq!(check_github_updates(&h.state), 1);
+        let row = h.state.read().unwrap().github_updates[0].clone();
+        assert_eq!((row.name.as_str(), row.installed_version.as_str(), row.new_version.as_str(), row.kind), ("Cool Mod", "1.0.0", "1.1.0", "github"));
+        assert!(row.url.ends_with("/dl/Cool-Mod-1.1.0.zip"), "{}", row.url);
+        // the interface sees it among the updates (its existing button applies it)
+        let st = api(&h, "/api/state", json!({}));
+        assert!(st["thunder_updates"].as_array().unwrap().iter().any(|u| u["lib_id"] == json!(m.id) && u["kind"] == "github" && u["new_version"] == "1.1.0"), "{}", st["thunder_updates"]);
+        // applying it replaces the mod instead of adding a second one, and remembers the new release
+        api(&h, "/api/thunder_update", json!({ "appid": g.appid, "id": m.id }));
+        wait_until("the update", || lib.mods().iter().any(|x| x.github.as_ref().map(|r| r.tag.as_str()) == Some("v1.1.0")));
+        let mods = lib.mods();
+        assert_eq!(mods.len(), 1, "replaced, not added: {mods:?}");
+        assert_eq!((mods[0].github.as_ref().map(|r| r.asset.as_str()), mods[0].version.as_str()), (Some("Cool-Mod-1.1.0.zip"), "1.1.0"));
+        // and the finished update is gone from the list
+        wait_until("the list to clear", || {
+            prune_github_updates(&h.state);
+            h.state.read().unwrap().github_updates.is_empty()
+        });
+        // a mod set to "keep this version" is not offered updates
+        lib.set_update_rule(&mods[0].id, "never").unwrap();
+        let (base, _) = github::fake::start_tagged("owner", "Cool-Mod", "v9.0.0", vec![("Cool-Mod-9.0.0.zip", b"x".to_vec())]);
+        h.state.write().unwrap().github_api = base;
+        assert_eq!(check_github_updates(&h.state), 0);
     }
 
     #[test]

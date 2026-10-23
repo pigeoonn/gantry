@@ -69,6 +69,9 @@ pub struct LibMod {
     /// Set when the mod came from Thunderstore (enables update checks and dependency handling).
     #[serde(default)]
     pub thunderstore: Option<ThunderRef>,
+    /// Set when the mod came from a GitHub release (enables update checks).
+    #[serde(default)]
+    pub github: Option<crate::github::GithubRef>,
     #[serde(default)]
     pub added_ms: u64,
     #[serde(default)]
@@ -1388,6 +1391,7 @@ impl Library {
             source: source.to_string(),
             nexus,
             thunderstore: None,
+            github: None,
             fomod: None,
             update_rule: String::new(),
             verified: String::new(),
@@ -1438,6 +1442,15 @@ impl Library {
         let mut lf = self.load();
         let m = lf.mods.iter_mut().find(|m| m.id == id).ok_or("Unknown mod.")?;
         m.thunderstore = Some(r);
+        self.save(&lf)
+    }
+
+    /// Remember that a mod came from a GitHub release.
+    pub fn set_github(&self, id: &str, r: crate::github::GithubRef) -> Result<(), String> {
+        let _g = lock();
+        let mut lf = self.load();
+        let m = lf.mods.iter_mut().find(|m| m.id == id).ok_or("Unknown mod.")?;
+        m.github = Some(r);
         self.save(&lf)
     }
 

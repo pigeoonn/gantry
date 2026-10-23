@@ -29,3 +29,9 @@ last, without the ones you already have. It needs a Nexus key or a Thunderstore 
 *Settings → Download speed limit* caps each download (1 to 25 MB/s). *Wait for the game to close before downloading*
 holds new downloads while a game runs, so they cannot make it stutter; a download that has already begun is left alone,
 and a waiting one can be cancelled in the download list.
+
+## Screenshots, before and after mods
+*Tools → Screenshots* (for games from Steam that have pictures) shows the screenshots Steam took with its key, newest
+first. Gantry marks each one *With mods* or *Without mods* by comparing the time it was taken with its own record of when
+you played with mods and without, so you can put the same place side by side. Click a picture to see it large. Nothing
+is copied or changed: the pictures stay in Steam's folder.

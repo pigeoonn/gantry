@@ -1,5 +1,17 @@
 # Changes
 
+## 5.3.0
+
+- **Updates for mods from GitHub.** A mod installed from a GitHub release remembers which repository and file it came from;
+  Gantry checks for newer releases with the other updates, shows them in the same list, and the update button replaces the
+  mod instead of adding a second one. A mod set to *keep this version* is left alone.
+- **Screenshots before and after mods:** *Tools → Screenshots* shows a game's Steam screenshots, each marked *With mods*
+  or *Without mods* from Gantry's own record of when you played, with a large viewer.
+- **Sync through a folder:** *Settings → Sync folder* keeps the portable part of your setup (profiles, notes, tags,
+  favourites, saved mods, look, mod lists) in a folder that Syncthing, Dropbox or a USB stick carries between computers.
+  Paths, trainers, launch options, play time and keys never travel.
+- A **Road to 1.0** checklist in `docs/ROADMAP.md` says what the beta still needs.
+
 ## 5.2.0
 
 The first update after the public beta.
