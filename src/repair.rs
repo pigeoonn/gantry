@@ -1674,6 +1674,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))] // the game's log of this test lives in a Wine prefix; on Windows it is in the real AppData
     fn pe_resource_and_the_games_own_log_decide_the_engine_version() {
         let (_d, game) = make_game("logver");
         let root = PathBuf::from(&game.bin_dir).join("ue4ss");

@@ -54,6 +54,11 @@ fn rate_arg(kb: u64) -> Option<String> {
     (kb > 0).then(|| format!("{}k", kb.max(16)))
 }
 
+/// The curl arguments that cap the speed (none without a cap).
+fn limit_args(l: Limits) -> Vec<String> {
+    rate_arg(l.kb_per_sec).map(|r| vec!["--limit-rate".to_string(), r]).unwrap_or_default()
+}
+
 static LIST: Mutex<Vec<Item>> = Mutex::new(Vec::new());
 static NEXT: AtomicU64 = AtomicU64::new(1);
 const KEEP: usize = 40;
@@ -113,9 +118,7 @@ pub fn fetch_with(url: &str, dest: &Path, user_agent: Option<&str>, source: &str
     let headers: PathBuf = dest.with_extension("headers");
     let mut cmd = Command::new("curl");
     cmd.args(["-fL", "--retry", "2", "--connect-timeout", "15", "--max-time", "3600", "-sS"]);
-    if let Some(rate) = rate_arg(limits.kb_per_sec) {
-        cmd.args(["--limit-rate", &rate]);
-    }
+    cmd.args(limit_args(limits));
     if let Some(ua) = user_agent {
         cmd.args(["-A", ua]);
     }
@@ -328,15 +331,16 @@ mod tests {
     }
 
     #[test]
-    fn a_capped_download_is_slowed_down_but_arrives_whole() {
+    fn a_capped_download_passes_the_cap_to_curl_and_still_arrives_whole() {
+        // how strictly curl holds a cap on a fast local connection differs between versions, so the argument is checked, not the clock
+        assert_eq!(limit_args(Limits { kb_per_sec: 100, wait_for_game: false }), vec!["--limit-rate".to_string(), "100k".to_string()]);
+        assert!(limit_args(Limits::default()).is_empty());
         if crate::fsutil::find_in_path("curl").is_none() {
             return;
         }
         let d = TempDir::new("dl-cap");
         let dest = d.path().join("capped-one.bin");
-        let t0 = Instant::now();
-        fetch_with(&serve(300_000, false), &dest, None, "Test", Limits { kb_per_sec: 100, wait_for_game: false }, &|| false).unwrap();
-        assert!(t0.elapsed() >= Duration::from_millis(1500), "300 kB at 100 kB/s cannot take {:?}", t0.elapsed());
+        fetch_with(&serve(300_000, false), &dest, None, "Test", Limits { kb_per_sec: 4000, wait_for_game: false }, &|| false).unwrap();
         assert_eq!(std::fs::metadata(&dest).unwrap().len(), 300_000);
     }
 

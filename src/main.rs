@@ -8446,7 +8446,9 @@ mod tests {
         fs::write(src.join("ue4ss/UE4SS-settings.ini"), "[General]\nbUseUObjectArrayCache = true\n").unwrap();
         fs::write(src.join("ue4ss/Mods/Keybinds/Scripts/main.lua"), "--").unwrap();
         let zip = h._dir.join("rt.zip");
-        assert!(Command::new("bsdtar").args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
+        // Windows ships the same program under the name tar
+        let tar = if fsutil::find_in_path("bsdtar").is_some() { "bsdtar" } else { "tar" };
+        assert!(Command::new(tar).args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
         let (code, _) = http(&h, "POST", "/api/drop_upload?name=UE4SS_v3.zip", &[("X-Rig-Token", &h.token)], &fs::read(&zip).unwrap());
         assert_eq!(code, 200);
         wait_until("runtime installed", || bin.join("ue4ss/UE4SS.dll").is_file() && bin.join("dwmapi.dll").is_file());
@@ -11208,8 +11210,8 @@ mod tests {
         assert!(issues.is_empty(), "{issues:?}");
         assert!(report.len() > 100);
         assert!(deploy < Duration::from_secs(20), "deploying 3000 files took {deploy:?}");
-        // the Windows runners of the automated checks have slow file systems
-        let limit = if cfg!(windows) { 8 } else { 2 };
+        // the Windows and macOS runners of the automated checks have slow file systems
+        let limit = if cfg!(any(windows, target_os = "macos")) { 8 } else { 2 };
         assert!(after < Duration::from_secs(limit), "status, doctor and report took {after:?}");
         let t = Instant::now();
         lib.purge().unwrap();
@@ -12184,7 +12186,7 @@ mod tests {
         wait_until("the settings coming back", || api(&h, "/api/state", json!({}))["settings"]["theme"] != "midnight");
         // a name that is not one of ours is refused
         api(&h, "/api/auto_backup_restore", json!({ "name": "../../config/protonrig/rig_config.json" }));
-        wait_until("the refusal", || last_log(&h).contains("not a backup of Gantry"));
+        wait_until("the refusal", || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("not a backup of Gantry")));
 
         api(&h, "/api/settings", json!({ "auto_backup": false }));
         assert_eq!(api(&h, "/api/state", json!({}))["settings"]["auto_backup"], false);
