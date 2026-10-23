@@ -1,6 +1,6 @@
 pkgbase = gantry
 	pkgdesc = Mod, trainer and crash-hunting hub for Proton games on Linux
-	pkgver = 5.1.0
+	pkgver = 5.2.0
 	pkgrel = 1
 	url = https://github.com/pigeoonn/gantry
 	arch = x86_64
@@ -21,7 +21,7 @@ pkgbase = gantry
 	optdepends = steam: sync launch options for Steam games
 	optdepends = chromium: app window for the interface (any Chromium based browser works)
 	conflicts = gantry-git
-	source = gantry-5.1.0.tar.gz::https://github.com/pigeoonn/gantry/archive/refs/tags/v5.1.0.tar.gz
-	sha256sums = ff84ef69200520297c4d19e2b5242320dff83de9c9ab4ea83cd5f23eccf6a73a
+	source = gantry-5.2.0.tar.gz::https://github.com/pigeoonn/gantry/archive/refs/tags/v5.2.0.tar.gz
+	sha256sums = 8783053eadb5840b739d7ae88a94f81dfcb11dd6708eebd75158b64c182c2637
 
 pkgname = gantry

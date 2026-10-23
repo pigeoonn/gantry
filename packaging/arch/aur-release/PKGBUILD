@@ -2,7 +2,7 @@
 # gantry: builds the tagged release of the public repository.
 # Submit it with:  git clone ssh://aur@aur.archlinux.org/gantry.git  (then copy this file in, run makepkg --printsrcinfo > .SRCINFO)
 pkgname=gantry
-pkgver=5.1.0
+pkgver=5.2.0
 pkgrel=1
 pkgdesc='Mod, trainer and crash-hunting hub for Proton games on Linux'
 arch=('x86_64')
@@ -21,7 +21,7 @@ optdepends=(
 )
 conflicts=('gantry-git')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('ff84ef69200520297c4d19e2b5242320dff83de9c9ab4ea83cd5f23eccf6a73a')
+sha256sums=('8783053eadb5840b739d7ae88a94f81dfcb11dd6708eebd75158b64c182c2637')
 
 build() {
   cd "$pkgname-$pkgver"
