@@ -1,5 +1,5 @@
 pkgbase = gantry
-	pkgdesc = Mod, trainer and crash-hunting hub for Proton games on Linux
+	pkgdesc = Mod, trainer and crash-hunting hub for games on Linux
 	pkgver = 5.3.0
 	pkgrel = 1
 	url = https://github.com/pigeoonn/gantry

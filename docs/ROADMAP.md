@@ -43,7 +43,7 @@ settings, deleting user data or publishing; never THE FINALS; never restart Gant
 |---|-----------|-------|
 | M1 | Play modes | "Play without mods" (mods out, game starts, mods back when it closes), play with a saved profile |
 | M2 | Game doctor 2.0 | one health chip per game (loader, Steam option of the right account, logs, game updates, missing requirements, anti-cheat) with one-click fixes, problem report |
-| M3 | Compatibility center | Proton per game, GE-Proton download with checksum, tweak presets, "try another way" |
+| M3 | Compatibility center | Compatibility tool per game, GE build download with checksum, tweak presets, "try another way" |
 | M4 | Library that looks finished | cover lookup, favourites, sorting, tags, notes, playtime, groups |
 | M5 | Safety and data | backup/restore of Gantry data, first-deploy snapshot, disk usage and safe cleanup, verify library |
 | M6 | Mod management depth | per-mod notes, dependency view, conflict explorer, re-install from cached archive, search |
@@ -142,9 +142,9 @@ Why: many big mods (FOMOD on Nexus) ship an installer script instead of a folder
 - Done when: search, export and import work against fake servers in tests, and a shared pack survives a round trip.
 
 ## M19: Crash knowledge base
-- A growing list of **known-error patterns** (log line → cause → fix) shipped as data and updatable like recipes: MelonLoader hangs at Cpp2IL, BepInEx version mismatch, missing runtime, UE4SS wrong version, DXVK/Proton crashes.
+- A growing list of **known-error patterns** (log line → cause → fix) shipped as data and updatable like recipes: MelonLoader hangs at Cpp2IL, BepInEx version mismatch, missing runtime, UE4SS wrong version, DXVK crashes.
 - The Game doctor uses it for every game; each fix is one click or a clear instruction.
-- **Better logs:** a Logs tab per game that merges Player.log, loader logs, Proton log and Gantry's own, with search and "copy for a bug report" (no keys, no paths of your home).
+- **Better logs:** a Logs tab per game that merges Player.log, loader logs, the compatibility layer's log and Gantry's own, with search and "copy for a bug report" (no keys, no paths of your home).
 - **Why is it slow?** frame-time/CPU/RAM glance while the game runs (read from /proc and MangoHud logs when present); suggests disabling heavy mods.
 - Schedule I stays the test case: the MelonLoader hang gets a real fix path (BepInEx 6 switch, retry with a Mono build, or wait for the loader update).
 - Done when: 30 patterns with tests; unknown errors still produce a useful report.

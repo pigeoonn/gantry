@@ -3,7 +3,7 @@
 pkgname=gantry
 pkgver=5.3.0
 pkgrel=1
-pkgdesc='Mod, trainer and crash-hunting hub for Proton games on Linux'
+pkgdesc='Mod, trainer and crash-hunting hub for games on Linux'
 arch=('x86_64')
 url='https://github.com/pigeoonn/gantry'
 license=('GPL-3.0-or-later')

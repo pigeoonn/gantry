@@ -16,4 +16,4 @@
   (*Updated shortly before this run*) with *Go back to v…*, and the notification bell says so. Before any update the mod page
   shows what changed and asks first; the version you leave stays in the library.
 - **Logs:** *Tools → Logs* reads every log of the game in one window (BepInEx, MelonLoader, Unity's player log, UE4SS, the engine,
-  Proton): pick one, search it, errors and warnings are coloured, *Copy* takes what is shown. Only logs Gantry found itself are read.
+  the compatibility layer): pick one, search it, errors and warnings are coloured, *Copy* takes what is shown. Only logs Gantry found itself are read.

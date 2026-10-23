@@ -29,8 +29,8 @@ you trust where it came from. You can check them with VirusTotal (optional).
 **Why is a game "Protected"?** It uses an anti-cheat (EasyAntiCheat, BattlEye and others). Mods there can get you banned, so Gantry
 does not add any.
 
-**Does it work on Windows and macOS?** The builds exist and their automated tests run on every change, but Gantry is developed and used on Linux, so treat both as beta (macOS more than Windows). Please report what breaks. Some Linux-only parts (Proton,
-Wine settings, memory and processor numbers) are hidden or empty there. See [TESTING](TESTING.md).
+**Does it work on Windows and macOS?** The builds exist and their automated tests run on every change, but Gantry is developed and used on Linux, so treat both as beta (macOS more than Windows). Please report what breaks. Some Linux-only parts (Wine
+settings, memory and processor numbers) are hidden or empty there. See [TESTING](TESTING.md).
 
 **Why no Flatpak?** A Flatpak sandbox cannot start your games or reach their folders the way a mod manager must. Use the AppImage,
 the Arch package or build from source ([INSTALL](INSTALL.md)).

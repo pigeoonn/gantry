@@ -20,7 +20,7 @@ text of the activity log at the bottom of the window.
 8. A notification: in Settings press **Check for a newer Gantry** with a release newer than yours available, or
    wait for an update notice. A Windows toast should appear (it shows as "Windows PowerShell"; that is expected).
 
-Known limits: no Proton/Wine parts (hidden); loaders (BepInEx, MelonLoader) work without launch options.
+Known limits: no Wine parts (hidden); loaders (BepInEx, MelonLoader) work without launch options.
 
 ## macOS (Apple silicon)
 

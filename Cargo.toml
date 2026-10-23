@@ -8,7 +8,7 @@ description = "Gantry: mod manager for games, with a Crash Detective that finds 
 repository = "https://github.com/pigeoonn/gantry"
 homepage = "https://github.com/pigeoonn/gantry"
 readme = "README.md"
-keywords = ["mods", "games", "proton", "modding", "steam"]
+keywords = ["mods", "games", "modding", "steam", "linux"]
 categories = ["games"]
 
 [dependencies]

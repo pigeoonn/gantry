@@ -1,6 +1,6 @@
 # Installing Gantry
 
-Gantry is a mod, trainer and crash-hunting hub for games that run through **Proton / Wine on Linux**
+Gantry is a mod, trainer and crash-hunting hub for games on **Linux, Windows and macOS**
 (Steam, Hydra, Heroic, Lutris or games you add by hand). It is one small program that shows its interface
 in an app window of your browser. You can download an AppImage (Linux), a zip (Windows) or a tar.gz from the **Releases** page, or build it once from the
 source (about a minute). This page walks through it for each system.
@@ -13,12 +13,12 @@ source (about a minute). This page walks through it for each system.
 | **Debian, Ubuntu, Linux Mint, Pop!_OS** | ✅ Supported (the automated tests run on Ubuntu). |
 | **Fedora, openSUSE** | 🟡 Should work; package names below are from the distributions' usual naming and have not been tried here. |
 | **Steam Deck (desktop mode), SteamOS, other immutable systems** | 🟡 Untested. The root folder is read-only, so build inside a container (distrobox) or install the build tools in your home folder. |
-| **Windows 10 / 11** | 🟡 Built and tested automatically on every push (unit tests and the interface run on a Windows machine); not yet tried by hand on real games. Finds Steam through the registry, launches games directly or through Steam, and has no Proton or Wine parts. |
-| **macOS** | 🟡 Early: builds and passes the automated tests on a Mac runner, not tried by hand. Mod library for native games; no Wine/Proton parts. |
+| **Windows 10 / 11** | 🟡 Built and tested automatically on every push (unit tests and the interface run on a Windows machine); not yet tried by hand on real games. Finds Steam through the registry, launches games directly or through Steam, and has no Wine parts. |
+| **macOS** | 🟡 Early: builds and passes the automated tests on a Mac runner, not tried by hand. Mod library for native games; no Wine parts. |
 
 ## What you need
 
-* A Linux desktop with **Steam** (and Proton) or another launcher you use. Gantry does not install games.
+* A Linux desktop with **Steam** or another launcher you use. Gantry does not install games.
 * **A Chromium-based browser** (Brave, Chromium, Chrome, Thorium, Vivaldi or Edge) for the app window.
   Without one, Gantry opens your default browser instead.
 * `curl` (downloads UE4SS and talks to Nexus Mods / Steam), and tools to open mod archives:
@@ -42,7 +42,7 @@ part of Windows 10/11); Chrome, Brave and Vivaldi also work. Archives are opened
 with Windows (zip, 7z and most rar files) or with 7-Zip when it is installed. Your data is in
 `%APPDATA%\Gantry` (settings) and `%LOCALAPPDATA%\Gantry` (downloads, backups, logs).
 
-On Windows games run natively, so Proton, Wine prefixes, GameMode and MangoHud do not appear. Mod loaders such
+On Windows games run natively, so Wine prefixes, GameMode and MangoHud do not appear. Mod loaders such
 as BepInEx and MelonLoader work without any launch option. To build from source install Rust
 (<https://rustup.rs>) and run `cargo build --release`.
 
@@ -203,7 +203,7 @@ For a bug report, include the lines of that log and your distribution's name.
 
 ## Flatpak
 
-There is no Flatpak yet, on purpose: Gantry has to see the processes of your games, start Steam and Proton tools and
+There is no Flatpak yet, on purpose: Gantry has to see the processes of your games, start Steam and its tools and
 write into game folders anywhere on disk, which a Flatpak sandbox blocks unless it is given almost everything (and
 Flathub does not accept that). The AppImage and the AUR package give the same program without a sandbox. If a Flatpak
 with host access is wanted anyway, it can be added later.

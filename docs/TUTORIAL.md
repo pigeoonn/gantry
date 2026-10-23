@@ -1,7 +1,7 @@
 # Getting started with Gantry
 
 Gantry puts mods into games, keeps them organised, and fixes things when a game stops starting. It is made for
-Linux (Steam, Proton, Heroic, Lutris, Hydra) and also runs on Windows and macOS. This page takes you from nothing to a
+Linux (Steam, Heroic, Lutris, Hydra) and also runs on Windows and macOS. This page takes you from nothing to a
 modded game in about ten minutes.
 
 ## 1. Install

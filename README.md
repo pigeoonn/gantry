@@ -13,7 +13,7 @@ back**. It finds games from Steam, Hydra, Heroic and Lutris, browses Nexus Mods 
 (BepInEx, MelonLoader, UE4SS), backs up your saves and explains what is wrong in plain words. Free and open source, no
 telemetry, no account needed.
 
-> **Status: beta.** Gantry is developed and tested on Linux (Proton/Wine, Steam). The Windows and macOS builds are made
+> **Status: beta.** Gantry is developed and tested on Linux (Steam, Hydra). The Windows and macOS builds are made
 > and tested automatically on every change but have had far less use by hand, so please [report what breaks](https://github.com/pigeoonn/gantry/issues/new/choose).
 > Your game files are never deleted: mods are linked in and can always be taken out again.
 >
@@ -53,7 +53,7 @@ The [tutorial](docs/TUTORIAL.md) walks through it with pictures.
 **When things go wrong**
 - **Crash Detective** and a health score with one-click fixes; a knowledge base of 26 known problems explained in your language.
 - **Save Guard:** saves are backed up before every launch, and can be kept separately per mod profile.
-- **Compatibility center:** pick another Proton, download GE-Proton, switch common fixes on or off.
+- **Compatibility center:** pick another compatibility tool for a game, download newer builds, switch common fixes on or off.
 
 **Around your games**
 - Reads **Steam** (also: tells you when Steam is updating a game, lists Workshop items), **Hydra, Heroic and Lutris**.
@@ -64,7 +64,13 @@ Everything in detail: **[docs/REFERENCE.md](docs/REFERENCE.md)**, or one page pe
 
 ![Mod Library](docs/img/mod-library.png)
 
+![Find mods](docs/img/find-mods.png)
+
+![Screenshots with and without mods](docs/img/screenshots.png)
+
 ![Tools](docs/img/tools.png)
+
+*The pictures show made-up games and mods.*
 
 ## What it guarantees
 - **It asks before it guesses.** If a mod's place had to be guessed, Gantry shows where the files would go and waits for your OK.

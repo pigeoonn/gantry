@@ -9,7 +9,7 @@ is reversible: **Back to vanilla** removes every mod file and puts the original 
 - **Left:** your games (Steam, Hydra, Heroic, Lutris and ones you add yourself). A small chip marks games that need
   attention. Right-click a game for Play, Game Folder, Pin and Remove from the list. Sort and search above the list.
 - **Top of a game:** cover, last played, time played in Gantry, the Play button (the arrow next to it plays
-  without mods or with a saved profile), and the Proton version button.
+  without mods or with a saved profile), and the compatibility button.
 - **Tabs:** **Mods**, **Tools**, **Activity**. **Ctrl+K** searches games and every action; **?** lists the shortcuts.
 
 ## Adding mods
@@ -125,10 +125,8 @@ when asking for help (it contains no keys).
 **The store.** *Find mods → Store* lists mods of the selected game from Nexus Mods and Thunderstore as cards. The chips sort by most downloaded, popular lately (most downloaded among mods changed in the last six months), most liked, new and recently updated; the source chips pick one site or both; the box narrows by category; *Hide mods I have* removes what is already in your library. Clicking a card opens the mod's page before you install anything. With a free Nexus account *Get it* opens the mod's page and Gantry takes the file when you press *Slow download*. *Starter pack* lists mods worth beginning with; *Get all* fetches them one after another. Mods their authors marked as adult stay hidden unless Settings → *Show adult mods in the store* is on. In the overview every installed game has a 🛒 button that opens the store for it.
 
 ## Compatibility
-![Compatibility](img/compat.png)
-
-The button next to Play opens **Compatibility**: choose the Proton version for the game (for Steam games this is
-Steam's own setting, changed only while Steam is closed, with a backup), download the newest GE-Proton, and switch
+The button next to Play opens **Compatibility**: choose the compatibility tool for the game (for Steam games this is
+Steam's own setting, changed only while Steam is closed, with a backup), download the newest GE build, and switch
 on common fixes (NT sync off, OpenGL, Wayland…).
 
 ## Finding mods

@@ -51,7 +51,7 @@ Value and effort are a judgement; every item is something Steam already proved p
    into a folder that Syncthing, Dropbox or a USB stick already syncs. *Value medium, effort medium.*
 9. **Update states in the download panel.** Show *Queued → Downloading → Checking → Deploying* the way Steam names its steps,
    instead of one progress bar. *Value low, effort low.*
-10. **Process tracking by environment.** Steam and Proton put `SteamGameId` into the environment of every process of a game;
+10. **Process tracking by environment.** Steam puts `SteamGameId` into the environment of every process of a game;
    Gantry finds games by executable name. Matching the variable would also find games whose executable is unknown.
    Not built: Wine helper processes such as `wineserver` carry the same variable and may outlive the game, so this needs a
    test with a real running game first.
