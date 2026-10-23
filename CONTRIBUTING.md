@@ -35,7 +35,7 @@ screen for a week (Actions, the run, Artifacts).
 
 Most knowledge is data, no code: `data/recipes.json` (a game's loader, Thunderstore and Nexus names, folder rules, tips)
 and `data/errors.json` (log lines that mean a known problem, with cause and fix). Add an entry, run `cargo test`, and
-open a pull request. See *Teaching Gantry about a game* in `docs/GUIDE.md`.
+open a pull request. See *Teaching Gantry about a game* in `docs/GUIDE.md`. `tools/build_recipes.py` can add many games at once from Nexus Mods' list and the Ludusavi save-location manifest (it needs a Nexus key; the header explains it).
 
 ## Reporting a problem
 

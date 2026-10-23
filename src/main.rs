@@ -3278,7 +3278,22 @@ fn spawn_inotify_watcher(state: Weak<RwLock<AppState>>) {
 
 // ───────────────────────────── window launcher ─────────────────────────────
 
+/// The window size to open with: the one remembered from last time when it is sensible, else the default.
+fn window_size_or_default(w: u32, h: u32) -> (u32, u32) {
+    if (640..=7680).contains(&w) && (480..=4320).contains(&h) {
+        (w, h)
+    } else {
+        (1280, 825)
+    }
+}
+
+fn configured_window_size() -> (u32, u32) {
+    let c = fs::read(RigPaths::new().config_file).ok().and_then(|b| serde_json::from_slice::<RigConfigData>(&b).ok()).unwrap_or_default();
+    window_size_or_default(c.window_w, c.window_h)
+}
+
 fn launch_native_app_window(url: &str, profile_dir: &Path) {
+    let (win_w, win_h) = configured_window_size();
     // `RIG_NO_WINDOW=1`: run only the server (automated checks, headless machines)
     if std::env::var_os("RIG_NO_WINDOW").is_some() {
         return;
@@ -3287,7 +3302,7 @@ fn launch_native_app_window(url: &str, profile_dir: &Path) {
         let mut c = Command::new(browser);
         c.arg(format!("--app={}", url))
             .arg(format!("--user-data-dir={}", profile_dir.display()))
-            .arg("--window-size=1280,825")
+            .arg(format!("--window-size={win_w},{win_h}"))
             .args(std::env::var_os("RIG_DECK").map(|_| "--start-fullscreen"))
             .arg("--disable-features=Translate,TranslateUI")
             .arg("--overscroll-history-navigation=0")
@@ -3469,6 +3484,7 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             return respond_json(req, 200, body.to_string());
         }
         "/api/home_trending" => return respond_json(req, 200, trending_for_home(&state, query_param(&query, "refresh").as_deref() == Some("1")).to_string()),
+        "/api/doctor_all" => return respond_json(req, 200, doctor_json(&state).to_string()),
         "/api/workshop" => {
             let (game, cache, base, http) = {
                 let st = read_state(&state);
@@ -4726,6 +4742,15 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             }
             if let Some(v) = body.get("install_preview").and_then(Value::as_bool) {
                 st.config.no_install_preview = !v;
+            }
+            if let Some([w, h]) = body.get("window_size").and_then(Value::as_array).map(|a| [a.first().and_then(Value::as_u64), a.get(1).and_then(Value::as_u64)]) {
+                // remembered so the next start opens the same size; nonsense is ignored
+                if let (Some(w), Some(h)) = (w, h) {
+                    if (640..=7680).contains(&w) && (480..=4320).contains(&h) {
+                        st.config.window_w = w as u32;
+                        st.config.window_h = h as u32;
+                    }
+                }
             }
             if let Some(v) = body.get("ui_scale").and_then(Value::as_u64) {
                 st.config.ui_scale = (v as u32).clamp(80, 200);
@@ -7777,7 +7802,7 @@ pub fn serve(server: Server, state: SharedState, notifier: Arc<EventNotifier>, c
     }
 }
 
-const USAGE: &str = "Gantry - mod, trainer and crash-hunting hub for Proton games\n\nUSAGE:\n  rig              start the app (or open a window on the running one)\n  rig --play GAME [--vanilla | --profile NAME]   start a game (id or name) with its mods, without a window\n  rig --deck      full-screen controller mode (Steam Deck / couch)\n  rig nxm://...   hand a Nexus Mods link to Gantry (used by the website's download button)\n  rig --install   add menu entry, icon and ~/.local/bin/rig for this binary\n  rig --register-nxm / --unregister-nxm   take over / give back nxm:// links\n  rig --uninstall remove what --install created\n  rig --version   print the version\n  rig --help      this text\n";
+const USAGE: &str = "Gantry - mod, trainer and crash-hunting hub for Proton games\n\nUSAGE:\n  rig              start the app (or open a window on the running one)\n  rig --play GAME [--vanilla | --profile NAME]   start a game (id or name) with its mods, without a window\n  rig --doctor    print the state of every installed game (also what to attach to a bug report)\n  rig --deck      full-screen controller mode (Steam Deck / couch)\n  rig nxm://...   hand a Nexus Mods link to Gantry (used by the website's download button)\n  rig --install   add menu entry, icon and ~/.local/bin/rig for this binary\n  rig --register-nxm / --unregister-nxm   take over / give back nxm:// links\n  rig --uninstall remove what --install created\n  rig --version   print the version\n  rig --help      this text\n";
 
 // ───────────────────────────── rig --play ─────────────────────────────
 
@@ -7846,6 +7871,94 @@ fn play_via_running(port: u16, query: &str, mode: &str) -> Result<String, String
 
 /// `rig --play GAME [--vanilla | --profile NAME]`: make sure a Gantry is running (without a window when
 /// none was), start the game through it, and return. A Gantry started this way ends itself after the game.
+/// What `rig --doctor` prints: the state of every installed game, as data.
+fn doctor_json(state: &SharedState) -> Value {
+    let games: Vec<GameEntry> = read_state(state).games.iter().filter(|g| g.is_installed).cloned().collect();
+    let rows: Vec<Value> = games
+        .iter()
+        .map(|g| {
+            let (issues, health) = game_issues(state, g, false);
+            let mods = library_of(g).map(|l| l.mods()).unwrap_or_default();
+            json!({
+                "name": g.name, "engine": g.engine, "source": if g.source.is_empty() { "Steam or custom" } else { g.source.as_str() },
+                "loader": health["loader"], "mods": mods.len(), "mods_on": mods.iter().filter(|m| m.enabled).count(),
+                "issues": issues.iter().map(|i| json!({ "level": i["level"], "code": i["code"], "args": i["args"], "title": i["kb"]["title"]["en"], "evidence": i["kb"]["evidence"] })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    json!({ "version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "games": rows })
+}
+
+/// The text of `rig --doctor`.
+fn doctor_text(d: &Value) -> String {
+    let mut out = format!("Gantry {} on {}\n\n", d["version"].as_str().unwrap_or(""), d["os"].as_str().unwrap_or(""));
+    for g in d["games"].as_array().into_iter().flatten() {
+        let issues = g["issues"].as_array().cloned().unwrap_or_default();
+        let worst = issues.iter().filter_map(|i| i["level"].as_str()).map(level_rank).max().unwrap_or(0);
+        let mark = match worst {
+            3 => "[bad] ",
+            2 => "[warn]",
+            _ => "[ok]  ",
+        };
+        let loader = g["loader"].as_str().filter(|l| !l.is_empty() && *l != "none").map(|l| format!(", {l}")).unwrap_or_default();
+        out.push_str(&format!("{mark} {} ({}{}) {} of {} mods on\n", g["name"].as_str().unwrap_or(""), g["engine"].as_str().unwrap_or(""), loader, g["mods_on"], g["mods"]));
+        for i in issues.iter().filter(|i| i["level"] != "info") {
+            let args: Vec<&str> = i["args"].as_array().into_iter().flatten().filter_map(Value::as_str).filter(|a| !a.is_empty()).collect();
+            // a known problem from the logs has a title and the log line that showed it; the others a short code
+            let what = i["title"].as_str().map(str::to_string).unwrap_or_else(|| format!("{}{}", i["code"].as_str().unwrap_or(""), if args.is_empty() { String::new() } else { format!(": {}", args.join(", ")) }));
+            out.push_str(&format!("         {} {}\n", i["level"].as_str().unwrap_or(""), what));
+            if let Some(line) = i["evidence"].as_str().filter(|l| !l.is_empty()) {
+                out.push_str(&format!("                {}\n", line.chars().take(110).collect::<String>()));
+            }
+        }
+    }
+    out.push_str("\nMore: open Gantry and use Tools > Problem Report for one game.\n");
+    out
+}
+
+/// `rig --doctor`: ask a running Gantry (or one started without a window) about every installed game and print it.
+fn cli_doctor() -> i32 {
+    let port = server_port();
+    let mut child = None;
+    if probe_existing_instance(port).is_none() {
+        child = std::env::current_exe().ok().and_then(|exe| Command::new(exe).env("RIG_NO_WINDOW", "1").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().ok());
+        if child.is_none() || !(0..100).any(|_| {
+            thread::sleep(Duration::from_millis(200));
+            probe_existing_instance(port).is_some()
+        }) {
+            eprintln!("rig: could not start Gantry.");
+            if let Some(c) = child.as_mut() {
+                let _ = c.kill();
+            }
+            return 1;
+        }
+    }
+    let host = format!("127.0.0.1:{port}");
+    let answer = (|| -> Result<Value, String> {
+        let (_, page) = local_http(port, &format!("GET / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")).ok_or("Gantry does not answer.")?;
+        let token = page.split("RIG_TOKEN = \"").nth(1).and_then(|r| r.split('"').next()).ok_or("That is not Gantry.")?.to_string();
+        let (code, text) = local_http(port, &format!("GET /api/doctor_all HTTP/1.1\r\nHost: {host}\r\nX-Rig-Token: {token}\r\nConnection: close\r\n\r\n")).ok_or("Gantry stopped answering.")?;
+        if code != 200 {
+            return Err(format!("Gantry refused the request ({code})."));
+        }
+        serde_json::from_str(&text).map_err(|_| "Gantry sent an unreadable answer.".to_string())
+    })();
+    if let Some(c) = child.as_mut() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+    match answer {
+        Ok(d) => {
+            print!("{}", doctor_text(&d));
+            0
+        }
+        Err(e) => {
+            eprintln!("rig: {e}");
+            1
+        }
+    }
+}
+
 fn cli_play(args: &[String]) -> i32 {
     let Some(query) = args.first().filter(|a| !a.starts_with("--")) else {
         eprintln!("rig: --play needs a game (its id or name).");
@@ -7959,6 +8072,7 @@ fn handle_cli(args: Vec<String>) -> Option<i32> {
             }
         }
         Some("--play") => Some(cli_play(&args[1..])),
+        Some("--doctor") => Some(cli_doctor()),
         // couch mode: full screen, big controls, the gamepad drives everything (the app then starts as usual)
         Some("--deck") => {
             std::env::set_var("RIG_DECK", "1");
@@ -11255,6 +11369,54 @@ mod tests {
         let t = Instant::now();
         lib.purge().unwrap();
         assert!(t.elapsed() < Duration::from_secs(20));
+    }
+
+    #[test]
+    fn the_doctor_lists_every_installed_game_with_what_is_wrong() {
+        let h = harness("doctor");
+        let dir = add_plain_game(&h);
+        let (code, body) = http(&h, "GET", "/api/doctor_all", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(code, 200);
+        let d: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(d["version"], env!("CARGO_PKG_VERSION"));
+        let names: Vec<&str> = d["games"].as_array().unwrap().iter().filter_map(|g| g["name"].as_str()).collect();
+        assert!(names.contains(&"Plain Game"), "{names:?}");
+        assert_eq!(http(&h, "GET", "/api/doctor_all", &[], b"").0, 403, "token required like every API call");
+        // a game with a deployed mod that something then changed shows the drift
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        let stage = h._dir.join("doctor-stage");
+        fs::create_dir_all(stage.join("Data")).unwrap();
+        fs::write(stage.join("Data/base.esp"), "MOD").unwrap();
+        lib.add_from_dir(&stage, "Overhaul", "o.zip").unwrap();
+        lib.deploy(false).unwrap();
+        fs::remove_file(dir.join("Data/base.esp")).unwrap();
+        fs::write(dir.join("Data/base.esp"), "UPDATED BY STEAM").unwrap();
+        let (_, body) = http(&h, "GET", "/api/doctor_all", &[("X-Rig-Token", &h.token)], b"");
+        let d: Value = serde_json::from_str(&body).unwrap();
+        let row = d["games"].as_array().unwrap().iter().find(|g| g["name"] == "Plain Game").unwrap().clone();
+        assert_eq!((row["mods"].as_u64(), row["mods_on"].as_u64()), (Some(1), Some(1)));
+        let text = doctor_text(&d);
+        assert!(text.starts_with(&format!("Gantry {} on ", env!("CARGO_PKG_VERSION"))), "{text}");
+        assert!(text.contains("Plain Game") && text.contains("1 of 1 mods on") && text.contains("drift"), "{text}");
+        assert!(text.contains("[warn]"), "{text}");
+        assert_eq!(handle_cli(vec!["--help".into()]), Some(0));
+    }
+
+    #[test]
+    fn the_window_size_is_remembered_and_nonsense_is_ignored() {
+        assert_eq!(window_size_or_default(0, 0), (1280, 825));
+        assert_eq!(window_size_or_default(1600, 900), (1600, 900));
+        for (w, h) in [(10, 10), (99_999, 900), (1600, 0), (639, 900)] {
+            assert_eq!(window_size_or_default(w, h), (1280, 825), "{w}x{h}");
+        }
+        let h = harness("winsize");
+        api(&h, "/api/settings", json!({ "window_size": [1500, 950] }));
+        assert_eq!((h.state.read().unwrap().config.window_w, h.state.read().unwrap().config.window_h), (1500, 950));
+        api(&h, "/api/settings", json!({ "window_size": [5, 5] }));
+        api(&h, "/api/settings", json!({ "window_size": "big" }));
+        api(&h, "/api/settings", json!({ "window_size": [1500] }));
+        assert_eq!((h.state.read().unwrap().config.window_w, h.state.read().unwrap().config.window_h), (1500, 950), "unchanged");
     }
 
     #[test]

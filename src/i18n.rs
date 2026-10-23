@@ -206,6 +206,8 @@ mod tests {
     const EXEMPT: &[&str] = &[
         "UserLocalConfigStore is not a block",
         "Gantry {} on {}",
+        "More: open Gantry and use Tools > Problem Report for one game.",
+        "{mark} {} ({}{}) {} of {} mods on",
         "Steam or custom",
         "Complete Edition",
         "Definitive Edition",

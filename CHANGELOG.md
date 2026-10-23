@@ -38,6 +38,11 @@ Portuguese, Polish and Turkish.
   and Play waits instead of starting half-updated files); Steam Cloud games get a heads-up next to per-profile saves;
   *Tools → Workshop* lists the Steam Workshop items a game has installed; the overview shows *Trending for your games*;
   Settings can cap download speed and make new downloads wait until a game closes.
+- The game list Gantry knows grew from 55 to 276 games, each checked against Nexus Mods' own list and a save-location
+  database (`tools/build_recipes.py` makes them); games with anti-cheat or with mods outside the game folder are left out.
+- `rig --doctor` prints the state of every installed game (also handy to attach to a bug report); Settings has
+  *Report a problem* and *Ask for a game* buttons that open a pre-filled GitHub form; the window opens at the size you
+  left it; the update check now sees beta releases.
 - Mod Settings keeps a file's byte order mark and Windows line endings when saving, and refuses files that are not UTF-8
   instead of garbling them. GitHub links ending in `#readme` or `?tab=...` are understood and a rate limit is named.
   Fixed a possible crash in cover look-up for names with letters such as İ. Faster MD5 for large downloads.

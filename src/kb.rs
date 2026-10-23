@@ -209,8 +209,8 @@ mod tests {
         assert_eq!(one("proton", "wine: Unhandled exception: unimplemented function ntdll.dll.RtlFoo called in 64-bit code"), vec!["proton_unimplemented"]);
         assert_eq!(one("proton", "wine: could not load kernel32.dll, status c0000135"), vec!["proton_kernel32"]);
         assert_eq!(one("ue4ss", "[PS] Failed to find FName::ToString: expect broken things"), vec!["ue4ss_scan_failed"]);
-        // ordinary lines do not trip them
-        for (label, line) in [("proton", "fixme:heap:RtlSetHeapInformation"), ("ue4ss", "Failed to find the mod folder"), ("player", "Steam initialised"), ("bepinex", "[Info   :   BepInEx] 3 plugins to load")] {
+        // ordinary lines do not trip them (Wine prints this warning in healthy games: it is not a crash)
+        for (label, line) in [("proton", "3633.431:0020:0024:warn:seh:virtual_unwind stack overflow 1984 bytes addr 0x6ffffff8bd2b"), ("proton", "warn:virtual:map_view out of memory for a view, retrying"), ("proton", "fixme:heap:RtlSetHeapInformation"), ("ue4ss", "Failed to find the mod folder"), ("player", "Steam initialised"), ("bepinex", "[Info   :   BepInEx] 3 plugins to load")] {
             assert!(one(label, line).is_empty(), "{line}");
         }
     }

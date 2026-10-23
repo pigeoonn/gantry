@@ -176,6 +176,11 @@ pub struct RigConfigData {
     /// The version whose "What's new" the user has seen.
     #[serde(default)]
     pub seen_version: String,
+    /// The size of the window when it was last closed or resized (0 = the default size).
+    #[serde(default)]
+    pub window_w: u32,
+    #[serde(default)]
+    pub window_h: u32,
     /// Speed cap per download in KB/s (0 = no cap).
     #[serde(default)]
     pub download_limit_kb: u64,

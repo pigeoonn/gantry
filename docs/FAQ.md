@@ -43,4 +43,6 @@ Mod files themselves are fetched again from where they came from (a modpack can 
 **How do I uninstall?** `rig --uninstall` removes the menu entry and `~/.local/bin/rig`; delete the settings folder to remove the
 rest. Your games are not changed by that (use *Back to vanilla* first if mods are still deployed).
 
+**How do I see everything at once, for a bug report?** Run `rig --doctor` in a terminal: it lists every installed game, its loader, its mods and what is wrong.
+
 **Something is wrong or missing.** *Settings → Report a problem* opens a GitHub issue with your version filled in; *Tools → Problem Report* copies a report without keys to paste into it. *Settings → Ask for a game* asks for a game to be supported.

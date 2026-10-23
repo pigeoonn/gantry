@@ -762,6 +762,1636 @@
       "saves": [
         "{appdata_locallow}/Stress Level Zero/BONEWORKS"
       ]
+    },
+    {
+      "appid": "1237950",
+      "name": "Star Wars Battlefront II (2017)",
+      "nexus": "starwarsbattlefront22017",
+      "saves": [
+        "{documents}/STAR WARS Battlefront II/settings"
+      ]
+    },
+    {
+      "appid": "261550",
+      "name": "Mount & Blade II: Bannerlord",
+      "nexus": "mountandblade2bannerlord",
+      "saves": [
+        "{documents}/Mount and Blade II Bannerlord/Game Saves"
+      ]
+    },
+    {
+      "appid": "251570",
+      "name": "7 Days to Die",
+      "nexus": "7daystodie",
+      "saves": [
+        "{appdata_roaming}/7DaysToDie/Saves"
+      ]
+    },
+    {
+      "appid": "629730",
+      "name": "Blade & Sorcery",
+      "nexus": "bladeandsorcery",
+      "saves": [
+        "{documents}/My Games/BladeAndSorcery/Saves/Default"
+      ]
+    },
+    {
+      "appid": "582010",
+      "name": "Monster Hunter: World",
+      "nexus": "monsterhunterworld"
+    },
+    {
+      "appid": "2050650",
+      "name": "Resident Evil 4 (2023)",
+      "nexus": "residentevil42023"
+    },
+    {
+      "appid": "516750",
+      "name": "My Summer Car",
+      "nexus": "mysummercar",
+      "saves": [
+        "{appdata_locallow}/Amistech/My Summer Car"
+      ]
+    },
+    {
+      "appid": "1144200",
+      "name": "Ready or Not",
+      "nexus": "readyornot",
+      "saves": [
+        "{appdata_local}/ReadyOrNot/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "1817070",
+      "name": "Marvel's Spider-Man Remastered",
+      "nexus": "marvelsspidermanremastered",
+      "saves": [
+        "{documents}/Marvel's Spider-Man Remastered"
+      ]
+    },
+    {
+      "appid": "2246340",
+      "name": "Monster Hunter Wilds",
+      "nexus": "monsterhunterwilds"
+    },
+    {
+      "appid": "1623730",
+      "name": "Palworld",
+      "nexus": "palworld",
+      "saves": [
+        "{appdata_local}/Pal/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "601150",
+      "name": "Devil May Cry 5",
+      "nexus": "devilmaycry5"
+    },
+    {
+      "appid": "1222690",
+      "name": "Dragon Age: Inquisition",
+      "nexus": "dragonageinquisition",
+      "saves": [
+        "{documents}/BioWare/Dragon Age Inquisition/Save"
+      ]
+    },
+    {
+      "appid": "1446780",
+      "name": "Monster Hunter Rise",
+      "nexus": "monsterhunterrise"
+    },
+    {
+      "appid": "502500",
+      "name": "Ace Combat 7: Skies Unknown",
+      "nexus": "acecombat7skiesunknown",
+      "saves": [
+        "{appdata_local}/BANDAI NAMCO Entertainment/ACE COMBAT 7/SaveGames"
+      ]
+    },
+    {
+      "appid": "3489700",
+      "name": "Stellar Blade",
+      "nexus": "stellarblade",
+      "saves": [
+        "{appdata_local}/SB/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "275850",
+      "name": "No Man's Sky",
+      "nexus": "nomanssky",
+      "saves": [
+        "{appdata_roaming}/HelloGames/NMS"
+      ]
+    },
+    {
+      "appid": "1771300",
+      "name": "Kingdom Come: Deliverance II",
+      "nexus": "kingdomcomedeliverance2",
+      "saves": [
+        "{saved_games}/kingdomcome2/saves"
+      ]
+    },
+    {
+      "appid": "1328670",
+      "name": "Mass Effect Legendary Edition",
+      "nexus": "masseffectlegendaryedition",
+      "saves": [
+        "{documents}/BioWare/Mass Effect Legendary Edition/Save"
+      ]
+    },
+    {
+      "appid": "208650",
+      "name": "Batman: Arkham Knight",
+      "nexus": "batmanarkhamknight",
+      "saves": [
+        "{game}/BMGame/SaveData"
+      ]
+    },
+    {
+      "appid": "3764200",
+      "name": "Resident Evil Requiem",
+      "nexus": "residentevilrequiem"
+    },
+    {
+      "appid": "1244460",
+      "name": "Jurassic World Evolution 2",
+      "nexus": "jurassicworldevolution2",
+      "saves": [
+        "{saved_games}/Frontier Developments/Jurassic World Evolution 2"
+      ]
+    },
+    {
+      "appid": "2552450",
+      "name": "Kingdom Hearts III",
+      "nexus": "kingdomhearts3",
+      "saves": [
+        "{documents}/My Games/KINGDOM HEARTS III/Steam"
+      ]
+    },
+    {
+      "appid": "2909400",
+      "name": "Final Fantasy VII Rebirth",
+      "nexus": "finalfantasy7rebirth",
+      "saves": [
+        "{documents}/My Games/FINAL FANTASY VII REBIRTH/Steam"
+      ]
+    },
+    {
+      "appid": "703080",
+      "name": "Planet Zoo",
+      "nexus": "planetzoo",
+      "saves": [
+        "{saved_games}/Frontier Developments/Planet Zoo"
+      ]
+    },
+    {
+      "appid": "22100",
+      "name": "Mount & Blade",
+      "nexus": "mountandblade",
+      "saves": [
+        "{documents}/Mount&Blade Savegames"
+      ]
+    },
+    {
+      "appid": "1643320",
+      "name": "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
+      "nexus": "stalker2heartofchornobyl",
+      "saves": [
+        "{appdata_local}/Stalker2/Saved/STEAM",
+        "{appdata_local}/Stalker2/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "883710",
+      "name": "Resident Evil 2 (2019)",
+      "nexus": "residentevil22019"
+    },
+    {
+      "appid": "2651280",
+      "name": "Marvel's Spider-Man 2",
+      "nexus": "marvelsspiderman2",
+      "saves": [
+        "{documents}/Marvel's Spider-Man 2"
+      ]
+    },
+    {
+      "appid": "287700",
+      "name": "Metal Gear Solid V: The Phantom Pain",
+      "nexus": "metalgearsolidvtpp"
+    },
+    {
+      "appid": "814380",
+      "name": "Sekiro: Shadows Die Twice",
+      "nexus": "sekiro",
+      "saves": [
+        "{appdata_roaming}/Sekiro"
+      ]
+    },
+    {
+      "appid": "2840770",
+      "name": "Avatar: Frontiers of Pandora",
+      "nexus": "avatarfrontiersofpandora"
+    },
+    {
+      "appid": "4164420",
+      "name": "My Winter Car",
+      "nexus": "mywintercar",
+      "saves": [
+        "{appdata_locallow}/Amistech/My Winter Car"
+      ]
+    },
+    {
+      "appid": "392160",
+      "name": "X4: Foundations",
+      "nexus": "x4foundations",
+      "saves": [
+        "{documents}/Egosoft/X4"
+      ]
+    },
+    {
+      "appid": "262060",
+      "name": "Darkest Dungeon",
+      "nexus": "darkestdungeon"
+    },
+    {
+      "appid": "379430",
+      "name": "Kingdom Come: Deliverance",
+      "nexus": "kingdomcomedeliverance",
+      "saves": [
+        "{saved_games}/kingdomcome/saves"
+      ]
+    },
+    {
+      "appid": "3321460",
+      "name": "Crimson Desert",
+      "nexus": "crimsondesert",
+      "saves": [
+        "{appdata_local}/Pearl Abyss/CD/save"
+      ]
+    },
+    {
+      "appid": "233860",
+      "name": "Kenshi",
+      "nexus": "kenshi",
+      "saves": [
+        "{appdata_local}/Kenshi/save"
+      ]
+    },
+    {
+      "appid": "2054970",
+      "name": "Dragon's Dogma 2",
+      "nexus": "dragonsdogma2"
+    },
+    {
+      "appid": "990080",
+      "name": "Hogwarts Legacy",
+      "nexus": "hogwartslegacy",
+      "saves": [
+        "{appdata_local}/Hogwarts Legacy/Saved/SaveGames",
+        "{appdata_local}/Hogwarts/Saved/SaveGames",
+        "{appdata_local}/HogwartsLegacy/Saved/SaveGames",
+        "{appdata_local}/Phoenix/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "3240220",
+      "name": "Grand Theft Auto V Enhanced",
+      "nexus": "gta5enhanced",
+      "saves": [
+        "{documents}/Rockstar Games/GTAV Enhanced/Profiles"
+      ]
+    },
+    {
+      "appid": "2138710",
+      "name": "Sifu",
+      "nexus": "sifu",
+      "saves": [
+        "{appdata_local}/Sifu/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "48700",
+      "name": "Mount & Blade: Warband",
+      "nexus": "mbwarband",
+      "saves": [
+        "{documents}/Mount&Blade Warband Savegames"
+      ]
+    },
+    {
+      "appid": "648350",
+      "name": "Jurassic World Evolution",
+      "nexus": "jurassicworldevolution",
+      "saves": [
+        "{saved_games}/Frontier Developments/Jurassic World Evolution"
+      ]
+    },
+    {
+      "appid": "2142790",
+      "name": "Fields of Mistria",
+      "nexus": "fieldsofmistria",
+      "saves": [
+        "{appdata_local}/FieldsOfMistria/saves"
+      ]
+    },
+    {
+      "appid": "588030",
+      "name": "Derail Valley",
+      "nexus": "derailvalley",
+      "saves": [
+        "{appdata_locallow}/Altfuture/Derail Valley"
+      ]
+    },
+    {
+      "appid": "1372110",
+      "name": "JoJo's Bizarre Adventure: All Star Battle R",
+      "nexus": "jojosbizarreadventureallstarbattler"
+    },
+    {
+      "appid": "782330",
+      "name": "Doom Eternal",
+      "nexus": "doometernal",
+      "saves": [
+        "{saved_games}/id Software/DOOMEternal/base"
+      ]
+    },
+    {
+      "appid": "495420",
+      "name": "State of Decay 2",
+      "nexus": "stateofdecay2",
+      "saves": [
+        "{appdata_local}/StateOfDecay2/Saved"
+      ]
+    },
+    {
+      "appid": "2670630",
+      "name": "Supermarket Simulator",
+      "nexus": "supermarketsimulator",
+      "saves": [
+        "{appdata_locallow}/Nokta Games/Supermarket Simulator"
+      ]
+    },
+    {
+      "appid": "784080",
+      "name": "MechWarrior 5: Mercenaries",
+      "nexus": "mechwarrior5mercenaries",
+      "saves": [
+        "{appdata_local}/MW5Mercs/Saved"
+      ]
+    },
+    {
+      "appid": "2456740",
+      "name": "InZOI",
+      "nexus": "inzoi"
+    },
+    {
+      "appid": "1361210",
+      "name": "Warhammer 40,000: Darktide",
+      "nexus": "warhammer40kdarktide"
+    },
+    {
+      "appid": "570940",
+      "name": "Dark Souls Remastered",
+      "nexus": "darksoulsremastered",
+      "saves": [
+        "{documents}/NBGI/DARK SOULS REMASTERED"
+      ]
+    },
+    {
+      "appid": "1020790",
+      "name": "Naruto X Boruto: Ultimate Ninja Storm Connections",
+      "nexus": "narutoxborutoultimateninjastormconnections"
+    },
+    {
+      "appid": "3404260",
+      "name": "Dead as Disco",
+      "nexus": "deadasdisco",
+      "saves": [
+        "{appdata_local}/Pagoda/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "952060",
+      "name": "Resident Evil 3 (2020)",
+      "nexus": "residentevil32020"
+    },
+    {
+      "appid": "638970",
+      "name": "Yakuza 0",
+      "nexus": "yakuza0"
+    },
+    {
+      "appid": "1238000",
+      "name": "Mass Effect: Andromeda",
+      "nexus": "masseffectandromeda",
+      "saves": [
+        "{documents}/BioWare/Mass Effect Andromeda/Save"
+      ]
+    },
+    {
+      "appid": "57400",
+      "name": "Batman: Arkham City",
+      "nexus": "batmanarkhamcity",
+      "saves": [
+        "{documents}/WB Games/Batman Arkham City GOTY/SaveData"
+      ]
+    },
+    {
+      "appid": "3070070",
+      "name": "TCG Card Shop Simulator",
+      "nexus": "tcgcardshopsimulator",
+      "saves": [
+        "{appdata_locallow}/OPNeonGames/Card Shop Simulator"
+      ]
+    },
+    {
+      "appid": "1790600",
+      "name": "Dragon Ball: Sparking! Zero",
+      "nexus": "dragonballsparkingzero",
+      "saves": [
+        "{game}/SaveGame"
+      ]
+    },
+    {
+      "appid": "568220",
+      "name": "Lobotomy Corporation",
+      "nexus": "lobotomycorporation",
+      "saves": [
+        "{appdata_locallow}/Project_Moon/Lobotomy"
+      ]
+    },
+    {
+      "appid": "2536520",
+      "name": "Diablo II: Resurrected",
+      "nexus": "diablo2resurrected",
+      "saves": [
+        "{saved_games}/Diablo II Resurrected",
+        "{documents}/Diablo II Resurrected/Save"
+      ]
+    },
+    {
+      "appid": "1659040",
+      "name": "Hitman: World of Assassination",
+      "nexus": "hitman3"
+    },
+    {
+      "appid": "239140",
+      "name": "Dying Light",
+      "nexus": "dyinglight",
+      "saves": [
+        "{documents}/Dying Light/out/save",
+        "{documents}/DyingLight/out/save"
+      ]
+    },
+    {
+      "appid": "365360",
+      "name": "Battle Brothers",
+      "nexus": "battlebrothers",
+      "saves": [
+        "{documents}/Battle Brothers/savegames"
+      ]
+    },
+    {
+      "appid": "367500",
+      "name": "Dragon's Dogma: Dark Arisen",
+      "nexus": "dragonsdogma"
+    },
+    {
+      "appid": "235460",
+      "name": "Metal Gear Rising: Revengeance",
+      "nexus": "metalgearrisingrevengeance"
+    },
+    {
+      "appid": "211820",
+      "name": "Starbound",
+      "nexus": "starbound",
+      "saves": [
+        "{game}/storage"
+      ]
+    },
+    {
+      "appid": "1030300",
+      "name": "Hollow Knight: Silksong",
+      "nexus": "hollowknightsilksong",
+      "saves": [
+        "{appdata_locallow}/Team Cherry/Hollow Knight Silksong"
+      ]
+    },
+    {
+      "appid": "2478970",
+      "name": "Tomb Raider I–III Remastered",
+      "nexus": "tombraidertrilogyremastered",
+      "saves": [
+        "{appdata_roaming}/TRX"
+      ]
+    },
+    {
+      "appid": "1184370",
+      "name": "Pathfinder: Wrath of the Righteous",
+      "nexus": "pathfinderwrathoftherighteous",
+      "saves": [
+        "{appdata_locallow}/Owlcat Games/Pathfinder Wrath Of The Righteous/Saved Games"
+      ]
+    },
+    {
+      "appid": "1259420",
+      "name": "Days Gone",
+      "nexus": "daysgone",
+      "saves": [
+        "{appdata_local}/BendGame/Saved"
+      ]
+    },
+    {
+      "appid": "2379780",
+      "name": "Balatro",
+      "nexus": "balatro",
+      "saves": [
+        "{appdata_roaming}/Balatro"
+      ]
+    },
+    {
+      "appid": "242050",
+      "name": "Assassin's Creed IV: Black Flag",
+      "nexus": "assassinscreedivblackflag"
+    },
+    {
+      "appid": "1903340",
+      "name": "Clair Obscur: Expedition 33",
+      "nexus": "clairobscurexpedition33",
+      "saves": [
+        "{appdata_local}/Sandfall/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "678960",
+      "name": "Code Vein",
+      "nexus": "codevein",
+      "saves": [
+        "{appdata_local}/CodeVein/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "2215430",
+      "name": "Ghost of Tsushima Director's Cut",
+      "nexus": "ghostoftsushima",
+      "saves": [
+        "{documents}/Ghost of Tsushima DIRECTOR'S CUT"
+      ]
+    },
+    {
+      "appid": "2254890",
+      "name": "The Killing Antidote",
+      "nexus": "thekillingantidote",
+      "saves": [
+        "{appdata_local}/TheKillingAntidote"
+      ]
+    },
+    {
+      "appid": "895870",
+      "name": "Project Wingman",
+      "nexus": "projectwingman",
+      "saves": [
+        "{appdata_local}/ProjectWingman/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "3008130",
+      "name": "Dying Light: The Beast",
+      "nexus": "dyinglightthebeast"
+    },
+    {
+      "appid": "1238020",
+      "name": "Mass Effect 3",
+      "nexus": "masseffect3",
+      "saves": [
+        "{documents}/BioWare/Mass Effect 3/Save"
+      ]
+    },
+    {
+      "appid": "1913210",
+      "name": "AEW Fight Forever",
+      "nexus": "aewfightforever",
+      "saves": [
+        "{appdata_local}/AEWFightForever/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "221040",
+      "name": "Resident Evil 6",
+      "nexus": "residentevil6"
+    },
+    {
+      "appid": "268500",
+      "name": "XCOM 2",
+      "nexus": "xcom2",
+      "saves": [
+        "{documents}/My Games/XCOM2/XComGame/SaveData"
+      ]
+    },
+    {
+      "appid": "1172380",
+      "name": "Star Wars Jedi: Fallen Order",
+      "nexus": "starwarsjedifallenorder",
+      "saves": [
+        "{saved_games}/Respawn/JediFallenOrder"
+      ]
+    },
+    {
+      "appid": "1817190",
+      "name": "Marvel's Spider-Man: Miles Morales",
+      "nexus": "spidermanmilesmorales",
+      "saves": [
+        "{documents}/Marvel's Spider-Man Miles Morales"
+      ]
+    },
+    {
+      "appid": "1407200",
+      "name": "World of Tanks",
+      "nexus": "worldoftanks"
+    },
+    {
+      "appid": "524220",
+      "name": "NieR: Automata",
+      "nexus": "nierautomata",
+      "saves": [
+        "{documents}/My Games/NieR_Automata"
+      ]
+    },
+    {
+      "appid": "2058190",
+      "name": "Lost Judgment",
+      "nexus": "lostjudgment",
+      "saves": [
+        "{appdata_roaming}/Sega/LostJudgment/Steam"
+      ]
+    },
+    {
+      "appid": "881020",
+      "name": "Granblue Fantasy: Relink",
+      "nexus": "granbluefantasyrelink",
+      "saves": [
+        "{appdata_local}/GBFR/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "4019220",
+      "name": "Dressmaker",
+      "nexus": "dressmaker"
+    },
+    {
+      "appid": "1922560",
+      "name": "Plants vs. Zombies: Garden Warfare 2",
+      "nexus": "plantsvszombiesgardenwarfare2",
+      "saves": [
+        "{documents}/Plants vs Zombies GW2"
+      ]
+    },
+    {
+      "appid": "2531310",
+      "name": "The Last of Us Part II Remastered",
+      "nexus": "thelastofuspart2",
+      "saves": [
+        "{documents}/The Last of Us Part II"
+      ]
+    },
+    {
+      "appid": "3751260",
+      "name": "The Blood of Dawnwalker",
+      "nexus": "thebloodofdawnwalker",
+      "saves": [
+        "{appdata_local}/Dawnwalker/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "1374490",
+      "name": "RuneScape: Dragonwilds",
+      "nexus": "runescapedragonwilds",
+      "saves": [
+        "{appdata_local}/RSDragonwilds/Saved"
+      ]
+    },
+    {
+      "appid": "2527500",
+      "name": "MiSide",
+      "nexus": "miside",
+      "saves": [
+        "{appdata_locallow}/AIHASTO/MiSideFull/Save"
+      ]
+    },
+    {
+      "appid": "218620",
+      "name": "Payday 2",
+      "nexus": "payday2",
+      "saves": [
+        "{appdata_local}/PAYDAY 2/saves"
+      ]
+    },
+    {
+      "appid": "1196590",
+      "name": "Resident Evil Village",
+      "nexus": "residentevilvillage"
+    },
+    {
+      "appid": "2668080",
+      "name": "Snowbreak: Containment Zone",
+      "nexus": "snowbreakcontainmentzone"
+    },
+    {
+      "appid": "2622380",
+      "name": "Elden Ring Nightreign",
+      "nexus": "eldenringnightreign",
+      "saves": [
+        "{appdata_roaming}/Nightreign"
+      ]
+    },
+    {
+      "appid": "2668510",
+      "name": "Red Dead Redemption",
+      "nexus": "reddeadredemption",
+      "saves": [
+        "{documents}/Rockstar Games/Red Dead Redemption/Profiles"
+      ]
+    },
+    {
+      "appid": "2669320",
+      "name": "EA Sports FC 25",
+      "nexus": "eafc25",
+      "saves": [
+        "{appdata_local}/EA SPORTS FC 25/settings"
+      ]
+    },
+    {
+      "appid": "916440",
+      "name": "Anno 1800",
+      "nexus": "anno1800",
+      "saves": [
+        "{documents}/Anno 1800/accounts"
+      ]
+    },
+    {
+      "appid": "204030",
+      "name": "Fable: The Lost Chapters",
+      "nexus": "fablethelostchapters",
+      "saves": [
+        "{documents}/My Games/Fable/Saves"
+      ]
+    },
+    {
+      "appid": "1222680",
+      "name": "Need for Speed Heat",
+      "nexus": "needforspeedheat",
+      "saves": [
+        "{documents}/Need for Speed Heat/SaveGame/savegame"
+      ]
+    },
+    {
+      "appid": "2186680",
+      "name": "Warhammer 40,000: Rogue Trader",
+      "nexus": "warhammer40kroguetrader",
+      "saves": [
+        "{appdata_locallow}/Owlcat Games/Warhammer 40000 Rogue Trader/Saved Games"
+      ]
+    },
+    {
+      "appid": "518790",
+      "name": "The Hunter: Call of the Wild",
+      "nexus": "thehuntercallofthewild",
+      "saves": [
+        "{documents}/Avalanche Studios/COTW/Saves",
+        "{documents}/Avalanche Studios/theHunter Call of the Wild/Saves"
+      ]
+    },
+    {
+      "appid": "2760",
+      "name": "Neverwinter Nights 2",
+      "nexus": "neverwinter2",
+      "saves": [
+        "{documents}/Neverwinter Nights 2/saves"
+      ]
+    },
+    {
+      "appid": "12120",
+      "name": "Grand Theft Auto: San Andreas",
+      "nexus": "gtasanandreas",
+      "saves": [
+        "{documents}/GTA San Andreas User Files"
+      ]
+    },
+    {
+      "appid": "20900",
+      "name": "The Witcher",
+      "nexus": "witcher",
+      "saves": [
+        "{documents}/The Witcher/saves"
+      ]
+    },
+    {
+      "appid": "637090",
+      "name": "BattleTech",
+      "nexus": "battletech",
+      "saves": [
+        "{appdata_locallow}/Harebrained Schemes/BattleTech"
+      ]
+    },
+    {
+      "appid": "209000",
+      "name": "Batman: Arkham Origins",
+      "nexus": "batmanarkhamorigins",
+      "saves": [
+        "{documents}/WB Games/Batman Arkham Origins/SaveData"
+      ]
+    },
+    {
+      "appid": "1012790",
+      "name": "Into the Radius VR",
+      "nexus": "intotheradiusvr"
+    },
+    {
+      "appid": "349040",
+      "name": "Naruto Shippuden: Ultimate Ninja Storm 4",
+      "nexus": "narutoultimateninjastorm4"
+    },
+    {
+      "appid": "16900",
+      "name": "Ground Branch",
+      "nexus": "groundbranch",
+      "saves": [
+        "{documents}/GroundBranch"
+      ]
+    },
+    {
+      "appid": "200510",
+      "name": "XCOM: Enemy Unknown",
+      "nexus": "xcom",
+      "saves": [
+        "{documents}/My Games/XCOM - Enemy Unknown/XComGame/SaveData",
+        "{documents}/My Games/XCOM - Enemy Within/XComGame/SaveData"
+      ]
+    },
+    {
+      "appid": "2515020",
+      "name": "Final Fantasy XVI",
+      "nexus": "finalfantasy16",
+      "saves": [
+        "{documents}/My Games/FINAL FANTASY XVI"
+      ]
+    },
+    {
+      "appid": "1774580",
+      "name": "Star Wars Jedi: Survivor",
+      "nexus": "starwarsjedisurvivor",
+      "saves": [
+        "{saved_games}/Respawn/JediSurvivor"
+      ]
+    },
+    {
+      "appid": "631510",
+      "name": "Devil May Cry HD Collection",
+      "nexus": "devilmaycryhdcollection",
+      "saves": [
+        "{documents}/My Games/Devil May Cry HD Collection"
+      ]
+    },
+    {
+      "appid": "2958130",
+      "name": "Jurassic World Evolution 3",
+      "nexus": "jurassicworldevolution3",
+      "saves": [
+        "{saved_games}/Frontier Developments/Jurassic World Evolution 3"
+      ]
+    },
+    {
+      "appid": "2183650",
+      "name": "Mega Man X Dive Offline",
+      "nexus": "megamanxdiveoffline",
+      "saves": [
+        "{appdata_locallow}/Capcom/ROCKMAN X DiVE Offline"
+      ]
+    },
+    {
+      "appid": "49520",
+      "name": "Borderlands 2",
+      "nexus": "borderlands2",
+      "saves": [
+        "{documents}/My Games/Borderlands 2/WillowGame/SaveData"
+      ]
+    },
+    {
+      "appid": "1432860",
+      "name": "Sun Haven",
+      "nexus": "sunhaven",
+      "saves": [
+        "{appdata_locallow}/Pixel Sprout Studios/Sun Haven/Saves"
+      ]
+    },
+    {
+      "appid": "2375550",
+      "name": "Like a Dragon Gaiden: The Man Who Erased His Name",
+      "nexus": "likeadragongaiden",
+      "saves": [
+        "{appdata_roaming}/Sega/LikeADragonGaiden/Steam"
+      ]
+    },
+    {
+      "appid": "241540",
+      "name": "State of Decay",
+      "nexus": "stateofdecay"
+    },
+    {
+      "appid": "1846380",
+      "name": "Need for Speed Unbound",
+      "nexus": "needforspeedunbound",
+      "saves": [
+        "{documents}/Need For Speed(TM) Unbound/SaveGame"
+      ]
+    },
+    {
+      "appid": "357190",
+      "name": "Ultimate Marvel vs. Capcom 3",
+      "nexus": "ultimatemarvelvscapcom3"
+    },
+    {
+      "appid": "2072450",
+      "name": "Like a Dragon: Infinite Wealth",
+      "nexus": "likeadragoninfinitewealth",
+      "saves": [
+        "{appdata_roaming}/Sega/LikeADragon8/Steam"
+      ]
+    },
+    {
+      "appid": "1297900",
+      "name": "Gothic 1 Remake",
+      "nexus": "gothic1remake",
+      "saves": [
+        "{appdata_local}/G1R/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "952070",
+      "name": "Resident Evil Resistance",
+      "nexus": "residentevilresistance"
+    },
+    {
+      "appid": "3819640",
+      "name": "Megastore Simulator",
+      "nexus": "megastoresimulator",
+      "saves": [
+        "{appdata_locallow}/Yolo Games Studio/Megastore Simulator"
+      ]
+    },
+    {
+      "appid": "686060",
+      "name": "Mewgenics",
+      "nexus": "mewgenics",
+      "saves": [
+        "{appdata_roaming}/Glaiel Games/Mewgenics"
+      ]
+    },
+    {
+      "appid": "102820",
+      "name": "The Sims Medieval",
+      "nexus": "thesimsmedieval",
+      "saves": [
+        "{documents}/Electronic Arts/The Sims Medieval/Saves"
+      ]
+    },
+    {
+      "appid": "1627720",
+      "name": "Lies of P",
+      "nexus": "liesofp",
+      "saves": [
+        "{game}/LiesofP/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "851850",
+      "name": "Dragon Ball Z: Kakarot",
+      "nexus": "dragonballzkakarot"
+    },
+    {
+      "appid": "289650",
+      "name": "Assassin's Creed Unity",
+      "nexus": "assassinscreedunity"
+    },
+    {
+      "appid": "3751950",
+      "name": "Assassin's Creed: Black Flag Resynced",
+      "nexus": "assassinscreedblackflagresynced",
+      "saves": [
+        "{appdata_local}/Ubisoft/Assassin's Creed Black Flag Resynced/save"
+      ]
+    },
+    {
+      "appid": "291650",
+      "name": "Pillars of Eternity",
+      "nexus": "pillarsofeternity",
+      "saves": [
+        "{saved_games}/Pillars of Eternity"
+      ]
+    },
+    {
+      "appid": "397540",
+      "name": "Borderlands 3",
+      "nexus": "borderlands3",
+      "saves": [
+        "{documents}/My Games/Borderlands 3/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "1062520",
+      "name": "Dinkum",
+      "nexus": "dinkum",
+      "saves": [
+        "{appdata_locallow}/James Bendon/Dinkum"
+      ]
+    },
+    {
+      "appid": "311560",
+      "name": "Assassin's Creed Rogue",
+      "nexus": "assassinscreedrogue"
+    },
+    {
+      "appid": "550",
+      "name": "Left 4 Dead 2",
+      "nexus": "left4dead2"
+    },
+    {
+      "appid": "2157560",
+      "name": "Granblue Fantasy Versus: Rising",
+      "nexus": "granbluefantasyversusrising",
+      "saves": [
+        "{appdata_local}/GBVSR/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "3041230",
+      "name": "Windrose",
+      "nexus": "windrose",
+      "saves": [
+        "{appdata_local}/R5/Saved/SaveProfiles"
+      ]
+    },
+    {
+      "appid": "2277560",
+      "name": "Wuchang: Fallen Feathers",
+      "nexus": "wuchangfallenfeathers",
+      "saves": [
+        "{appdata_local}/Project_Plague/Saved"
+      ]
+    },
+    {
+      "appid": "2195250",
+      "name": "EA Sports FC 24",
+      "nexus": "eafc24",
+      "saves": [
+        "{documents}/FC 24/settings"
+      ]
+    },
+    {
+      "appid": "12200",
+      "name": "Bully: Scholarship Edition",
+      "nexus": "bullyscholarshipedition",
+      "saves": [
+        "{documents}/Bully Scholarship Edition"
+      ]
+    },
+    {
+      "appid": "595520",
+      "name": "Final Fantasy XII: The Zodiac Age",
+      "nexus": "finalfantasy12",
+      "saves": [
+        "{documents}/My Games/FINAL FANTASY XII THE ZODIAC AGE"
+      ]
+    },
+    {
+      "appid": "1496790",
+      "name": "Gotham Knights",
+      "nexus": "gothamknights",
+      "saves": [
+        "{appdata_local}/WB Games/Gotham Knights/Steam/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "1332010",
+      "name": "Stray",
+      "nexus": "stray",
+      "saves": [
+        "{appdata_local}/Hk_project/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "243470",
+      "name": "Watch Dogs",
+      "nexus": "watchdogs"
+    },
+    {
+      "appid": "1237980",
+      "name": "Star Wars Battlefront (2015)",
+      "nexus": "starwarsbattlefront2015",
+      "saves": [
+        "{documents}/STAR WARS Battlefront/settings"
+      ]
+    },
+    {
+      "appid": "1578390",
+      "name": "My Garage",
+      "nexus": "mygarage",
+      "saves": [
+        "{appdata_locallow}/Viking/My Garage"
+      ]
+    },
+    {
+      "appid": "2525380",
+      "name": "Tomb Raider IV–VI Remastered",
+      "nexus": "tombraidertrilogy2remastered",
+      "saves": [
+        "{appdata_roaming}/TRX2"
+      ]
+    },
+    {
+      "appid": "750920",
+      "name": "Shadow of the Tomb Raider",
+      "nexus": "shadowofthetombraider",
+      "saves": [
+        "{documents}/Shadow of the Tomb Raider"
+      ]
+    },
+    {
+      "appid": "220440",
+      "name": "DmC: Devil May Cry",
+      "nexus": "dmcdevilmaycry"
+    },
+    {
+      "appid": "640820",
+      "name": "Pathfinder: Kingmaker",
+      "nexus": "pathfinderkingmaker",
+      "saves": [
+        "{appdata_locallow}/Owlcat Games/Pathfinder Kingmaker/Saved Games"
+      ]
+    },
+    {
+      "appid": "740130",
+      "name": "Tales of Arise",
+      "nexus": "talesofarise",
+      "saves": [
+        "{appdata_local}/BANDAI NAMCO Entertainment/Tales of Arise/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "4358690",
+      "name": "Graveyard Keeper 2",
+      "nexus": "graveyardkeeper2",
+      "saves": [
+        "{appdata_locallow}/Lazy Bear Games/Graveyard Keeper 2"
+      ]
+    },
+    {
+      "appid": "2291060",
+      "name": "Earth Defense Force 6",
+      "nexus": "earthdefenseforce6",
+      "saves": [
+        "{appdata_local}/EarthDefenceForce6/SAVE_DATA"
+      ]
+    },
+    {
+      "appid": "626690",
+      "name": "Sword Art Online: Fatal Bullet",
+      "nexus": "saofatalbullet",
+      "saves": [
+        "{appdata_local}/SAOFB/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "2362420",
+      "name": "Mass Effect 2",
+      "nexus": "masseffect2",
+      "saves": [
+        "{documents}/BioWare/Mass Effect 2/Profile",
+        "{documents}/BioWare/Mass Effect 2/Save"
+      ]
+    },
+    {
+      "appid": "368260",
+      "name": "Marvel's Midnight Suns",
+      "nexus": "marvelsmidnightsuns",
+      "saves": [
+        "{documents}/My Games/Marvel's Midnight Suns"
+      ]
+    },
+    {
+      "appid": "1607250",
+      "name": "My Hero: Ultra Rumble",
+      "nexus": "myheroultrarumble",
+      "saves": [
+        "{appdata_local}/HerovsGame"
+      ]
+    },
+    {
+      "appid": "207170",
+      "name": "Legend of Grimrock",
+      "nexus": "grimrock",
+      "saves": [
+        "{documents}/Almost Human/Legend of Grimrock"
+      ]
+    },
+    {
+      "appid": "2397300",
+      "name": "Half Sword",
+      "nexus": "halfsword",
+      "saves": [
+        "{appdata_local}/HalfSwordUE5/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "1363080",
+      "name": "Manor Lords",
+      "nexus": "manorlords",
+      "saves": [
+        "{appdata_local}/ManorLords/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "2600",
+      "name": "Vampire: The Masquerade - Bloodlines",
+      "nexus": "vampirebloodlines",
+      "saves": [
+        "{game}/Unofficial_Patch/Vampire/save",
+        "{game}/Vampire/save"
+      ]
+    },
+    {
+      "appid": "3937550",
+      "name": "Yakuza Kiwami 3 & Dark Ties",
+      "nexus": "yakuzakiwami3",
+      "saves": [
+        "{appdata_roaming}/Sega/YakuzaKiwami3/Steam"
+      ]
+    },
+    {
+      "appid": "2638890",
+      "name": "Onimusha: Way of the Sword",
+      "nexus": "onimushawayofthesword"
+    },
+    {
+      "appid": "286160",
+      "name": "Tabletop Simulator",
+      "nexus": "tabletopsimulator",
+      "saves": [
+        "{game}/Tabletop Simulator_Data/Mods",
+        "{documents}/My Games/Tabletop Simulator/Mods",
+        "{documents}/My Games/Tabletop Simulator/Saves"
+      ]
+    },
+    {
+      "appid": "433340",
+      "name": "Slime Rancher",
+      "nexus": "slimerancher",
+      "saves": [
+        "{appdata_locallow}/Monomi Park/Slime Rancher"
+      ]
+    },
+    {
+      "appid": "1888160",
+      "name": "Armored Core VI: Fires of Rubicon",
+      "nexus": "armoredcore6firesofrubicon",
+      "saves": [
+        "{appdata_roaming}/ArmoredCore6"
+      ]
+    },
+    {
+      "appid": "1167630",
+      "name": "Teardown",
+      "nexus": "teardown",
+      "saves": [
+        "{appdata_local}/Teardown"
+      ]
+    },
+    {
+      "appid": "2075800",
+      "name": "Star Wars: Zero Company",
+      "nexus": "starwarszerocompany",
+      "saves": [
+        "{appdata_local}/SWZeroCompany/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "924980",
+      "name": "Trials of Mana",
+      "nexus": "trialsofmana",
+      "saves": [
+        "{documents}/My Games/Trials of Mana/Steam",
+        "{appdata_local}/Trials of Mana/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "3287520",
+      "name": "Ninja Gaiden 2 Black",
+      "nexus": "ninjagaiden2black",
+      "saves": [
+        "{appdata_local}/NINJAGAIDEN2BLACK/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "108600",
+      "name": "Project Zomboid",
+      "nexus": "projectzomboid"
+    },
+    {
+      "appid": "2806050",
+      "name": "Halo: Campaign Evolved",
+      "nexus": "halocampaignevolved",
+      "saves": [
+        "{appdata_local}/Meteorite/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "920210",
+      "name": "Lego Star Wars: The Skywalker Saga",
+      "nexus": "legostarwarstheskywalkersaga",
+      "saves": [
+        "{appdata_roaming}/Warner Bros. Interactive Entertainment/LEGO Star Wars - The Skywalker Saga/SAVEDGAMES"
+      ]
+    },
+    {
+      "appid": "2870",
+      "name": "X Rebirth",
+      "nexus": "xrebirth",
+      "saves": [
+        "{documents}/Egosoft/X Rebirth"
+      ]
+    },
+    {
+      "appid": "1304930",
+      "name": "The Outlast Trials",
+      "nexus": "theoutlasttrials",
+      "saves": [
+        "{appdata_local}/OPP/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "2584270",
+      "name": "Mortal Shell II",
+      "nexus": "mortalshell2",
+      "saves": [
+        "{appdata_local}/MortalShell2/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "1233570",
+      "name": "Mirror's Edge Catalyst",
+      "nexus": "mirrorsedgecatalyst",
+      "saves": [
+        "{documents}/Mirrors Edge Catalyst/settings/PROF_SAVE"
+      ]
+    },
+    {
+      "appid": "2842040",
+      "name": "Star Wars Outlaws",
+      "nexus": "starwarsoutlaws"
+    },
+    {
+      "appid": "1466060",
+      "name": "Tainted Grail: The Fall of Avalon",
+      "nexus": "taintedgrailthefallofavalon",
+      "saves": [
+        "{appdata_locallow}/Questline/Fall of Avalon"
+      ]
+    },
+    {
+      "appid": "625960",
+      "name": "Stoneshard",
+      "nexus": "stoneshard",
+      "saves": [
+        "{appdata_local}/StoneShard/characters_v1"
+      ]
+    },
+    {
+      "appid": "1142710",
+      "name": "Total War: Warhammer III",
+      "nexus": "totalwarwarhammer3",
+      "saves": [
+        "{appdata_roaming}/The Creative Assembly/Warhammer3/save_games",
+        "{appdata_roaming}/The Creative Assembly/Warhammer3/save_games_multiplayer"
+      ]
+    },
+    {
+      "appid": "1272080",
+      "name": "Payday 3",
+      "nexus": "payday3"
+    },
+    {
+      "appid": "2208920",
+      "name": "Assassin's Creed Valhalla",
+      "nexus": "assassinscreedvalhalla"
+    },
+    {
+      "appid": "1235140",
+      "name": "Yakuza: Like a Dragon",
+      "nexus": "yakuzalikeadragon",
+      "saves": [
+        "{appdata_roaming}/Sega/YakuzaLikeADragon"
+      ]
+    },
+    {
+      "appid": "2058180",
+      "name": "Judgment",
+      "nexus": "judgment",
+      "saves": [
+        "{appdata_roaming}/Sega/Judgment/Steam"
+      ]
+    },
+    {
+      "appid": "1285190",
+      "name": "Borderlands 4",
+      "nexus": "borderlands4",
+      "saves": [
+        "{documents}/My Games/Borderlands 4/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "794260",
+      "name": "Outward",
+      "nexus": "outward",
+      "saves": [
+        "{game}/Outward_Defed/SaveGames",
+        "{game}/SaveGames"
+      ]
+    },
+    {
+      "appid": "812140",
+      "name": "Assassin's Creed Odyssey",
+      "nexus": "assassinscreedodyssey"
+    },
+    {
+      "appid": "1164940",
+      "name": "Trepang2",
+      "nexus": "trepang2",
+      "saves": [
+        "{appdata_local}/CPPFPS/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "4348910",
+      "name": "Probably Stolen",
+      "nexus": "probablystolen"
+    },
+    {
+      "appid": "359870",
+      "name": "Final Fantasy X/X-2 HD Remaster",
+      "nexus": "finalfantasyxx2hdremaster",
+      "saves": [
+        "{documents}/SQUARE ENIX/FINAL FANTASY X&X-2 HD Remaster"
+      ]
+    },
+    {
+      "appid": "1551360",
+      "name": "Forza Horizon 5",
+      "nexus": "forzahorizon5"
+    },
+    {
+      "appid": "1295510",
+      "name": "Dragon Quest XI S - Definitive Edition",
+      "nexus": "dragonquestxisdefinitiveedition",
+      "saves": [
+        "{documents}/My Games/DRAGON QUEST XI S/Steam"
+      ]
+    },
+    {
+      "appid": "1118520",
+      "name": "Paralives",
+      "nexus": "paralives",
+      "saves": [
+        "{appdata_locallow}/Paralives/Paralives"
+      ]
+    },
+    {
+      "appid": "1105510",
+      "name": "Yakuza 5 Remastered",
+      "nexus": "yakuza5remastered"
+    },
+    {
+      "appid": "1084160",
+      "name": "Jagged Alliance 3",
+      "nexus": "jaggedalliance3",
+      "saves": [
+        "{saved_games}/Jagged Alliance 3"
+      ]
+    },
+    {
+      "appid": "1811260",
+      "name": "FIFA 23",
+      "nexus": "fifa23",
+      "saves": [
+        "{documents}/FIFA 23/settings"
+      ]
+    },
+    {
+      "appid": "1149460",
+      "name": "Icarus",
+      "nexus": "icarus",
+      "saves": [
+        "{appdata_local}/Icarus/Saved/PlayerData"
+      ]
+    },
+    {
+      "appid": "427410",
+      "name": "Abiotic Factor",
+      "nexus": "abioticfactor",
+      "saves": [
+        "{appdata_local}/AbioticFactor/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "289070",
+      "name": "Sid Meier's Civilization VI",
+      "nexus": "civilisationvi",
+      "saves": [
+        "{documents}/My Games/Sid Meier's Civilization VI/Saves"
+      ]
+    },
+    {
+      "appid": "454650",
+      "name": "Dragon Ball Xenoverse 2",
+      "nexus": "dragonballxenoverse2"
+    },
+    {
+      "appid": "582160",
+      "name": "Assassin's Creed Origins",
+      "nexus": "assassinscreedorigins"
+    },
+    {
+      "appid": "637650",
+      "name": "Final Fantasy XV",
+      "nexus": "finalfantasy15",
+      "saves": [
+        "{documents}/My Games/FINAL FANTASY XV/Origin/savestorage",
+        "{documents}/My Games/FINAL FANTASY XV/Steam"
+      ]
+    },
+    {
+      "appid": "313120",
+      "name": "Stranded Deep",
+      "nexus": "strandeddeep",
+      "saves": [
+        "{appdata_locallow}/Beam Team Games/Stranded Deep/Data"
+      ]
+    },
+    {
+      "appid": "1449690",
+      "name": "The Walking Dead: The Telltale Definitive Series",
+      "nexus": "thewalkingdeadthetelltaledefinitiveseries",
+      "saves": [
+        "{documents}/Telltale Games/The Walking Dead Definitive",
+        "{documents}/Telltale Games/The Walking Dead The Telltale Definitive Series"
+      ]
+    },
+    {
+      "appid": "1388590",
+      "name": "Yakuza 6: The Song of Life",
+      "nexus": "yakuza6"
+    },
+    {
+      "appid": "4570720",
+      "name": "DragonSword: Awakening",
+      "nexus": "dragonswordawakening",
+      "saves": [
+        "{game}/DS/Saved/SaveGames"
+      ]
+    },
+    {
+      "appid": "220240",
+      "name": "Far Cry 3",
+      "nexus": "farcry3"
+    },
+    {
+      "appid": "35010",
+      "name": "Batman: Arkham Asylum",
+      "nexus": "batmanarkhamasylum",
+      "saves": [
+        "{documents}/Eidos/Batman Arkham Asylum/SaveData",
+        "{documents}/Square Enix/Batman Arkham Asylum GOTY/SaveData"
+      ]
+    },
+    {
+      "appid": "601510",
+      "name": "Yu-Gi-Oh! Duel Links",
+      "nexus": "yugiohduellinks"
+    },
+    {
+      "appid": "3024040",
+      "name": "Stronghold Crusader: Definitive Edition",
+      "nexus": "strongholdcrusaderdefinitiveedition",
+      "saves": [
+        "{appdata_locallow}/Firefly Studios/Stronghold Crusader Definitive Edition"
+      ]
+    },
+    {
+      "appid": "2307350",
+      "name": "Into the Radius 2",
+      "nexus": "intotheradius2",
+      "saves": [
+        "{documents}/My Games/IntoTheRadius2"
+      ]
     }
   ]
 }

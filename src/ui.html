@@ -4444,6 +4444,21 @@
     b.style.display = unseenProblems > 0 ? 'inline-block' : 'none';
   }
 
+  // the window size is remembered, so the next start opens the way it was left
+  (function rememberWindowSize() {
+    let timer = null, last = '';
+    window.addEventListener('resize', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (document.fullscreenElement || (appState.settings || {}).deck || !window.outerWidth) return;
+        const key = window.outerWidth + 'x' + window.outerHeight;
+        if (key === last) return;
+        last = key;
+        ipcSend('/api/settings', { window_size: [window.outerWidth, window.outerHeight] });
+      }, 1200);
+    });
+  })();
+
   function setModView(v) {
     const g = appState.games[appState.selected_idx];
     if (g) modViewOf[g.appid] = v;

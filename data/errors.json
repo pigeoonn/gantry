@@ -1023,8 +1023,7 @@
     "logs": [
       "bepinex",
       "melonloader",
-      "player",
-      "proton"
+      "player"
     ],
     "contains": [
       "OutOfMemoryException",
@@ -1079,7 +1078,7 @@
     ],
     "contains": [
       "StackOverflowException",
-      "stack overflow"
+      "virtual_setup_exception stack overflow"
     ],
     "level": "bad",
     "title": {
