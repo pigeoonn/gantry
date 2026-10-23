@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **mod.io** is a third place to find mods (*Find mods → mod.io*). Games whose makers let other programs use their mod.io
+  mods are listed and installed in one click, free, with the mods they need installed first. It uses your own free
+  read-only key (mod.io/me/access), kept only on this computer. Games that only allow downloads inside the game say so.
+- **Install what is missing.** A mod that needs other mods now has a button for it on every account. Premium accounts get
+  them at once; free accounts get their Nexus pages opened one after another, and each download is installed the moment
+  its *Mod Manager Download* click arrives, without asking again. (Nexus only lets the website start a free download, so
+  that one click stays yours.) The same holds for *Get it* on a store card.
 - **Trainers start the way Steam starts the game.** A trainer only works when it is in the same Wine session as the game.
   Gantry used to start it three seconds after Play with whichever compatibility tool it had picked itself; for a Steam game that is
   often not the one Steam uses, so the trainer never saw the game. Now it uses the compatibility tool Steam is set to use for that

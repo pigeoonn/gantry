@@ -25,6 +25,7 @@ pub mod stats;
 pub mod welcome;
 pub mod loaders;
 pub mod modinfo;
+pub mod modio;
 pub mod logdoctor;
 pub mod nexus;
 pub mod pak;
@@ -186,6 +187,7 @@ pub struct AppState {
     /// Undo stack for mod changes (newest last), across games.
     pub undo: Vec<UndoEntry>,
     pub nexus: NexusState,
+    pub modio: ModioState,
     pub vt: VtState,
     /// Where the UE4SS release is looked up (tests point this at a local fake).
     pub ue4ss_source: ue4ss::Source,
@@ -315,6 +317,21 @@ pub struct VtFile {
     pub error: String,
 }
 
+/// The user's own mod.io key (read-only, from mod.io/me/access); it stays on this computer.
+#[derive(Clone)]
+pub struct ModioState {
+    pub key: Option<String>,
+    pub base: String,
+    /// Tests talk to a local fake server over plain http; production never does.
+    pub allow_http: bool,
+}
+
+impl Default for ModioState {
+    fn default() -> Self {
+        Self { key: None, base: modio::DEFAULT_BASE.into(), allow_http: false }
+    }
+}
+
 /// VirusTotal: the user's own key (never in the UI JSON) and the answers of this run.
 #[derive(Clone)]
 pub struct VtState {
@@ -354,7 +371,24 @@ pub struct NexusState {
     pub check_error: Option<String>,
     /// Free accounts update through the website: the file whose link we are waiting for.
     pub expect: Option<(UpdateTarget, nexus::NexusRef)>,
+    /// Mods whose Nexus page Gantry opened and whose download link it is waiting for; that link needs no confirmation.
+    pub wants: Vec<Want>,
+    /// Mods still to be opened, one at a time, as each download arrives.
+    pub queue: std::collections::VecDeque<Want>,
 }
+
+/// A mod the user asked for on Nexus Mods with a free account (the website must start its download).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Want {
+    pub appid: String,
+    pub game: String,
+    pub mod_id: u64,
+    pub name: String,
+    pub asked_ms: u64,
+}
+
+/// How long Gantry keeps waiting for the click on the website.
+const WANT_FOR_MS: u64 = 30 * 60_000;
 
 impl Default for NexusState {
     fn default() -> Self {
@@ -371,6 +405,8 @@ impl Default for NexusState {
             checking: false,
             check_error: None,
             expect: None,
+            wants: Vec::new(),
+            queue: std::collections::VecDeque::new(),
         }
     }
 }
@@ -588,6 +624,7 @@ impl AppState {
             last_run: None,
             undo: Vec::new(),
             nexus: NexusState::default(),
+            modio: ModioState::default(),
             vt: VtState::default(),
             ue4ss_source: ue4ss::Source::default(),
             loader_sources: loaders::Sources::default(),
@@ -749,6 +786,7 @@ impl AppState {
             "nexus": self.nexus_json(),
             "steam_lib": self.steam_lib_json(),
             "last_played": self.last_played_json(),
+            "modio": json!({ "configured": self.modio.key.is_some() }),
             "thunder_updates": self.thunder.updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null)).chain(self.github_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).collect::<Vec<_>>(),
         })
     }
@@ -801,7 +839,9 @@ impl AppState {
             "checked_ms": self.nexus.checked_ms,
             "checking": self.nexus.checking,
             "check_error": self.nexus.check_error,
-            "waiting_for": self.nexus.expect.as_ref().map(|(t, _)| json!({ "appid": t.appid, "lib_id": t.lib_id, "name": t.name })),
+            "waiting_for": self.nexus.expect.as_ref().map(|(t, _)| json!({ "appid": t.appid, "lib_id": t.lib_id, "name": t.name }))
+                .or_else(|| self.nexus.wants.first().map(|w| json!({ "appid": w.appid, "lib_id": "", "name": w.name }))),
+            "queued": self.nexus.queue.len(),
         })
     }
 
@@ -1432,6 +1472,8 @@ struct InstallOpts {
     thunder: Option<thunderstore::ThunderRef>,
     /// Where the file came from on GitHub.
     github: Option<github::GithubRef>,
+    /// Where the file came from on mod.io.
+    modio: Option<modio::ModioRef>,
     name: Option<String>,
     /// Thunderstore packages the mod needs (`Owner-Name`).
     depends: Vec<String>,
@@ -1719,8 +1761,10 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
     let mut categories: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let (mut next_n, mut next_t) = (ask.off_nexus, ask.off_thunder);
     let (mut more_n, mut more_t) = (false, false);
-    let want_nexus = ask.source != "thunder";
-    let want_thunder = ask.source != "nexus";
+    let want_nexus = !matches!(ask.source.as_str(), "thunder" | "modio");
+    let want_thunder = !matches!(ask.source.as_str(), "nexus" | "modio");
+    let want_modio = ask.source == "modio";
+    let have_modio: HashSet<u64> = library_of(g).map(|l| l.mods().iter().filter_map(|m| m.modio.as_ref().map(|r| r.mod_id)).collect()).unwrap_or_default();
 
     if want_nexus {
         match nexus_domain_for(state, g).and_then(|d| nexus_client(state).map(|c| (d, c))) {
@@ -1797,6 +1841,25 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
                     }));
                 }
             }
+        }
+    }
+    if want_modio {
+        match modio_game_for(state, g).and_then(|id| modio_client(state).map(|c| (id, c))) {
+            Err(e) => notes.push(json!({ "source": "modio", "error": e, "need_key": read_state(state).modio.key.is_none() })),
+            Ok((game_id, client)) => match client.mods(game_id, &modio::Query { text: ask.query.clone(), sort: ask.sort.clone(), offset: ask.off_nexus, limit: ask.per }) {
+                Err(e) => notes.push(json!({ "source": "modio", "error": e })),
+                Ok((list, total)) => {
+                    next_n = ask.off_nexus + list.len();
+                    more_n = list.len() >= ask.per && (next_n as u64) < total;
+                    for c in list.into_iter().filter(|c| adult || !c.adult) {
+                        cards.push(json!({
+                            "source": "modio", "id": c.id.to_string(), "name": c.name, "summary": c.summary, "author": c.author, "version": c.version,
+                            "downloads": c.downloads, "endorsements": 0, "updated_ms": c.updated_ms, "size_kb": c.size_kb,
+                            "picture": c.picture, "category": "", "installed": have_modio.contains(&c.id), "page_url": c.page_url, "has_deps": c.has_deps,
+                        }));
+                    }
+                }
+            },
         }
     }
     // both sources in one list, ordered by what was asked for
@@ -2683,7 +2746,8 @@ fn nexus_main_file(client: &nexus::Nexus, game: &str, mod_id: u64) -> Result<u64
 }
 
 /// "Get this mod" from the browse list: installed for Premium accounts, otherwise its page opens.
-fn nexus_get_mod(state: &SharedState, mod_id: u64) {
+fn nexus_get_mod(state: &SharedState, mod_id: u64, name: &str) {
+    let name = if name.trim().is_empty() { format!("mod {}", mod_id) } else { name.trim().to_string() };
     let Some(g) = selected_game(state).filter(|g| g.is_installed) else { return };
     let domain = match nexus_domain_for(state, &g) {
         Ok(d) => d,
@@ -2695,8 +2759,15 @@ fn nexus_get_mod(state: &SharedState, mod_id: u64) {
     };
     let premium = read_state(state).nexus.user.as_ref().map(|u| u.premium).unwrap_or(false);
     if !premium {
-        xdg_open(format!("https://www.nexusmods.com/{domain}/mods/{mod_id}?tab=files"));
-        return log(state, "INFO", "Free Nexus accounts download from the website: press \"Mod Manager Download\" there and Gantry takes over.");
+        // a free account downloads through the website: Gantry opens the exact page and installs what arrives
+        {
+            let mut st = write_state(state);
+            st.nexus.wants.retain(|w| !(w.game == domain && w.mod_id == mod_id));
+            st.nexus.wants.insert(0, Want { appid: g.appid.clone(), game: domain.clone(), mod_id, name: name.clone(), asked_ms: now_ms() });
+            st.notifier.bump();
+        }
+        open_nexus_files_page(state, &domain, mod_id);
+        return log(state, "INFO", format!("Opened the Nexus page of {}. Press its Mod Manager Download button; Gantry installs it by itself.", name));
     }
     match nexus_main_file(&client, &domain, mod_id) {
         Ok(file_id) => nexus_fetch_and_install(state, &g, &nexus::NxmLink { game: domain, mod_id, file_id, key: None, expires: None }, None),
@@ -2709,8 +2780,25 @@ fn nexus_install_needs(state: &SharedState, appid: &str, lib_id: &str) {
     let row = read_state(state).nexus.needs.iter().find(|n| n.appid == appid && n.lib_id == lib_id).cloned();
     let (Some(row), Some(g)) = (row, game_by_appid(state, appid)) else { return };
     let premium = read_state(state).nexus.user.as_ref().map(|u| u.premium).unwrap_or(false);
+    let parse = |url: &str| url.strip_prefix("https://www.nexusmods.com/").and_then(|p| p.split_once("/mods/")).and_then(|(g, i)| Some((g.to_string(), i.split(['?', '/']).next()?.parse::<u64>().ok()?)));
     if !premium {
-        return log(state, "WARN", "Installing required mods in one go needs a Premium account. Use the links to download them from the website.");
+        // a free account cannot download without the website: the pages open one after the other and each download is installed on arrival
+        let mut queued = 0;
+        {
+            let mut st = write_state(state);
+            for r in &row.missing {
+                let Some((game, mod_id)) = parse(&r.page_url) else { continue };
+                if st.nexus.queue.iter().chain(st.nexus.wants.iter()).any(|w| w.game == game && w.mod_id == mod_id) {
+                    continue;
+                }
+                st.nexus.queue.push_back(Want { appid: appid.to_string(), game, mod_id, name: r.name.clone(), asked_ms: 0 });
+                queued += 1;
+            }
+        }
+        if queued == 0 {
+            return log(state, "WARN", "Nothing to open: what is missing has no Nexus page, or is already being waited for.");
+        }
+        return nexus_queue_next(state);
     }
     let client = match nexus_client(state) {
         Ok(c) => c,
@@ -3255,6 +3343,9 @@ fn finish_library_add(state: &SharedState, g: &GameEntry, lib: &deploy::Library,
             }
             if let Some(r) = &opts.github {
                 let _ = lib.set_github(&m.id, r.clone());
+            }
+            if let Some(r) = &opts.modio {
+                let _ = lib.set_modio(&m.id, r.clone());
             }
             if let Some(answers) = &opts.fomod {
                 let _ = lib.set_fomod(&m.id, answers.clone());
@@ -4453,6 +4544,28 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 refresh_mods_shared(state);
             }
         }
+        "/api/modio_key_set" => {
+            let key = body_str(body, "key");
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || match set_modio_key(&state_bg, &key) {
+                Ok(m) => log(&state_bg, "OK", m),
+                Err(e) => log(&state_bg, "ERR", e),
+            });
+        }
+        "/api/modio_key_clear" => {
+            clear_modio_key(state);
+            log(state, "WARN", "mod.io API key removed from this computer.");
+        }
+        "/api/modio_install" => {
+            let id: u64 = body.get("id").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(0);
+            if let Some(g) = selected_game(state).filter(|g| g.is_installed && id > 0) {
+                let state_bg = Arc::clone(state);
+                thread::spawn(move || match modio_install(&state_bg, &g, id) {
+                    Ok(m) => log(&state_bg, "OK", m),
+                    Err(e) => log(&state_bg, "ERR", e),
+                });
+            }
+        }
         "/api/nexus_key_set" => {
             let key = body_str(body, "key");
             let state_bg = Arc::clone(state);
@@ -4789,6 +4902,8 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 // a mod page, only ever on Nexus Mods itself
                 "nexus_page" if page.starts_with("https://www.nexusmods.com/") && !page.contains(char::is_whitespace) => Some(page),
                 "thunder_page" if page.starts_with("https://thunderstore.io/") && !page.contains(char::is_whitespace) => Some(page),
+                "modio_page" if (page.starts_with("https://mod.io/") || page.starts_with("https://www.mod.io/")) && !page.contains(char::is_whitespace) => Some(page),
+                "modio_key" => Some("https://mod.io/me/access".to_string()),
                 // a link from a mod's own page (the page only ever offers http and https ones)
                 "web" => richtext::safe_url(&page),
                 // a pre-filled issue form (the person reads it and presses Submit themselves)
@@ -5378,8 +5493,9 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/nexus_get" => {
             let mod_id = body.get("mod_id").and_then(Value::as_u64).unwrap_or(0);
+            let name = body_str(body, "name");
             let state_bg = Arc::clone(state);
-            thread::spawn(move || nexus_get_mod(&state_bg, mod_id));
+            thread::spawn(move || nexus_get_mod(&state_bg, mod_id, &name));
         }
         "/api/nexus_install_needs" => {
             let (appid, lib_id) = (body_str(body, "appid"), body_str(body, "lib_id"));
@@ -6457,6 +6573,111 @@ fn load_nexus_key(state: &SharedState) {
     }
 }
 
+fn modio_key_file(st: &AppState) -> PathBuf {
+    st.paths.config_file.with_file_name("modio_api_key")
+}
+
+/// Load a previously saved mod.io key (no network access at startup).
+fn load_modio_key(state: &SharedState) {
+    let mut st = write_state(state);
+    if let Ok(k) = fs::read_to_string(modio_key_file(&st)) {
+        if modio::valid_key(k.trim()) {
+            st.modio.key = Some(k.trim().to_string());
+        }
+    }
+}
+
+fn set_modio_key(state: &SharedState, key: &str) -> Result<String, String> {
+    let (base, allow_http) = {
+        let st = read_state(state);
+        (st.modio.base.clone(), st.modio.allow_http)
+    };
+    modio::Modio::new(&base, key.trim(), allow_http)?.check()?;
+    let mut st = write_state(state);
+    fsutil::atomic_write_private(&modio_key_file(&st), key.trim()).map_err(|e| format!("Could not save the key: {}", e))?;
+    st.modio.key = Some(key.trim().to_string());
+    st.notifier.bump();
+    Ok("mod.io connected.".to_string())
+}
+
+fn clear_modio_key(state: &SharedState) {
+    let mut st = write_state(state);
+    let _ = fs::remove_file(modio_key_file(&st));
+    st.modio.key = None;
+    st.notifier.bump();
+}
+
+fn modio_client(state: &SharedState) -> Result<modio::Modio, String> {
+    let st = read_state(state);
+    let key = st.modio.key.clone().ok_or("Add your mod.io API key first.")?;
+    modio::Modio::new(&st.modio.base, &key, st.modio.allow_http)
+}
+
+/// The mod.io game that is `g`: its remembered number, else the one named like it. Games whose makers do not let other
+/// programs download their mods are reported as such.
+fn modio_game_for(state: &SharedState, g: &GameEntry) -> Result<u64, String> {
+    let file = read_state(state).cache_root().join("modio_games.json");
+    let mut known: std::collections::HashMap<String, u64> = fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    if let Some(id) = known.get(&g.appid) {
+        return Ok(*id);
+    }
+    let client = modio_client(state)?;
+    let norm = |s: &str| s.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
+    let found = client.find_games(&g.name)?;
+    let want = norm(&g.name);
+    let hit = found.iter().find(|x| norm(&x.name) == want).ok_or_else(|| format!("mod.io has no game called {}.", g.name))?;
+    if !hit.open {
+        return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so Gantry cannot download them.", g.name));
+    }
+    known.insert(g.appid.clone(), hit.id);
+    let _ = fsutil::atomic_write(&file, serde_json::to_string(&known).unwrap_or_default());
+    Ok(hit.id)
+}
+
+/// One mod.io mod (and the mods it needs, deepest first) into `g`'s library; what is already there is skipped.
+fn modio_install(state: &SharedState, g: &GameEntry, mod_id: u64) -> Result<String, String> {
+    let game_id = modio_game_for(state, g)?;
+    let client = modio_client(state)?;
+    let lib = library_of(g).ok_or_else(|| format!("{} is not installed.", g.name))?;
+    let have: HashSet<u64> = lib.mods().iter().filter_map(|m| m.modio.as_ref().map(|r| r.mod_id)).collect();
+    let mut plan: Vec<u64> = client.dependencies(game_id, mod_id).unwrap_or_default().into_iter().map(|d| d.mod_id).filter(|id| !have.contains(id)).collect();
+    if !have.contains(&mod_id) {
+        plan.push(mod_id);
+    }
+    if plan.is_empty() {
+        return Ok("That mod is already in the library.".to_string());
+    }
+    let drops = read_state(state).cache_root().join("drops");
+    let mut done = 0;
+    for id in plan {
+        let card = client.one(game_id, id)?;
+        if card.download_url.is_empty() {
+            return Err(format!("{} has no file to download.", card.name));
+        }
+        log(state, "INFO", format!("Fetching mod.io mod {}...", card.name));
+        let dir = drops.join(fsutil::unique_token());
+        let name = nexus::safe_file_name(&card.file_name, &format!("modio_{}.zip", id));
+        let dest = dir.join(&name);
+        let fetched = fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|_| client.download(&card.download_url, &dest));
+        if let Err(e) = fetched {
+            let _ = fs::remove_dir_all(&dir);
+            return Err(e);
+        }
+        let opts = InstallOpts {
+            game: Some(g.clone()),
+            to_library: true,
+            version: card.version.clone(),
+            name: Some(card.name.clone()),
+            modio: Some(modio::ModioRef { game_id, mod_id: id, file_id: card.file_id }),
+            ..Default::default()
+        };
+        install_routed(dest, true, Arc::clone(state), opts);
+        done += 1;
+    }
+    refresh_mods_shared(state);
+    Ok(if done == 1 { "mod.io: 1 mod installed.".to_string() } else { format!("mod.io: {} mods installed (with what they need).", done) })
+}
+
 fn vt_key_file(st: &AppState) -> PathBuf {
     st.paths.config_file.with_file_name("virustotal_api_key")
 }
@@ -6976,8 +7197,21 @@ fn nxm_request(state: &SharedState, url: &str) -> Result<String, String> {
                 None
             }
         };
+        // a link for a page Gantry opened itself needs no second question: the click on the website was the answer
+        let now = now_ms();
+        st.nexus.wants.retain(|w| now.saturating_sub(w.asked_ms) < WANT_FOR_MS);
+        let asked = st.nexus.wants.iter().position(|w| w.game == link.game && w.mod_id == link.mod_id).map(|i| st.nexus.wants.remove(i));
+        if let Some(w) = &asked {
+            st.nexus.pending_for = Some(UpdateTarget { appid: w.appid.clone(), lib_id: String::new(), name: w.name.clone() });
+        }
         st.nexus.pending = Some(link);
         st.notifier.bump();
+        drop(st);
+        if asked.is_some() {
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || nxm_confirm(&state_bg, true));
+            return Ok(msg);
+        }
     }
     add_note(state, "waiting", "Open Gantry to confirm the Nexus download.", "");
     if !cfg!(test) {
@@ -7011,7 +7245,42 @@ fn nxm_confirm(state: &SharedState, accept: bool) {
         log(state, "WARN", "Select a game first, then confirm the download again.");
         return;
     };
-    nexus_fetch_and_install(state, &game, &link, target.map(|t| t.lib_id));
+    nexus_fetch_and_install(state, &game, &link, target.map(|t| t.lib_id).filter(|id| !id.is_empty()));
+    nexus_queue_next(state);
+}
+
+/// Opens the Nexus page of the next mod in the queue, when nothing else is being waited for.
+fn nexus_queue_next(state: &SharedState) {
+    let (w, more) = {
+        let mut st = write_state(state);
+        let now = now_ms();
+        st.nexus.wants.retain(|w| now.saturating_sub(w.asked_ms) < WANT_FOR_MS);
+        if !st.nexus.wants.is_empty() {
+            return;
+        }
+        let Some(mut w) = st.nexus.queue.pop_front() else { return };
+        w.asked_ms = now;
+        st.nexus.wants.push(w.clone());
+        st.notifier.bump();
+        (w, st.nexus.queue.len())
+    };
+    open_nexus_files_page(state, &w.game, w.mod_id);
+    log(state, "INFO", format!("Opened the Nexus page of {}. Press its Mod Manager Download button; Gantry installs it by itself.", w.name));
+    if more > 0 {
+        log(state, "INFO", format!("{} more are waiting for it; each page opens when the one before is done.", more));
+    }
+}
+
+/// The Nexus page where the download button of a mod's main file is (the exact file when the key lets Gantry find it).
+fn open_nexus_files_page(state: &SharedState, domain: &str, mod_id: u64) {
+    let file = nexus_client(state).ok().and_then(|c| nexus_main_file(&c, domain, mod_id).ok());
+    let url = match file {
+        Some(file_id) => nexus::NexusRef { game: domain.to_string(), mod_id, file_id }.files_page(file_id),
+        None => format!("https://www.nexusmods.com/{domain}/mods/{mod_id}?tab=files"),
+    };
+    if !cfg!(test) {
+        xdg_open(url);
+    }
 }
 
 /// Download one Nexus file and install it for `game`; `replaces` makes it an update of that library mod.
@@ -8722,6 +8991,7 @@ fn main() {
     resume_bisect(&state);
     load_nexus_key(&state);
     load_vt_key(&state);
+    load_modio_key(&state);
     load_steam_lib(&state);
     load_steam_played(&state);
     spawn_steam_refresher(Arc::downgrade(&state));
@@ -11345,6 +11615,65 @@ mod tests {
     }
 
     #[test]
+    fn mod_io_mods_are_listed_and_installed_with_what_they_need() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("modio");
+        let dir = add_plain_game(&h);
+        let zip = zip_of(&h, "mio", &[("Data/from_modio.esp", "M")]);
+        let f = modio::fake::start(zip);
+        {
+            let mut st = h.state.write().unwrap();
+            st.modio.base = f.base.clone();
+            st.modio.allow_http = true;
+            let i = st.selected_idx;
+            st.games[i].name = "Cool Racer".into();
+        }
+        let get = |path: &str| -> Value {
+            let (code, body) = http(&h, "GET", path, &[("X-Rig-Token", &h.token)], b"");
+            assert_eq!(code, 200, "{body}");
+            serde_json::from_str(&body).unwrap()
+        };
+        // no key yet: the list says so, and nothing was asked of mod.io
+        let none = get("/api/store?source=modio&sort=popular");
+        assert_eq!(none["notes"][0]["need_key"], true, "{none}");
+        // a wrong key is refused, the right one is kept in a private file
+        api(&h, "/api/modio_key_set", json!({ "key": "ffffffffffffffffffffffffffffffff" }));
+        wait_until("wrong key refused", || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("rejected")));
+        assert!(!api(&h, "/api/state", json!({}))["modio"]["configured"].as_bool().unwrap());
+        api(&h, "/api/modio_key_set", json!({ "key": modio::fake::KEY }));
+        wait_until("key accepted", || api(&h, "/api/state", json!({}))["modio"]["configured"] == true);
+        let keyfile = h._dir.join("cfg/modio_api_key");
+        assert_eq!(fs::read_to_string(&keyfile).unwrap(), modio::fake::KEY);
+        assert!(!api(&h, "/api/state", json!({})).to_string().contains(modio::fake::KEY), "the key is never in what the page gets");
+        // the list: three mods (the adult one is left out), the most downloaded first is the fake's order
+        let page = get("/api/store?source=modio&sort=popular");
+        let ids: Vec<&str> = page["cards"].as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap()).collect();
+        assert_eq!(ids.len(), 3, "{page}");
+        assert!(page["cards"][0]["source"] == "modio" && page["cards"][0]["page_url"].as_str().unwrap().starts_with("https://mod.io/"));
+        // mod 3 needs 2, which needs 1: all three arrive, the needed ones first
+        api(&h, "/api/modio_install", json!({ "id": "3" }));
+        let lib = library_of(&h.state.read().unwrap().games.last().unwrap().clone()).unwrap();
+        wait_until("three mods installed", || lib.mods().len() == 3);
+        let names: Vec<String> = lib.mods().iter().map(|m| m.name.clone()).collect();
+        assert_eq!(names, vec!["Mod 1", "Mod 2", "Mod 3"], "what a mod needs is added before it");
+        assert!(lib.mods().iter().all(|m| m.modio.as_ref().map(|r| r.game_id) == Some(7)));
+        assert!(dir.join("Data/from_modio.esp").exists() || lib.mods().iter().all(|m| m.files.iter().any(|x| x.ends_with("from_modio.esp"))));
+        // installing again changes nothing, and the list now shows them as installed
+        api(&h, "/api/modio_install", json!({ "id": 3 }));
+        wait_until("told it is there", || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("already in the library")));
+        assert_eq!(lib.mods().len(), 3);
+        let after = get("/api/store?source=modio&sort=popular");
+        assert!(after["cards"].as_array().unwrap().iter().all(|c| c["installed"] == true));
+        // the key went only into the API calls, never into the download
+        assert!(f.requests.lock().unwrap().iter().filter(|u| u.contains("/download/")).all(|u| !u.contains("KEY")));
+        api(&h, "/api/modio_key_clear", json!({}));
+        assert!(!keyfile.exists());
+    }
+
+    #[test]
     fn nexus_update_checks_find_only_real_replacements_and_leave_everything_else_alone() {
         if fsutil::find_in_path("bsdtar").is_none() {
             eprintln!("skipping: bsdtar missing");
@@ -11478,6 +11807,62 @@ mod tests {
         wait_until("library records the new version", || api(&h, "/api/state", json!({}))["library"]["mods"][0]["version"] == "2.0");
         let mods = api(&h, "/api/state", json!({}))["library"]["mods"].clone();
         assert_eq!(mods.as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_free_account_that_asked_for_a_mod_gets_it_installed_without_a_second_question() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let (h, _f, _dir, _id) = nexus_update_setup("nxget", false);
+        let g = h.state.read().unwrap().games.last().unwrap().clone();
+        h.state.write().unwrap().config.nexus_domain.insert(g.appid.clone(), "coolgame".into());
+        let lib = library_of(&g).unwrap();
+        let before = lib.mods().len();
+        api(&h, "/api/nexus_get", json!({ "mod_id": 6, "name": "Needed Mod" }));
+        wait_until("the page was opened and the link is awaited", || nexus_state(&h)["waiting_for"]["name"] == "Needed Mod");
+        // a link nobody asked for still waits for the person's OK
+        api(&h, "/api/nxm", json!({ "url": "nxm://coolgame/mods/9/files/99?key=K1&expires=1999999999" }));
+        assert_eq!(nexus_state(&h)["pending"]["mod_id"], 9);
+        api(&h, "/api/nxm_confirm", json!({ "accept": false }));
+        assert_eq!(nexus_state(&h)["waiting_for"]["name"], "Needed Mod");
+        // the link of the page Gantry opened installs by itself, as a new mod
+        api(&h, "/api/nxm", json!({ "url": "nxm://coolgame/mods/6/files/12?key=K2&expires=1999999999" }));
+        wait_until("installed", || lib.mods().len() == before + 1);
+        assert!(nexus_state(&h)["pending"].is_null() && nexus_state(&h)["waiting_for"].is_null());
+        assert_eq!(lib.mods().len(), before + 1, "added next to the others, nothing replaced");
+    }
+
+    #[test]
+    fn what_a_mod_needs_is_fetched_one_page_at_a_time_on_a_free_account() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let (h, _f, _dir, id) = nexus_update_setup("nxneeds", false);
+        let g = h.state.read().unwrap().games.last().unwrap().clone();
+        let lib = library_of(&g).unwrap();
+        let before = lib.mods().len();
+        h.state.write().unwrap().nexus.needs = vec![NeedRow {
+            appid: g.appid.clone(),
+            lib_id: id.clone(),
+            name: "Cool Pack".into(),
+            missing: vec![
+                MissingReq { name: "Frame One".into(), page_url: "https://www.nexusmods.com/coolgame/mods/6".into(), notes: String::new() },
+                MissingReq { name: "Frame Two".into(), page_url: "https://www.nexusmods.com/coolgame/mods/7".into(), notes: String::new() },
+            ],
+        }];
+        api(&h, "/api/nexus_install_needs", json!({ "appid": g.appid, "lib_id": id }));
+        wait_until("the first page is awaited", || nexus_state(&h)["waiting_for"]["name"] == "Frame One");
+        assert_eq!(nexus_state(&h)["queued"], 1, "the second one waits its turn");
+        api(&h, "/api/nxm", json!({ "url": "nxm://coolgame/mods/6/files/12?key=K1&expires=1999999999" }));
+        wait_until("the next page is awaited once the first arrived", || nexus_state(&h)["waiting_for"]["name"] == "Frame Two");
+        assert_eq!(lib.mods().len(), before + 1);
+        assert_eq!(nexus_state(&h)["queued"], 0);
+        api(&h, "/api/nxm", json!({ "url": "nxm://coolgame/mods/7/files/12?key=K2&expires=1999999999" }));
+        wait_until("both installed", || lib.mods().len() == before + 2);
+        assert!(nexus_state(&h)["waiting_for"].is_null());
     }
 
     #[test]

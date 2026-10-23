@@ -275,7 +275,7 @@ mod tests {
 
     const MESSAGE_SOURCES: &[&str] = &[
         "main.rs", "repair.rs", "saves.rs", "steam.rs", "crash.rs", "bisect.rs", "ue4ss.rs", "nexus.rs", "deploy.rs", "engine.rs", "hydra.rs", "install.rs",
-        "fsutil.rs", "procs.rs", "steamlib.rs", "thunderstore.rs", "loaders.rs", "readme.rs", "configs.rs", "compat.rs", "logdoctor.rs", "fomod.rs", "modinfo.rs", "downloads.rs", "perf.rs", "autobackup.rs", "virustotal.rs", "github.rs", "covers.rs", "plugins.rs",
+        "fsutil.rs", "procs.rs", "steamlib.rs", "thunderstore.rs", "loaders.rs", "readme.rs", "configs.rs", "compat.rs", "logdoctor.rs", "fomod.rs", "modinfo.rs", "downloads.rs", "perf.rs", "autobackup.rs", "virustotal.rs", "github.rs", "covers.rs", "plugins.rs", "modio.rs",
     ];
 
     /// Hand-listed messages the scanner cannot recognise (lower-case start).

@@ -128,6 +128,14 @@ Free accounts work through the website button (Nexus puts a one-time key in the 
 The CLI equivalents are `rig --register-nxm` / `--unregister-nxm`. The Nexus HTTP calls are covered by tests against a
 local fake API.
 
+## mod.io
+
+mod.io is where many newer games keep their mods. *Find mods → mod.io* lists the selected game's mods when the game's makers
+let other programs use them; *Install* downloads one together with the mods it needs (the deepest first). It needs your own
+free read-only key from <https://mod.io/me/access>, pasted once into the note the list shows; the key stays in
+`~/.config/protonrig/modio_api_key` (readable by you only) and is sent to mod.io only. A game that wants a sign-in for
+downloads, or forbids other programs, is reported as such and nothing is downloaded. The game is found by its name.
+
 ## Library overview
 On start Gantry scans your whole library (Steam incl. extra libraries, Hydra, your own games) and opens
 an overview with cover art: what is installed, what is not, the engine, whether UE4SS is ready or the

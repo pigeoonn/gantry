@@ -4715,7 +4715,7 @@
     const games = appState.games.map((g, i) => ({ g, i })).filter(x => x.g.is_installed !== false);
     const gameSel = games.length > 1 ? `<select class="proton-select" title="${escapeHtml(t('Find mods for this game'))}" onchange="storeSwitchGame(this.value)">${games.map(({ g, i }) => `<option value="${i}" ${i === appState.selected_idx ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')}</select>` : '';
     bar.innerHTML = `${gameSel}<span class="group">${STORE_SORTS().map(([k, l]) => chip(k, l, storeSort, 'setStoreSort')).join('')}</span>
-      <span class="group">${[['both', t('Both')], ['nexus', 'Nexus Mods'], ['thunder', 'Thunderstore']].map(([k, l]) => chip(k, l, storeSource, 'setStoreSource')).join('')}</span>
+      <span class="group">${[['both', t('Both')], ['nexus', 'Nexus Mods'], ['thunder', 'Thunderstore'], ['modio', 'mod.io']].map(([k, l]) => chip(k, l, storeSource, 'setStoreSource')).join('')}</span>
       ${storeCats.length > 1 ? `<select class="proton-select" aria-label="${escapeHtml(t('Category'))}" onchange="setStoreCat(this.value)"><option value="">${t('Every category')}</option>${storeCats.map(c => `<option value="${escapeHtml(c)}" ${c === storeCat ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>` : ''}
       <label class="ml-chip ${storeHide ? 'on' : ''}" style="cursor:pointer"><input type="checkbox" style="display:none" ${storeHide ? 'checked' : ''} onchange="storeHide = this.checked; storeReload()">${t('Hide mods I have')}</label>
       <label class="ml-chip ${storeLibs ? 'on' : ''}" style="cursor:pointer" title="${escapeHtml(t('BepInEx, mod managers and other packages that mods need.'))}"><input type="checkbox" style="display:none" ${storeLibs ? 'checked' : ''} onchange="storeLibs = this.checked; storeReload()">${t('Show libraries and tools')}</label>`;
@@ -4732,15 +4732,17 @@
   function oldDays(ms) { return ms ? (Date.now() - ms) / 86400000 : 0; }
   function storeCard(c, i) {
     const nx = c.source === 'nexus';
+    const mio = c.source === 'modio';
     const old = oldDays(c.updated_ms) > 730;
     const thumb = c.picture ? `<img src="${escapeHtml(c.picture)}" alt="" loading="lazy" onerror="this.remove()">` : '';
     const stats = [`<span class="dl">⬇ ${fmtCount(c.downloads)}</span>`, c.endorsements ? `<span>♥ ${fmtCount(c.endorsements)}</span>` : '', c.updated_ms ? `<span class="${old ? 'old' : ''}" title="${escapeHtml(new Date(c.updated_ms).toLocaleDateString(LANG))}">${old ? '⚠ ' : ''}${escapeHtml(ago(c.updated_ms))}</span>` : '', c.size_kb ? `<span>${fmtBytes(c.size_kb * 1024)}</span>` : ''].filter(Boolean).join('');
     const act = c.installed ? `<span class="ml-pill good" style="flex:1; text-align:center">${t('In your library')}</span>`
-      : nx ? `<button class="btn btn-play" onclick='storeGetNexus(${JS(c.id)}, this)'>${(appState.nexus || {}).premium ? t('Install') : t('Get it')}</button>`
+      : nx ? `<button class="btn btn-play" onclick='storeGetNexus(${JS(c.id)}, this, ${JS(c.name)})'>${(appState.nexus || {}).premium ? t('Install') : t('Get it')}</button>`
+      : mio ? `<button class="btn btn-play" title="${escapeHtml(c.has_deps ? t('Installs what it needs first') : '')}" onclick='modioInstall(${JS(c.id)}, this)'>${t('Install')}</button>`
       : `<button class="btn btn-play" onclick='tsInstall(${JS(c.id)}, this)'>${t('Install')}</button>`;
-    return `<div class="s-card" tabindex="0" role="button" style="animation-delay:${Math.min(i, 12) * 28}ms" onclick='openStorePage(${JS(c.source)}, ${JS(c.id)})' onkeydown="if (event.key === 'Enter' && event.target === this) this.click()"><div class="s-thumb"><span class="tile" style="background:${tileColor(c.name)}">${escapeHtml(c.name.slice(0, 1).toUpperCase())}</span>${thumb}<span class="s-src">${nx ? 'Nexus Mods' : 'Thunderstore'}</span>${c.category ? `<span class="s-cat">${escapeHtml(c.category)}</span>` : ''}</div>
+    return `<div class="s-card" tabindex="0" role="button" style="animation-delay:${Math.min(i, 12) * 28}ms" onclick='${mio ? `ipcSend("/api/open_link", { which: "modio_page", url: ${JS(c.page_url)} })` : `openStorePage(${JS(c.source)}, ${JS(c.id)})`}' onkeydown="if (event.key === 'Enter' && event.target === this) this.click()"><div class="s-thumb"><span class="tile" style="background:${tileColor(c.name)}">${escapeHtml(c.name.slice(0, 1).toUpperCase())}</span>${thumb}<span class="s-src">${nx ? 'Nexus Mods' : (mio ? 'mod.io' : 'Thunderstore')}</span>${c.category ? `<span class="s-cat">${escapeHtml(c.category)}</span>` : ''}</div>
       <div class="s-body"><div class="s-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div><div class="s-by">${escapeHtml(c.author)}${c.version ? ' · v' + escapeHtml(c.version) : ''}</div><div class="s-sum">${escapeHtml(c.summary || '')}</div>${c.why ? `<div class="s-why">✨ ${escapeHtml(c.why)}</div>` : ''}
-      <div class="s-stats">${stats}</div><div class="s-foot" onclick="event.stopPropagation()">${act}<button class="btn heart ${isSaved(c) ? 'on' : ''}" title="${escapeHtml(isSaved(c) ? t('Saved: press to remove') : t('Save for later'))}" aria-label="${escapeHtml(isSaved(c) ? t('Saved: press to remove') : t('Save for later'))}" onclick='storeSave(${JS(c)}, this)'>${isSaved(c) ? '♥' : '♡'}</button><button class="btn" title="${escapeHtml(t('Open its page'))}" aria-label="${escapeHtml(t('Open its page'))}" onclick='ipcSend("/api/open_link", { which: "${nx ? 'nexus_page' : 'thunder_page'}", url: ${JS(c.page_url)} })'>↗</button></div></div></div>`;
+      <div class="s-stats">${stats}</div><div class="s-foot" onclick="event.stopPropagation()">${act}<button class="btn heart ${isSaved(c) ? 'on' : ''}" ${mio ? 'style="display:none"' : ''} title="${escapeHtml(isSaved(c) ? t('Saved: press to remove') : t('Save for later'))}" aria-label="${escapeHtml(isSaved(c) ? t('Saved: press to remove') : t('Save for later'))}" onclick='storeSave(${JS(c)}, this)'>${isSaved(c) ? '♥' : '♡'}</button><button class="btn" title="${escapeHtml(t('Open its page'))}" aria-label="${escapeHtml(t('Open its page'))}" onclick='ipcSend("/api/open_link", { which: "${nx ? 'nexus_page' : (mio ? 'modio_page' : 'thunder_page')}", url: ${JS(c.page_url)} })'>↗</button></div></div></div>`;
   }
   const savedKey = c => (c.source === 'thunderstore' ? 'thunderstore' : 'nexus') + ':' + c.id;
   const isSaved = c => ((appState.saved_mods) || []).includes(savedKey(c));
@@ -4766,8 +4768,22 @@
       await new Promise(r => setTimeout(r, c.source === 'nexus' && free ? 2500 : 600));
     }
   }
-  function storeGetNexus(id, btn) {
-    ipcSend('/api/nexus_get', { mod_id: Number(id) });
+  function saveModioKey() {
+    const el = document.getElementById('modioKeyInput');
+    const key = el ? el.value.trim() : '';
+    if (!key) return;
+    ipcSend('/api/modio_key_set', { key });
+    el.value = '';
+    setTimeout(storeReload, 3000);
+  }
+  function modioInstall(id, btn) {
+    ipcSend('/api/modio_install', { id: Number(id) });
+    showToast(t('Getting it from mod.io…'));
+    btn.disabled = true;
+    setTimeout(() => { btn.disabled = false; storeReload(); }, 8000);
+  }
+  function storeGetNexus(id, btn, name) {
+    ipcSend('/api/nexus_get', { mod_id: Number(id), name: name || '' });
     showToast((appState.nexus || {}).premium ? t('Getting it from Nexus Mods…') : t('The Nexus page opens: press Slow download and Gantry takes it from there.'));
     btn.disabled = true;
     setTimeout(() => { btn.disabled = false; }, 6000);
@@ -4807,7 +4823,7 @@
       storePack = cards.filter(c => !c.installed);
       list.insertAdjacentHTML('afterbegin', `<div class="s-all"><span>${d.curated ? t('A short list of mods worth starting with for this game.') : t('The most downloaded mods that people also liked.')}</span><button class="btn btn-play" onclick="storeGetAll()">${t('Get all ({})', storePack.length)}</button></div>`);
     }
-    const notes = (d.notes || []).map(n => n.source === 'game' ? escapeHtml(tm(n.error)) : n.need_domain ? `${t('Nexus Mods')}: ${tm(n.error)} <button class="btn" onclick="nxChooseDomain()">${t('Choose the game')}</button>` : n.need_community ? `${tm(n.error)} <button class="btn" onclick="tsChooseCommunity()">${t('Choose the community')}</button>` : `${n.source === 'nexus' ? 'Nexus Mods' : 'Thunderstore'}: ${escapeHtml(tm(n.error))}`);
+    const notes = (d.notes || []).map(n => n.source === 'game' ? escapeHtml(tm(n.error)) : n.need_domain ? `${t('Nexus Mods')}: ${tm(n.error)} <button class="btn" onclick="nxChooseDomain()">${t('Choose the game')}</button>` : n.need_community ? `${tm(n.error)} <button class="btn" onclick="tsChooseCommunity()">${t('Choose the community')}</button>` : n.need_key ? `mod.io: ${escapeHtml(tm(n.error))} <button class="btn" onclick='ipcSend("/api/open_link", { which: "modio_key" })'>${t('Open the mod.io key page')}</button> <input type="password" id="modioKeyInput" class="input-field" style="max-width:240px; display:inline-block" placeholder="${escapeHtml(t('Paste your key'))}" autocomplete="off" spellcheck="false"> <button class="btn btn-heal" onclick="saveModioKey()">${t('Save &amp; test')}</button>` : `${n.source === 'nexus' ? 'Nexus Mods' : (n.source === 'modio' ? 'mod.io' : 'Thunderstore')}: ${escapeHtml(tm(n.error))}`);
     document.getElementById('tsSub').innerHTML = notes.map(n => `<span class="mp-note" style="display:inline-block">${n}</span>`).join(' ');
     if (!list.querySelector('.s-card')) {
       list.classList.remove('store-grid');
@@ -5828,7 +5844,7 @@
         <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange='ipcSend("/api/lib_toggle", { id: ${JS(m.id)}, enabled: this.checked })' title="${t('Enable / disable')}">
         <div class="ml-main">
           <div class="ml-name">${escapeHtml(m.name)}${m.group ? `<span class="ml-group">${escapeHtml(m.group)}</span>` : ''} ${m.version ? `<small style="color:var(--text-muted)">v${escapeHtml(m.version)}</small>` : ''}${(m.programs || []).length ? ` <span title="${escapeHtml(t('Contains programs: {}', m.programs.slice(0, 3).join(', ')))}">⚠</span>` : ''}${m.update_rule === 'never' ? ` <span title="${escapeHtml(t('You chose to keep this version: it is never updated.'))}">🔒</span>` : m.update_rule === 'auto' ? ` <span title="${escapeHtml(t('Updates itself when the game is closed.'))}">⟳</span>` : ''} ${m.conflicts ? '<span class="ml-pill warn" style="margin-left:4px">⚔</span>' : ''}</div>
-          ${need ? `<div class="ml-need">⚠ ${t('Needs')}: ${need.missing.map(r => r.page_url ? `<a onclick='openNexusPage(${JS(r.page_url)})' title="${escapeHtml(r.notes || t('Open its Nexus page'))}">${escapeHtml(r.name)}</a>` : escapeHtml(r.name)).join(', ')}${nx.premium ? ` <button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:6px" onclick='ipcSend("/api/nexus_install_needs", { appid: ${JS(need.appid)}, lib_id: ${JS(need.lib_id)} })'>${t('Install them')}</button>` : ''}</div>` : ''}
+          ${need ? `<div class="ml-need">⚠ ${t('Needs')}: ${need.missing.map(r => r.page_url ? `<a onclick='openNexusPage(${JS(r.page_url)})' title="${escapeHtml(r.notes || t('Open its Nexus page'))}">${escapeHtml(r.name)}</a>` : escapeHtml(r.name)).join(', ')}<button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:6px" title="${escapeHtml(nx.premium ? '' : t('Opens their Nexus pages one after another: press Mod Manager Download on each and Gantry installs it.'))}" onclick='ipcSend("/api/nexus_install_needs", { appid: ${JS(need.appid)}, lib_id: ${JS(need.lib_id)} })'>${nx.premium ? t('Install them') : t('Get them')}</button></div>` : ''}
           ${m.note ? `<div class="ml-note">${escapeHtml(m.note)}</div>` : ''}
           <div class="ml-sub">${tp(m.files, '{} file', '{} files')} · ${fmtSize(m.size)} · ${escapeHtml(m.source || t('manual'))}${m.target ? ' · ' + t('into {}/', escapeHtml(m.target)) : ''}${m.placed_by === 'names' ? ' · ' + t('placed by matching file names') : (m.placed_by === 'readme' ? ' · ' + t('placed as its instructions say') : (m.placed_by === 'pack' ? ' · ' + t('placed by the game\'s support entry') : ''))}${m.nexus ? ' · ' + t('from Nexus') : ''}${m.thunderstore ? ' · ' + t('from Thunderstore') : ''}${(m.depends_on || []).length ? ' · ' + t('needs {}', m.depends_on.map(d => d.split('-').slice(1).join('-').replace(/_/g, ' ')).join(', ')) : ''}</div>
         </div>

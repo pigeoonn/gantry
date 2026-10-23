@@ -72,6 +72,9 @@ pub struct LibMod {
     /// Set when the mod came from a GitHub release (enables update checks).
     #[serde(default)]
     pub github: Option<crate::github::GithubRef>,
+    /// Set when the mod came from mod.io.
+    #[serde(default)]
+    pub modio: Option<crate::modio::ModioRef>,
     #[serde(default)]
     pub added_ms: u64,
     #[serde(default)]
@@ -1416,6 +1419,7 @@ impl Library {
             nexus,
             thunderstore: None,
             github: None,
+            modio: None,
             fomod: None,
             update_rule: String::new(),
             verified: String::new(),
@@ -1546,6 +1550,15 @@ impl Library {
             m.version = version.to_string();
         }
         m.nexus = Some(r);
+        self.save(&lf)
+    }
+
+    /// Remember that a mod came from mod.io.
+    pub fn set_modio(&self, id: &str, r: crate::modio::ModioRef) -> Result<(), String> {
+        let _g = lock();
+        let mut lf = self.load();
+        let m = lf.mods.iter_mut().find(|m| m.id == id).ok_or("Unknown mod.")?;
+        m.modio = Some(r);
         self.save(&lf)
     }
 
@@ -2359,7 +2372,7 @@ impl Library {
             "trash": self.trash_list().into_iter().map(|(dir, name, version, size, removed_ms)| json!({ "dir": dir, "name": name, "version": version, "size": size, "removed_ms": removed_ms })).collect::<Vec<_>>(),
             "mods": lf.mods.iter().map(|m| json!({
                 "id": m.id, "name": m.name, "version": m.version, "enabled": m.enabled, "target": m.target,
-                "nexus": m.nexus, "thunderstore": m.thunderstore,
+                "nexus": m.nexus, "thunderstore": m.thunderstore, "modio": m.modio,
                 "source": m.source, "files": m.files.len(), "size": m.size, "added_ms": m.added_ms, "notes": m.notes.len(), "placed_by": m.placed_by, "note": m.note, "group": m.group, "depends_on": m.depends_on, "update_rule": m.update_rule, "verified": m.verified, "programs": m.programs,
                 "needed_by": m.thunderstore.as_ref().map(|t| lf.mods.iter().filter(|o| o.id != m.id && o.depends_on.iter().any(|d| d.eq_ignore_ascii_case(&t.full_name()))).map(|o| o.name.clone()).collect::<Vec<_>>()).unwrap_or_default(),
                 "conflicts": in_conflict.contains(&m.name),

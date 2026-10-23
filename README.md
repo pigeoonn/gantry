@@ -47,7 +47,8 @@ The [tutorial](docs/TUTORIAL.md) walks through it with pictures.
 
 **Mods**
 - A **mod library** for any game: mods are hard-linked in with a journal and undo, ordered by priority, conflicts shown.
-- A **store** for Nexus Mods and Thunderstore side by side, sorted by downloads, with starter packs for some games.
+- A **store** for Nexus Mods, Thunderstore and mod.io, sorted by downloads, with starter packs for some games; mods that a
+  mod needs are installed with it.
 - One-click setup of **BepInEx, MelonLoader and UE4SS**; installer wizards (FOMOD); modpacks and profile codes.
 
 **When things go wrong**
