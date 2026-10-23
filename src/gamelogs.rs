@@ -47,6 +47,9 @@ pub fn files(game: &GameEntry, proton_log: Option<PathBuf>) -> Vec<LogFile> {
     };
     add("bepinex", Some(dir.join("BepInEx/LogOutput.log")));
     add("melonloader", Some(dir.join("MelonLoader/Latest.log")));
+    add("red4ext", crate::kb::newest_log_in(&dir.join("red4ext/logs")));
+    add("redscript", Some(dir.join("r6/logs/redscript_rCURRENT.log")));
+    add("cet", Some(dir.join("bin/x64/plugins/cyber_engine_tweaks/cyber_engine_tweaks.log")));
     add("player", prefixes.iter().find_map(|p| crate::logdoctor::newest_player_log(p)));
     let (ue4ss, engine) = crate::crash::unreal_log_files(game);
     add("ue4ss", ue4ss);

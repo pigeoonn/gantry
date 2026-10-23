@@ -18,7 +18,7 @@ const FRESH: Duration = Duration::from_secs(14 * 24 * 3600);
 #[derive(Clone, Debug, Deserialize)]
 pub struct Pattern {
     pub id: String,
-    /// Which logs to look in: "bepinex", "melonloader", "player", "ue4ss" or "proton".
+    /// Which logs to look in: "bepinex", "melonloader", "red4ext", "redscript", "cet", "player", "ue4ss" or "proton".
     #[serde(default)]
     pub logs: Vec<String>,
     /// A line matches when it contains any of these (letter case does not matter) ...
@@ -116,6 +116,17 @@ fn tail(p: &Path, n: usize) -> Option<Vec<String>> {
     Some(lines[lines.len().saturating_sub(n)..].to_vec())
 }
 
+/// The most recently written `.log` file in a folder (RED4ext names its logs by date).
+pub fn newest_log_in(dir: &Path) -> Option<PathBuf> {
+    fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter(|e| e.path().extension().map(|x| x.eq_ignore_ascii_case("log")).unwrap_or(false))
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .max()
+        .map(|(_, p)| p)
+}
+
 /// The logs a game and its loaders write, as `(label, last lines)`.
 pub fn collect_logs(game_dir: &Path, prefixes: &[PathBuf], ue4ss_log: &str, proton_log: Option<&Path>) -> Vec<(String, Vec<String>)> {
     let mut out = Vec::new();
@@ -126,6 +137,9 @@ pub fn collect_logs(game_dir: &Path, prefixes: &[PathBuf], ue4ss_log: &str, prot
     };
     add("bepinex", tail(&game_dir.join("BepInEx/LogOutput.log"), 800));
     add("melonloader", tail(&game_dir.join("MelonLoader/Latest.log"), 800));
+    add("red4ext", newest_log_in(&game_dir.join("red4ext/logs")).and_then(|p| tail(&p, 800)));
+    add("redscript", tail(&game_dir.join("r6/logs/redscript_rCURRENT.log"), 800));
+    add("cet", tail(&game_dir.join("bin/x64/plugins/cyber_engine_tweaks/cyber_engine_tweaks.log"), 800));
     for p in prefixes {
         if let Some(log) = crate::logdoctor::newest_player_log(p) {
             add("player", tail(&log, 800));
@@ -145,6 +159,7 @@ pub fn collect_logs(game_dir: &Path, prefixes: &[PathBuf], ue4ss_log: &str, prot
 mod tests {
     use super::*;
     use crate::fsutil::testutil::TempDir;
+    use std::thread;
 
     fn log(label: &str, lines: &[&str]) -> (String, Vec<String>) {
         (label.to_string(), lines.iter().map(|s| s.to_string()).collect())
@@ -153,7 +168,7 @@ mod tests {
     #[test]
     fn the_built_in_list_is_valid_and_every_entry_can_match_its_own_example() {
         let all = patterns(None);
-        assert!(all.len() >= 26, "{}", all.len());
+        assert!(all.len() >= 34, "{}", all.len());
         let mut ids: Vec<&str> = all.iter().map(|p| p.id.as_str()).collect();
         ids.sort();
         ids.dedup();
@@ -269,5 +284,33 @@ mod tests {
         let old = fs::File::options().write(true).open(&proton).unwrap();
         old.set_modified(SystemTime::now() - Duration::from_secs(40 * 24 * 3600)).unwrap();
         assert!(!collect_logs(&game, &[], "", Some(&proton)).iter().any(|l| l.0 == "proton"));
+    }
+
+    #[test]
+    fn cyberpunk_loader_messages_are_told_apart_and_their_logs_are_found() {
+        let all = patterns(None);
+        let ids = |lines: &[&str]| scan(&all, &[log("red4ext", lines)]).iter().map(|f| f.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&["[2026-10-23 20:01:12] [error] To use this version of RED4ext, ensure your game is updated to patch 2.12 or newer"]), vec!["red4ext_game_too_old"]);
+        assert_eq!(ids(&["[error] This game patch (Unknown patch (3.0.72.54038)) is not supported"]), vec!["red4ext_patch_unsupported"]);
+        assert_eq!(ids(&["[warning] ArchiveXL: (This version of the plugin was compiled for patch 1.63)"]), vec!["red4ext_plugin_other_patch"]);
+        assert_eq!(ids(&["[error] Could not attach the hook for the main function. Detour error code: 6"]), vec!["red4ext_hook_failed"]);
+        assert_eq!(ids(&["[warning] scc invocation failed with an error: REDScript compilation has failed"]), vec!["redscript_compile_failed"]);
+        assert_eq!(ids(&["Message: Watchdog timeout! (120 seconds)"]), vec!["cyberpunk_watchdog"]);
+        assert_eq!(ids(&["Message: Gpu Crash for unknown reasons!"]), vec!["cyberpunk_gpu_crash"]);
+        let redscript = scan(&all, &[log("redscript", &["- Lizzie's Braindances depends on Codeware but you don't have it installed. Try to (re)install it"])]);
+        assert_eq!(redscript.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(), vec!["cyberpunk_missing_framework"]);
+        assert!(ids(&["[info] RED4ext is starting", "[info] Game patch 2.3 is supported", "[info] Loaded plugin ArchiveXL"]).is_empty());
+        // the logs themselves: RED4ext names its file by date, the newest one is read
+        let d = TempDir::new("cp-logs");
+        let game = d.join("Cyberpunk 2077");
+        fs::create_dir_all(game.join("red4ext/logs")).unwrap();
+        fs::create_dir_all(game.join("r6/logs")).unwrap();
+        fs::write(game.join("red4ext/logs/red4ext-2026-10-22-10-00-00.log"), "old run\n").unwrap();
+        thread::sleep(Duration::from_millis(30));
+        fs::write(game.join("red4ext/logs/red4ext-2026-10-23-21-00-00.log"), "new run\n").unwrap();
+        fs::write(game.join("r6/logs/redscript_rCURRENT.log"), "compile ok\n").unwrap();
+        let found = collect_logs(&game, &[], "", None);
+        assert_eq!(found.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>(), vec!["red4ext", "redscript"]);
+        assert_eq!(found[0].1, vec!["new run".to_string()]);
     }
 }

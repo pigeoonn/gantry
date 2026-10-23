@@ -9,4 +9,4 @@
 - **Play time:** the *Activity* tab shows time in the game, crashes, how much you played with mods, the last 14 days, and a
   timeline that mixes sessions with changes to the mod list.
 - **Why is it slow?** See [performance](performance.md).
-- **Trainers:** the Tools tab starts a trainer together with the game when *Auto Trainer* is on.
+- **Trainers:** the Tools tab starts a trainer for the game when *Auto Trainer* is on: it waits until the game is running, then starts the trainer inside the game's own Wine session (with the compatibility tool Steam uses for it). If a trainer does not appear, `~/.cache/rig/trainer.log` has what it printed.

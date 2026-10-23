@@ -3395,7 +3395,7 @@
   function openLogs() { logQ = ''; document.getElementById('logsModal').classList.add('open'); renderGameLogs(true); }
   function logSearch(v) { logQ = v; clearTimeout(logTimer); logTimer = setTimeout(() => renderGameLogs(false), 200); }
   function logPick(id) { logSrc = id; renderGameLogs(true); }
-  const LOG_NAMES = () => ({ bepinex: 'BepInEx', melonloader: 'MelonLoader', player: t('Unity player'), ue4ss: 'UE4SS', game: t('Game (engine)'), proton: 'Proton' });
+  const LOG_NAMES = () => ({ bepinex: 'BepInEx', melonloader: 'MelonLoader', red4ext: 'RED4ext', redscript: 'Redscript', cet: 'Cyber Engine Tweaks', player: t('Unity player'), ue4ss: 'UE4SS', game: t('Game (engine)'), proton: 'Proton' });
   async function renderGameLogs(full) {
     const box = document.getElementById('logsBody');
     let d;
@@ -4559,7 +4559,7 @@
         steam_updating: () => a[0] ? t('Steam is updating this game ({}%). Wait until it finishes before playing or changing mods.', a[0]) : t('Steam is updating this game. Wait until it finishes before playing or changing mods.'),
         steam_update_waiting: () => t('Steam has an update waiting for this game. Your mods may need to be deployed again after it.'),
         anti_cheat: () => t('This game uses {}. Modified files can get your account banned, so play without mods.', a[0]),
-        launch_option: () => t('Steam is missing the launch option {} needs for the account you are logged in with, so mods will not load.', name),
+        launch_option: () => a[0] === 'mods' ? t('Steam is missing the launch option your mods need for the account you are logged in with, so they will not load.') : t('Steam is missing the launch option {} needs for the account you are logged in with, so mods will not load.', name),
         not_loaded: () => t('The game ran, but {} did not start. Most likely Steam is missing the launch option for the account you are logged in with.', name),
         frozen: () => t('The game looks frozen: nothing has happened for {} minutes.', a[0]),
         incomplete: () => t('The last start of {} did not finish. Last step: {}', name, a[1]),

@@ -44,6 +44,7 @@ pub mod steam;
 pub mod steamlib;
 pub mod workshop;
 pub mod thunderstore;
+pub mod trainer;
 pub mod ue4ss;
 pub mod virustotal;
 
@@ -1188,23 +1189,67 @@ fn run_quiet(cmd: &mut Command) -> bool {
         .unwrap_or(false)
 }
 
-fn spawn_trainer_in_prefix(trainer_path: &Path, pfx: &str, proton_script: Option<&Path>) -> bool {
-    // on Windows the trainer is simply a program
-    let mut cmd = if platform::IS_WINDOWS {
-        Command::new(trainer_path)
+/// The compatibility folder and Wine prefix a game runs in.
+fn compat_and_pfx(g: &GameEntry) -> (PathBuf, String) {
+    let compat = if g.compatdata.is_empty() {
+        home_dir().join(".local/share/Steam/steamapps/compatdata/protonrig_custom")
     } else {
-        let mut c = Command::new(RigEngine::resolve_proton_wine_bin(proton_script));
-        c.arg(trainer_path);
-        c
+        PathBuf::from(&g.compatdata)
     };
-    if let Some(parent) = trainer_path.parent() {
-        cmd.current_dir(parent);
+    let pfx = if platform::IS_WINDOWS {
+        String::new()
+    } else if g.pfx.is_empty() {
+        format!("{}/pfx", compat.to_string_lossy())
+    } else {
+        g.pfx.clone()
+    };
+    (compat, pfx)
+}
+
+/// The Proton the game itself runs with: for a Steam game what Steam is set to use for it (a trainer started with
+/// another build cannot see the game), otherwise Gantry's own choice.
+fn game_proton(state: &SharedState, g: &GameEntry) -> Option<PathBuf> {
+    if !g.launches_directly() {
+        let env = read_state(state).steam_env.clone();
+        let name = env.config_vdf().and_then(|p| fs::read_to_string(p).ok()).and_then(|t| steam::get_compat_tool(&t, &g.appid).ok().flatten());
+        if let Some(name) = name {
+            if let Some(t) = all_tools(state).into_iter().find(|t| t.internal == name) {
+                return Some(t.script);
+            }
+        }
     }
-    if !pfx.is_empty() {
-        cmd.env("WINEPREFIX", pfx);
+    read_state(state).proton_for(g)
+}
+
+/// Starts a trainer for a game that is running (or about to) and says in the activity log what happened.
+fn start_trainer(state: &SharedState, g: &GameEntry, trainer: &Path) -> bool {
+    if !trainer.is_file() {
+        log(state, "ERR", format!("The trainer file is missing: {}", trainer.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+        return false;
     }
-    cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    spawn_reaped(cmd)
+    let (compat, pfx) = compat_and_pfx(g);
+    let proton = game_proton(state, g);
+    let app_id = compat_app_id(g);
+    let steam_root = home_dir().join(".local/share/Steam");
+    let log_file = trainer::log_path(&read_state(state).cache_root());
+    let launch = trainer::Launch { trainer, pfx: &pfx, compat: &compat, proton: proton.as_deref(), steam_root: &steam_root, app_id: &app_id, env_lines: &g.env_vars, log_file: &log_file };
+    match trainer::start(&launch, Duration::from_secs(6)) {
+        Ok(_) => {
+            log(state, "OK", "Trainer started. Use its hotkeys inside the game.");
+            true
+        }
+        Err(why) => {
+            log(state, "ERR", format!("The trainer did not start: {}", why));
+            let said = fs::read_to_string(&log_file).unwrap_or_default();
+            match trainer::cause_of(&said) {
+                Some(trainer::Cause::CppRuntime) => log(state, "WARN", format!("The trainer needs the Visual C++ runtime in the game's prefix. Install it with protontricks: protontricks {} vcrun2022", app_id)),
+                Some(trainer::Cause::DotNet) => log(state, "WARN", format!("The trainer needs .NET in the game's prefix. Install it with protontricks: protontricks {} dotnet48", app_id)),
+                Some(trainer::Cause::OtherBuild) => log(state, "WARN", "The game and the trainer run with different compatibility tools. Pick the same one for both under Compatibility."),
+                None => {}
+            }
+            false
+        }
+    }
 }
 
 fn wineserver_for(proton_script: Option<&Path>) -> PathBuf {
@@ -1306,6 +1351,10 @@ fn attach_trainer(state: &SharedState, appid: &str, trainer: &Path, display: &st
         g.trainer_name = display.to_string();
     }
     st.log("OK", format!("Attached persistent trainer: {}", display));
+    let low = display.to_lowercase();
+    if ["setup", "installer", "install "].iter().any(|w| low.contains(w)) {
+        st.log("WARN", format!("{} looks like an installer, not a trainer. Running it would install a program inside the game's prefix.", display));
+    }
 }
 
 /// Detect a full UE4SS runtime inside an extracted archive and install it into `ue_bin`.
@@ -2348,6 +2397,10 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
         }
     } else if unity.is_some() && mods.iter().any(|m| m.enabled) {
         out.push(issue("needs_loader", "warn", "install_loader", vec![]));
+    }
+    // a mod that loads through a proxy DLL (Cyber Engine Tweaks' version.dll, ...) only loads when Steam's launch options carry Wine's override
+    if !platform::IS_WINDOWS && !platform::IS_MAC && loader.is_empty() && !g.launches_directly() && deployed > 0 && !library_overrides(g).is_empty() && matches!(steam_info(state, g).status.as_str(), "missing" | "stale") {
+        out.push(issue("launch_option", "bad", "launch_option", vec!["mods".to_string()]));
     }
     if let Some(note) = recipes::find(&read_state(state).recipes, &g.appid, g.recipe_steam_id()).map(|r| r.notes.trim().to_string()).filter(|n| !n.is_empty()) {
         out.push(issue("pack_note", "info", "", vec![note]));
@@ -5480,19 +5533,23 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             thread::spawn(move || play_with_profile(&state_bg, &name));
         }
         "/api/trainer" => {
-            let (game, tp, pb) = {
+            let (game, tp) = {
                 let st = read_state(state);
                 let g = st.games.get(st.selected_idx).cloned();
                 let tp = g.as_ref().and_then(|g| st.config.trainers.get(&g.appid).cloned());
-                let pb = g.as_ref().and_then(|g| st.proton_for(g));
-                (g, tp, pb)
+                (g, tp)
             };
             if let Some(g) = game {
                 match tp {
-                    Some(tp) if spawn_trainer_in_prefix(Path::new(&tp), &g.pfx, pb.as_deref()) => {
-                        log(state, "OK", "Launched attached trainer using Proton Wine binary.")
+                    Some(tp) => {
+                        if !procs::is_game_running(&g) {
+                            log(state, "WARN", format!("{} is not running yet. A trainer only works once the game has started.", g.name));
+                        }
+                        let state_bg = Arc::clone(state);
+                        thread::spawn(move || {
+                            start_trainer(&state_bg, &g, Path::new(&tp));
+                        });
                     }
-                    Some(_) => log(state, "ERR", "Failed to launch trainer."),
                     None => log(state, "WARN", "No trainer attached to this game."),
                 }
             }
@@ -7969,15 +8026,23 @@ fn play_game_inner(state: &SharedState, skip_prelaunch: bool) {
     if auto_tr {
         if let Some(tp) = trainer_opt {
             let tp_path = PathBuf::from(&tp);
-            if tp_path.is_file() {
-                let (pfx_clone, pb_clone, st_tr) = (effective_pfx.clone(), proton_bin.clone(), Arc::clone(state));
+            if !tp_path.is_file() {
+                log(state, "WARN", format!("The trainer file is missing: {}", tp_path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+            } else {
+                let (st_tr, g_tr) = (Arc::clone(state), g.clone());
                 thread::spawn(move || {
-                    thread::sleep(Duration::from_millis(3500));
-                    if spawn_trainer_in_prefix(&tp_path, &pfx_clone, pb_clone.as_deref()) {
-                        log(&st_tr, "OK", "Auto-launched Trainer inside active Proton prefix.");
-                    } else {
-                        log(&st_tr, "ERR", "Auto-launch of the trainer failed.");
+                    // the trainer has to join the game's Wine session, so it waits until the game is really up
+                    let can_see = procs::game_needle(&g_tr).is_some();
+                    let waited = (0..180).any(|_| {
+                        thread::sleep(Duration::from_secs(1));
+                        !can_see || procs::is_game_running(&g_tr)
+                    });
+                    if !waited {
+                        log(&st_tr, "WARN", format!("{} did not start, so the trainer was not started. Use Run Trainer once the game is up.", g_tr.name));
+                        return;
                     }
+                    thread::sleep(Duration::from_secs(if can_see { 6 } else { 20 }));
+                    start_trainer(&st_tr, &g_tr, &tp_path);
                 });
             }
         }
@@ -8321,11 +8386,20 @@ fn doctor_json(state: &SharedState) -> Value {
             json!({
                 "name": g.name, "engine": g.engine, "source": if g.source.is_empty() { "Steam or custom" } else { g.source.as_str() },
                 "loader": health["loader"], "mods": mods.len(), "mods_on": mods.iter().filter(|m| m.enabled).count(),
+                "trainer": trainer_line(state, g),
                 "issues": issues.iter().map(|i| json!({ "level": i["level"], "code": i["code"], "args": i["args"], "title": i["kb"]["title"]["en"], "evidence": i["kb"]["evidence"] })).collect::<Vec<_>>(),
             })
         })
         .collect();
     json!({ "version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "games": rows })
+}
+
+/// Which trainer a game has and the Proton it would be started with (the one the game runs with), for `rig --doctor`.
+fn trainer_line(state: &SharedState, g: &GameEntry) -> Value {
+    let Some(tp) = read_state(state).config.trainers.get(&g.appid).cloned() else { return Value::Null };
+    let file = Path::new(&tp).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let with = game_proton(state, g).map(|script| all_tools(state).into_iter().find(|t| t.script == script).map(|t| t.display).unwrap_or_else(|| script.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+    json!({ "file": file, "exists": Path::new(&tp).is_file(), "runs_with": with })
 }
 
 /// The text of `rig --doctor`.
@@ -8341,10 +8415,16 @@ fn doctor_text(d: &Value) -> String {
         };
         let loader = g["loader"].as_str().filter(|l| !l.is_empty() && *l != "none").map(|l| format!(", {l}")).unwrap_or_default();
         out.push_str(&format!("{mark} {} ({}{}) {} of {} mods on\n", g["name"].as_str().unwrap_or(""), g["engine"].as_str().unwrap_or(""), loader, g["mods_on"], g["mods"]));
+        if let Some(t) = g["trainer"].as_object() {
+            out.push_str(&format!("         trainer {}{} runs with {}\n", t["file"].as_str().unwrap_or(""), if t["exists"] == false { " (file is missing)" } else { "" }, t["runs_with"].as_str().filter(|w| !w.is_empty()).unwrap_or("plain Wine")));
+        }
         for i in issues.iter().filter(|i| i["level"] != "info") {
             let args: Vec<&str> = i["args"].as_array().into_iter().flatten().filter_map(Value::as_str).filter(|a| !a.is_empty()).collect();
             // a known problem from the logs has a title and the log line that showed it; the others a short code
-            let what = i["title"].as_str().map(str::to_string).unwrap_or_else(|| format!("{}{}", i["code"].as_str().unwrap_or(""), if args.is_empty() { String::new() } else { format!(": {}", args.join(", ")) }));
+            let what = i["title"].as_str().map(str::to_string).unwrap_or_else(|| match i["code"].as_str().unwrap_or("") {
+                "launch_option" => "launch_option: Steam's launch options lack what the mods need (open Gantry, then Doctor, Close Steam & apply)".to_string(),
+                code => format!("{}{}", code, if args.is_empty() { String::new() } else { format!(": {}", args.join(", ")) }),
+            });
             out.push_str(&format!("         {} {}\n", i["level"].as_str().unwrap_or(""), what));
             if let Some(line) = i["evidence"].as_str().filter(|l| !l.is_empty()) {
                 out.push_str(&format!("                {}\n", line.chars().take(110).collect::<String>()));
@@ -8971,6 +9051,83 @@ mod tests {
         assert_eq!(c, 400);
         // GET is not accepted for uploads
         assert_eq!(http(&h, "GET", "/api/drop_upload?name=x.pak", &[("X-Rig-Token", &h.token)], b"").0, 405);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_trainer_starts_it_with_the_proton_steam_uses_for_the_game_and_leaves_a_log() {
+        use std::os::unix::fs::PermissionsExt;
+        let h = harness("trainerrun");
+        add_plain_game(&h);
+        let appid = "4242".to_string();
+        {
+            let mut st = h.state.write().unwrap();
+            let i = st.selected_idx;
+            st.games[i].appid = appid.clone();
+        }
+        // two fake Protons: Steam is set to use the first one; Gantry's own pick is the second
+        let ct = h._dir.join("ct");
+        let fake = |dir: &str, says: &str| {
+            let p = ct.join(dir).join("proton");
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, format!("#!/bin/sh\necho \"{says} $@ app=$STEAM_COMPAT_APP_ID pfx=$WINEPREFIX\"\nsleep 1\n")).unwrap();
+            fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
+            p
+        };
+        let steams = fake("Steamish", "steam-tool");
+        let others = fake("Other", "other-tool");
+        fs::write(ct.join("Steamish/compatibilitytool.vdf"), "\"compatibilitytools\"\n{\n \"compat_tools\"\n {\n  \"steamish\"\n  {\n   \"display_name\" \"Steamish\"\n  }\n }\n}\n").unwrap();
+        // a private copy of Steam's config; nothing real is read or started
+        let cfg = h._dir.join("config.vdf");
+        fs::write(&cfg, "\"InstallConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"CompatToolMapping\"\n\t\t\t\t{\n\t\t\t\t\t\"0\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"name\"\t\t\"steamish\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n").unwrap();
+        let trainer = h._dir.join("t/Tr.exe");
+        fs::create_dir_all(trainer.parent().unwrap()).unwrap();
+        fs::write(&trainer, b"MZ").unwrap();
+        {
+            let mut st = h.state.write().unwrap();
+            st.tools_dirs = Some(vec![ct.clone()]);
+            st.steam_env = SteamEnv { config_vdf: Some(cfg), localconfig: None, running: Some(false), libraries: Some(vec![]) };
+            st.config.proton_choice.insert(appid.clone(), others.to_string_lossy().to_string());
+            st.config.trainers.insert(appid, trainer.to_string_lossy().to_string());
+        }
+        let log = h._dir.join("cache/trainer.log");
+        api(&h, "/api/trainer", json!({}));
+        wait_until("trainer log", || fs::read_to_string(&log).map(|t| t.contains("steam-tool run") && t.contains("Tr.exe")).unwrap_or(false));
+        let said = fs::read_to_string(&log).unwrap();
+        assert!(said.contains("-- proton run --") && said.contains("app=") && !said.contains("other-tool"), "Steam's own choice wins over Gantry's: {said}");
+        let _ = steams;
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_proxy_dll_mod_without_the_steam_launch_option_is_reported_even_when_there_is_no_loader() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("proxyhealth");
+        add_plain_game(&h);
+        {
+            let mut st = h.state.write().unwrap();
+            let i = st.selected_idx;
+            st.games[i].appid = "42".into();
+        }
+        let lc = h._dir.join("steam/userdata/1/config/localconfig.vdf");
+        fs::create_dir_all(lc.parent().unwrap()).unwrap();
+        fs::write(&lc, LOCALCONFIG).unwrap();
+        h.state.write().unwrap().steam_env = SteamEnv { config_vdf: None, localconfig: Some(lc), running: Some(false), libraries: Some(vec![]) };
+        let issues = || -> Vec<String> {
+            let (_, body) = http(&h, "GET", "/api/health", &[("X-Rig-Token", &h.token)], b"");
+            serde_json::from_str::<Value>(&body).unwrap()["issues"].as_array().unwrap().iter().map(|i| i["code"].as_str().unwrap_or("").to_string()).collect()
+        };
+        assert!(!issues().contains(&"launch_option".to_string()), "nothing deployed yet: nothing to report");
+        let zip = zip_of(&h, "cet", &[("Cool Pack-77-1-3-1700000000/Data/new.esp", "NEW"), ("Cool Pack-77-1-3-1700000000/version.dll", "DLL")]);
+        let (code, _) = http(&h, "POST", "/api/drop_upload?name=Cool%20Pack-77-1-3-1700000000.zip", &[("X-Rig-Token", &h.token)], &zip);
+        assert_eq!(code, 200);
+        wait_until("mod deployed", || library_of_state(&h)["deployed"] == 2);
+        assert!(issues().contains(&"launch_option".to_string()), "version.dll needs Wine's override and Steam does not have it: {:?}", issues());
+        api(&h, "/api/steam_launch_apply", json!({}));
+        wait_until("options applied", || !issues().contains(&"launch_option".to_string()));
     }
 
     #[test]

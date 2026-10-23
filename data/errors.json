@@ -1312,5 +1312,378 @@
       "pl": "Uruchom Samonaprawa (Narzędzia), potem wypróbuj najnowszą (eksperymentalną) wersję UE4SS; przy zupełnie nowej wersji gry poczekaj, aż UE4SS nadrobi.",
       "tr": "Kendini Onar (Araçlar) çalıştır, sonra UE4SS'nin en yeni (deneysel) sürümünü dene; yepyeni bir oyun sürümü için UE4SS'nin yetişmesini bekle."
     }
+  },
+  {
+    "id": "red4ext_game_too_old",
+    "logs": [
+      "red4ext"
+    ],
+    "contains": [
+      "ensure your game is updated to patch"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "RED4ext needs a newer version of the game",
+      "ro": "RED4ext are nevoie de o versiune mai nouă a jocului",
+      "it": "RED4ext richiede una versione più recente del gioco",
+      "fr": "RED4ext a besoin d'une version plus récente du jeu",
+      "es": "RED4ext necesita una versión más reciente del juego",
+      "ru": "RED4ext нужна более новая версия игры",
+      "de": "RED4ext braucht eine neuere Version des Spiels",
+      "pt": "O RED4ext precisa de uma versão mais recente do jogo",
+      "pl": "RED4ext wymaga nowszej wersji gry",
+      "tr": "RED4ext oyunun daha yeni bir sürümünü gerektiriyor"
+    },
+    "cause": {
+      "en": "The game is older than the patch this RED4ext was made for.",
+      "ro": "Jocul este mai vechi decât patch-ul pentru care a fost făcut acest RED4ext.",
+      "it": "Il gioco è più vecchio della patch per cui è stato creato questo RED4ext.",
+      "fr": "Le jeu est plus ancien que le correctif pour lequel ce RED4ext a été conçu.",
+      "es": "El juego es más antiguo que el parche para el que se hizo este RED4ext.",
+      "ru": "Игра старее патча, для которого сделан этот RED4ext.",
+      "de": "Das Spiel ist älter als der Patch, für den dieses RED4ext gemacht wurde.",
+      "pt": "O jogo é mais antigo que o patch para o qual este RED4ext foi feito.",
+      "pl": "Gra jest starsza niż łatka, dla której zrobiono ten RED4ext.",
+      "tr": "Oyun, bu RED4ext'in yapıldığı yamadan daha eski."
+    },
+    "fix": {
+      "en": "Update the game in Steam (verify its files), or install an older RED4ext.",
+      "ro": "Actualizează jocul în Steam (verifică fișierele) sau instalează un RED4ext mai vechi.",
+      "it": "Aggiorna il gioco su Steam (verifica i file) o installa un RED4ext più vecchio.",
+      "fr": "Mettez le jeu à jour dans Steam (vérifiez ses fichiers) ou installez un RED4ext plus ancien.",
+      "es": "Actualiza el juego en Steam (verifica sus archivos) o instala un RED4ext más antiguo.",
+      "ru": "Обновите игру в Steam (проверьте файлы) или установите более старый RED4ext.",
+      "de": "Aktualisiere das Spiel in Steam (Dateien überprüfen) oder installiere ein älteres RED4ext.",
+      "pt": "Atualize o jogo na Steam (verifique os arquivos) ou instale um RED4ext mais antigo.",
+      "pl": "Zaktualizuj grę w Steam (sprawdź pliki) lub zainstaluj starszy RED4ext.",
+      "tr": "Oyunu Steam'de güncelle (dosyaları doğrula) veya daha eski bir RED4ext kur."
+    }
+  },
+  {
+    "id": "red4ext_patch_unsupported",
+    "logs": [
+      "red4ext"
+    ],
+    "contains": [
+      "is not supported"
+    ],
+    "also": [
+      "game patch"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "RED4ext does not support this game version yet",
+      "ro": "RED4ext nu suportă încă această versiune a jocului",
+      "it": "RED4ext non supporta ancora questa versione del gioco",
+      "fr": "RED4ext ne prend pas encore en charge cette version du jeu",
+      "es": "RED4ext aún no es compatible con esta versión del juego",
+      "ru": "RED4ext пока не поддерживает эту версию игры",
+      "de": "RED4ext unterstützt diese Spielversion noch nicht",
+      "pt": "O RED4ext ainda não suporta esta versão do jogo",
+      "pl": "RED4ext nie obsługuje jeszcze tej wersji gry",
+      "tr": "RED4ext bu oyun sürümünü henüz desteklemiyor"
+    },
+    "cause": {
+      "en": "The game was updated and this RED4ext does not know the new version.",
+      "ro": "Jocul a fost actualizat, iar acest RED4ext nu cunoaște versiunea nouă.",
+      "it": "Il gioco è stato aggiornato e questo RED4ext non conosce la nuova versione.",
+      "fr": "Le jeu a été mis à jour et ce RED4ext ne connaît pas la nouvelle version.",
+      "es": "El juego se actualizó y este RED4ext no conoce la nueva versión.",
+      "ru": "Игра обновилась, а этот RED4ext не знает новую версию.",
+      "de": "Das Spiel wurde aktualisiert und dieses RED4ext kennt die neue Version nicht.",
+      "pt": "O jogo foi atualizado e este RED4ext não conhece a nova versão.",
+      "pl": "Gra została zaktualizowana, a ten RED4ext nie zna nowej wersji.",
+      "tr": "Oyun güncellendi ve bu RED4ext yeni sürümü tanımıyor."
+    },
+    "fix": {
+      "en": "Update RED4ext and the mods that use it (ArchiveXL, TweakXL, Codeware, Redscript), or wait until they are updated.",
+      "ro": "Actualizează RED4ext și modurile care îl folosesc (ArchiveXL, TweakXL, Codeware, Redscript) sau așteaptă să fie actualizate.",
+      "it": "Aggiorna RED4ext e i mod che lo usano (ArchiveXL, TweakXL, Codeware, Redscript), oppure attendi che vengano aggiornati.",
+      "fr": "Mettez à jour RED4ext et les mods qui l'utilisent (ArchiveXL, TweakXL, Codeware, Redscript), ou attendez leur mise à jour.",
+      "es": "Actualiza RED4ext y los mods que lo usan (ArchiveXL, TweakXL, Codeware, Redscript), o espera a que se actualicen.",
+      "ru": "Обновите RED4ext и моды, которые его используют (ArchiveXL, TweakXL, Codeware, Redscript), или дождитесь их обновления.",
+      "de": "Aktualisiere RED4ext und die Mods, die es nutzen (ArchiveXL, TweakXL, Codeware, Redscript), oder warte auf deren Updates.",
+      "pt": "Atualize o RED4ext e os mods que o usam (ArchiveXL, TweakXL, Codeware, Redscript), ou espere que sejam atualizados.",
+      "pl": "Zaktualizuj RED4ext i mody, które go używają (ArchiveXL, TweakXL, Codeware, Redscript), albo poczekaj na ich aktualizacje.",
+      "tr": "RED4ext'i ve onu kullanan modları (ArchiveXL, TweakXL, Codeware, Redscript) güncelle ya da güncellenmelerini bekle."
+    }
+  },
+  {
+    "id": "red4ext_plugin_other_patch",
+    "logs": [
+      "red4ext"
+    ],
+    "contains": [
+      "was compiled for patch"
+    ],
+    "level": "warn",
+    "title": {
+      "en": "A plugin was made for another game version",
+      "ro": "Un plugin a fost făcut pentru altă versiune a jocului",
+      "it": "Un plugin è stato creato per un'altra versione del gioco",
+      "fr": "Un plugin a été conçu pour une autre version du jeu",
+      "es": "Un plugin se hizo para otra versión del juego",
+      "ru": "Плагин сделан для другой версии игры",
+      "de": "Ein Plugin wurde für eine andere Spielversion gemacht",
+      "pt": "Um plugin foi feito para outra versão do jogo",
+      "pl": "Wtyczka powstała dla innej wersji gry",
+      "tr": "Bir eklenti oyunun başka bir sürümü için yapılmış"
+    },
+    "cause": {
+      "en": "A RED4ext plugin (ArchiveXL, Codeware ...) was built for a different game patch and may crash or not load.",
+      "ro": "Un plugin RED4ext (ArchiveXL, Codeware ...) a fost construit pentru alt patch și poate cădea sau nu se încarcă.",
+      "it": "Un plugin RED4ext (ArchiveXL, Codeware ...) è stato compilato per un'altra patch e può andare in crash o non caricarsi.",
+      "fr": "Un plugin RED4ext (ArchiveXL, Codeware ...) a été compilé pour un autre correctif et peut planter ou ne pas se charger.",
+      "es": "Un plugin de RED4ext (ArchiveXL, Codeware ...) se compiló para otro parche y puede fallar o no cargarse.",
+      "ru": "Плагин RED4ext (ArchiveXL, Codeware ...) собран под другой патч и может вылетать или не загружаться.",
+      "de": "Ein RED4ext-Plugin (ArchiveXL, Codeware ...) wurde für einen anderen Patch gebaut und kann abstürzen oder nicht laden.",
+      "pt": "Um plugin do RED4ext (ArchiveXL, Codeware ...) foi compilado para outro patch e pode travar ou não carregar.",
+      "pl": "Wtyczka RED4ext (ArchiveXL, Codeware ...) została zbudowana pod inną łatkę i może się wysypywać lub nie wczytywać.",
+      "tr": "Bir RED4ext eklentisi (ArchiveXL, Codeware ...) başka bir yama için derlenmiş; çökebilir veya yüklenmeyebilir."
+    },
+    "fix": {
+      "en": "Update that plugin to the version for your game, or switch it off.",
+      "ro": "Actualizează pluginul la versiunea pentru jocul tău sau dezactivează-l.",
+      "it": "Aggiorna quel plugin alla versione per il tuo gioco, oppure disattivalo.",
+      "fr": "Mettez ce plugin à jour vers la version de votre jeu, ou désactivez-le.",
+      "es": "Actualiza ese plugin a la versión de tu juego o desactívalo.",
+      "ru": "Обновите этот плагин до версии для вашей игры или отключите его.",
+      "de": "Aktualisiere das Plugin auf die Version für dein Spiel oder schalte es aus.",
+      "pt": "Atualize esse plugin para a versão do seu jogo ou desative-o.",
+      "pl": "Zaktualizuj tę wtyczkę do wersji dla twojej gry albo ją wyłącz.",
+      "tr": "Eklentiyi oyununun sürümüne uygun olana güncelle ya da kapat."
+    }
+  },
+  {
+    "id": "red4ext_hook_failed",
+    "logs": [
+      "red4ext"
+    ],
+    "contains": [
+      "Could not attach the hook for the main function"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "RED4ext could not start",
+      "ro": "RED4ext nu a putut porni",
+      "it": "RED4ext non è riuscito ad avviarsi",
+      "fr": "RED4ext n'a pas pu démarrer",
+      "es": "RED4ext no pudo iniciarse",
+      "ru": "RED4ext не смог запуститься",
+      "de": "RED4ext konnte nicht starten",
+      "pt": "O RED4ext não conseguiu iniciar",
+      "pl": "RED4ext nie mógł się uruchomić",
+      "tr": "RED4ext başlatılamadı"
+    },
+    "cause": {
+      "en": "RED4ext could not attach itself to the game, usually because it or another core mod is out of date.",
+      "ro": "RED4ext nu s-a putut atașa de joc, de obicei pentru că el sau alt mod de bază e depășit.",
+      "it": "RED4ext non è riuscito ad agganciarsi al gioco, di solito perché lui o un altro mod di base è obsoleto.",
+      "fr": "RED4ext n'a pas pu s'attacher au jeu, en général parce que lui ou un autre mod de base est périmé.",
+      "es": "RED4ext no pudo engancharse al juego, normalmente porque él u otro mod base está desactualizado.",
+      "ru": "RED4ext не смог подключиться к игре, обычно потому что он или другой базовый мод устарел.",
+      "de": "RED4ext konnte sich nicht ins Spiel einklinken, meist weil es oder eine andere Kern-Mod veraltet ist.",
+      "pt": "O RED4ext não conseguiu se conectar ao jogo, geralmente porque ele ou outro mod base está desatualizado.",
+      "pl": "RED4ext nie mógł podpiąć się do gry, zwykle dlatego że on lub inny podstawowy mod jest nieaktualny.",
+      "tr": "RED4ext oyuna bağlanamadı; genellikle kendisi veya başka bir çekirdek mod güncel değildir."
+    },
+    "fix": {
+      "en": "Update RED4ext, Redscript, CET and the other core mods, then try again. If it stays, verify the game files in Steam.",
+      "ro": "Actualizează RED4ext, Redscript, CET și celelalte moduri de bază, apoi încearcă din nou. Dacă rămâne, verifică fișierele jocului în Steam.",
+      "it": "Aggiorna RED4ext, Redscript, CET e gli altri mod di base, poi riprova. Se resta, verifica i file del gioco su Steam.",
+      "fr": "Mettez à jour RED4ext, Redscript, CET et les autres mods de base, puis réessayez. Sinon, vérifiez les fichiers du jeu dans Steam.",
+      "es": "Actualiza RED4ext, Redscript, CET y los demás mods base, y vuelve a probar. Si sigue, verifica los archivos del juego en Steam.",
+      "ru": "Обновите RED4ext, Redscript, CET и другие базовые моды, затем повторите. Если не помогло, проверьте файлы игры в Steam.",
+      "de": "Aktualisiere RED4ext, Redscript, CET und die anderen Kern-Mods und versuche es erneut. Bleibt es, überprüfe die Spieldateien in Steam.",
+      "pt": "Atualize o RED4ext, Redscript, CET e os outros mods base e tente de novo. Se continuar, verifique os arquivos do jogo na Steam.",
+      "pl": "Zaktualizuj RED4ext, Redscript, CET i inne podstawowe mody, potem spróbuj ponownie. Jeśli dalej nie działa, sprawdź pliki gry w Steam.",
+      "tr": "RED4ext, Redscript, CET ve diğer çekirdek modları güncelle, sonra tekrar dene. Sürerse Steam'de oyun dosyalarını doğrula."
+    }
+  },
+  {
+    "id": "redscript_compile_failed",
+    "logs": [
+      "red4ext",
+      "redscript"
+    ],
+    "contains": [
+      "REDScript compilation has failed",
+      "scc invocation failed"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "Redscript could not compile the scripts",
+      "ro": "Redscript nu a putut compila scripturile",
+      "it": "Redscript non è riuscito a compilare gli script",
+      "fr": "Redscript n'a pas pu compiler les scripts",
+      "es": "Redscript no pudo compilar los scripts",
+      "ru": "Redscript не смог скомпилировать скрипты",
+      "de": "Redscript konnte die Skripte nicht kompilieren",
+      "pt": "O Redscript não conseguiu compilar os scripts",
+      "pl": "Redscript nie zdołał skompilować skryptów",
+      "tr": "Redscript betikleri derleyemedi"
+    },
+    "cause": {
+      "en": "A script mod is broken, installed twice or made for another game version, so the game's scripts did not build.",
+      "ro": "Un mod cu scripturi e stricat, instalat de două ori sau făcut pentru altă versiune, așa că scripturile jocului nu s-au construit.",
+      "it": "Un mod di script è rotto, installato due volte o fatto per un'altra versione, quindi gli script del gioco non sono stati compilati.",
+      "fr": "Un mod de scripts est cassé, installé deux fois ou conçu pour une autre version, donc les scripts du jeu n'ont pas été compilés.",
+      "es": "Un mod de scripts está roto, instalado dos veces o hecho para otra versión, así que los scripts del juego no se compilaron.",
+      "ru": "Скриптовый мод сломан, установлен дважды или сделан для другой версии, поэтому скрипты игры не собрались.",
+      "de": "Eine Skript-Mod ist defekt, doppelt installiert oder für eine andere Version gemacht, deshalb wurden die Skripte des Spiels nicht gebaut.",
+      "pt": "Um mod de scripts está quebrado, instalado duas vezes ou feito para outra versão, então os scripts do jogo não foram compilados.",
+      "pl": "Mod ze skryptami jest uszkodzony, zainstalowany dwa razy lub zrobiony pod inną wersję, więc skrypty gry się nie zbudowały.",
+      "tr": "Bir betik modu bozuk, iki kez kurulmuş veya başka bir sürüm için yapılmış; bu yüzden oyunun betikleri derlenmedi."
+    },
+    "fix": {
+      "en": "Open the redscript log (r6/logs) to see which file failed, then update or remove that mod. Look for duplicate mod files.",
+      "ro": "Deschide jurnalul redscript (r6/logs) ca să vezi ce fișier a eșuat, apoi actualizează sau scoate acel mod. Caută fișiere de mod duplicate.",
+      "it": "Apri il log di redscript (r6/logs) per vedere quale file ha fallito, poi aggiorna o rimuovi quel mod. Cerca file di mod duplicati.",
+      "fr": "Ouvrez le journal de redscript (r6/logs) pour voir quel fichier a échoué, puis mettez à jour ou retirez ce mod. Cherchez les fichiers de mod en double.",
+      "es": "Abre el registro de redscript (r6/logs) para ver qué archivo falló y luego actualiza o quita ese mod. Busca archivos de mod duplicados.",
+      "ru": "Откройте журнал redscript (r6/logs), чтобы увидеть проблемный файл, затем обновите или удалите этот мод. Поищите дублирующиеся файлы модов.",
+      "de": "Öffne das Redscript-Log (r6/logs), um zu sehen, welche Datei scheiterte, und aktualisiere oder entferne diese Mod. Suche nach doppelten Mod-Dateien.",
+      "pt": "Abra o registro do redscript (r6/logs) para ver qual arquivo falhou e então atualize ou remova esse mod. Procure arquivos de mod duplicados.",
+      "pl": "Otwórz log redscript (r6/logs), aby zobaczyć, który plik zawiódł, i zaktualizuj lub usuń ten mod. Poszukaj zduplikowanych plików modów.",
+      "tr": "Hangi dosyanın başarısız olduğunu görmek için redscript günlüğünü (r6/logs) aç, sonra o modu güncelle veya kaldır. Yinelenen mod dosyalarına bak."
+    }
+  },
+  {
+    "id": "cyberpunk_watchdog",
+    "logs": [
+      "red4ext"
+    ],
+    "contains": [
+      "Watchdog timeout"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The game froze and was closed",
+      "ro": "Jocul a înghețat și a fost închis",
+      "it": "Il gioco si è bloccato ed è stato chiuso",
+      "fr": "Le jeu s'est figé et a été fermé",
+      "es": "El juego se congeló y se cerró",
+      "ru": "Игра зависла и была закрыта",
+      "de": "Das Spiel ist eingefroren und wurde beendet",
+      "pt": "O jogo congelou e foi fechado",
+      "pl": "Gra zawisła i została zamknięta",
+      "tr": "Oyun donup kapatıldı"
+    },
+    "cause": {
+      "en": "The game stopped responding for 120 seconds. A broken mod or too many heavy mods is the usual cause.",
+      "ro": "Jocul nu a răspuns 120 de secunde. De obicei vinovat e un mod stricat sau prea multe moduri grele.",
+      "it": "Il gioco non ha risposto per 120 secondi. Di solito la causa è un mod rotto o troppi mod pesanti.",
+      "fr": "Le jeu n'a pas répondu pendant 120 secondes. La cause habituelle est un mod défectueux ou trop de mods lourds.",
+      "es": "El juego no respondió durante 120 segundos. Suele deberse a un mod roto o a demasiados mods pesados.",
+      "ru": "Игра не отвечала 120 секунд. Обычно виноват сломанный мод или слишком много тяжёлых модов.",
+      "de": "Das Spiel hat 120 Sekunden lang nicht reagiert. Meist ist eine defekte Mod oder zu viele schwere Mods die Ursache.",
+      "pt": "O jogo ficou 120 segundos sem responder. Em geral a causa é um mod quebrado ou mods pesados demais.",
+      "pl": "Gra nie odpowiadała przez 120 sekund. Zwykle winny jest zepsuty mod albo zbyt wiele ciężkich modów.",
+      "tr": "Oyun 120 saniye yanıt vermedi. Genelde bozuk bir mod ya da çok fazla ağır mod yüzünden olur."
+    },
+    "fix": {
+      "en": "Use Find the broken mod (Crash Detective), and make sure your antivirus is not scanning the game folder.",
+      "ro": "Folosește Găsește modul stricat (Crash Detective) și verifică să nu scaneze antivirusul folderul jocului.",
+      "it": "Usa Trova il mod difettoso (Crash Detective) e assicurati che l'antivirus non analizzi la cartella del gioco.",
+      "fr": "Utilisez Trouver le mod défectueux (Crash Detective) et vérifiez que l'antivirus n'analyse pas le dossier du jeu.",
+      "es": "Usa Encontrar el mod roto (Crash Detective) y comprueba que el antivirus no analice la carpeta del juego.",
+      "ru": "Используйте «Найти сломанный мод» (Crash Detective) и проверьте, что антивирус не сканирует папку игры.",
+      "de": "Nutze „Defekte Mod finden“ (Crash Detective) und stelle sicher, dass dein Virenscanner den Spielordner nicht prüft.",
+      "pt": "Use Encontrar o mod quebrado (Crash Detective) e confira se o antivírus não está varrendo a pasta do jogo.",
+      "pl": "Użyj „Znajdź zepsuty mod” (Crash Detective) i upewnij się, że antywirus nie skanuje folderu gry.",
+      "tr": "Bozuk modu bul (Crash Detective) özelliğini kullan ve antivirüsün oyun klasörünü taramadığından emin ol."
+    }
+  },
+  {
+    "id": "cyberpunk_gpu_crash",
+    "logs": [
+      "red4ext"
+    ],
+    "contains": [
+      "Gpu Crash for unknown reasons"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "The graphics card stopped the game",
+      "ro": "Placa video a oprit jocul",
+      "it": "La scheda video ha fermato il gioco",
+      "fr": "La carte graphique a arrêté le jeu",
+      "es": "La tarjeta gráfica detuvo el juego",
+      "ru": "Видеокарта остановила игру",
+      "de": "Die Grafikkarte hat das Spiel gestoppt",
+      "pt": "A placa de vídeo parou o jogo",
+      "pl": "Karta graficzna zatrzymała grę",
+      "tr": "Ekran kartı oyunu durdurdu"
+    },
+    "cause": {
+      "en": "The game lost the graphics card. Graphics mods, ReShade or an unstable driver can do this.",
+      "ro": "Jocul a pierdut placa video. Moduri grafice, ReShade sau un driver instabil pot cauza asta.",
+      "it": "Il gioco ha perso la scheda video. Mod grafici, ReShade o un driver instabile possono causarlo.",
+      "fr": "Le jeu a perdu la carte graphique. Des mods graphiques, ReShade ou un pilote instable peuvent en être la cause.",
+      "es": "El juego perdió la tarjeta gráfica. Mods gráficos, ReShade o un controlador inestable pueden causarlo.",
+      "ru": "Игра потеряла видеокарту. Причиной могут быть графические моды, ReShade или нестабильный драйвер.",
+      "de": "Das Spiel hat die Grafikkarte verloren. Grafik-Mods, ReShade oder ein instabiler Treiber können das auslösen.",
+      "pt": "O jogo perdeu a placa de vídeo. Mods gráficos, ReShade ou um driver instável podem causar isso.",
+      "pl": "Gra straciła kartę graficzną. Mogą za tym stać mody graficzne, ReShade lub niestabilny sterownik.",
+      "tr": "Oyun ekran kartını kaybetti. Grafik modları, ReShade veya kararsız bir sürücü buna yol açabilir."
+    },
+    "fix": {
+      "en": "Turn off graphics mods and ReShade, update the graphics driver, and try again.",
+      "ro": "Oprește modurile grafice și ReShade, actualizează driverul video și încearcă din nou.",
+      "it": "Disattiva i mod grafici e ReShade, aggiorna il driver video e riprova.",
+      "fr": "Désactivez les mods graphiques et ReShade, mettez à jour le pilote graphique et réessayez.",
+      "es": "Desactiva los mods gráficos y ReShade, actualiza el controlador de la gráfica y vuelve a probar.",
+      "ru": "Отключите графические моды и ReShade, обновите драйвер видеокарты и повторите.",
+      "de": "Schalte Grafik-Mods und ReShade aus, aktualisiere den Grafiktreiber und versuche es erneut.",
+      "pt": "Desative os mods gráficos e o ReShade, atualize o driver de vídeo e tente de novo.",
+      "pl": "Wyłącz mody graficzne i ReShade, zaktualizuj sterownik karty graficznej i spróbuj ponownie.",
+      "tr": "Grafik modlarını ve ReShade'i kapat, ekran kartı sürücüsünü güncelle ve tekrar dene."
+    }
+  },
+  {
+    "id": "cyberpunk_missing_framework",
+    "logs": [
+      "redscript"
+    ],
+    "contains": [
+      "but you don't have it installed"
+    ],
+    "level": "bad",
+    "title": {
+      "en": "A mod needs a framework that is not installed",
+      "ro": "Un mod are nevoie de un framework care nu e instalat",
+      "it": "Un mod richiede un framework non installato",
+      "fr": "Un mod a besoin d'un framework qui n'est pas installé",
+      "es": "Un mod necesita un framework que no está instalado",
+      "ru": "Моду нужен фреймворк, который не установлен",
+      "de": "Eine Mod braucht ein Framework, das nicht installiert ist",
+      "pt": "Um mod precisa de um framework que não está instalado",
+      "pl": "Mod potrzebuje frameworka, który nie jest zainstalowany",
+      "tr": "Bir mod, kurulu olmayan bir çatıya ihtiyaç duyuyor"
+    },
+    "cause": {
+      "en": "A script mod depends on a framework such as Codeware, TweakXL or ArchiveXL that is missing. The log line says which one.",
+      "ro": "Un mod cu scripturi depinde de un framework precum Codeware, TweakXL sau ArchiveXL care lipsește. Linia din jurnal spune care.",
+      "it": "Un mod di script dipende da un framework come Codeware, TweakXL o ArchiveXL che manca. La riga del log dice quale.",
+      "fr": "Un mod de scripts dépend d'un framework comme Codeware, TweakXL ou ArchiveXL qui manque. La ligne du journal dit lequel.",
+      "es": "Un mod de scripts depende de un framework como Codeware, TweakXL o ArchiveXL que falta. La línea del registro dice cuál.",
+      "ru": "Скриптовый мод зависит от фреймворка (Codeware, TweakXL, ArchiveXL и т. п.), которого нет. В строке журнала указано, какого именно.",
+      "de": "Eine Skript-Mod hängt von einem fehlenden Framework wie Codeware, TweakXL oder ArchiveXL ab. Die Logzeile nennt, welches.",
+      "pt": "Um mod de scripts depende de um framework como Codeware, TweakXL ou ArchiveXL que está faltando. A linha do registro diz qual.",
+      "pl": "Mod ze skryptami zależy od frameworka, takiego jak Codeware, TweakXL lub ArchiveXL, którego brakuje. Linia logu mówi którego.",
+      "tr": "Bir betik modu, eksik olan Codeware, TweakXL veya ArchiveXL gibi bir çatıya bağlı. Günlük satırı hangisi olduğunu söyler."
+    },
+    "fix": {
+      "en": "Install the framework named in the log (from Nexus Mods, with Gantry), then deploy again.",
+      "ro": "Instalează framework-ul numit în jurnal (de pe Nexus Mods, cu Gantry), apoi fă din nou Deploy.",
+      "it": "Installa il framework indicato nel log (da Nexus Mods, con Gantry), poi esegui di nuovo il deploy.",
+      "fr": "Installez le framework indiqué dans le journal (depuis Nexus Mods, avec Gantry), puis redéployez.",
+      "es": "Instala el framework que indica el registro (desde Nexus Mods, con Gantry) y vuelve a desplegar.",
+      "ru": "Установите фреймворк, названный в журнале (с Nexus Mods, через Gantry), и снова выполните Deploy.",
+      "de": "Installiere das im Log genannte Framework (von Nexus Mods, mit Gantry) und deploye erneut.",
+      "pt": "Instale o framework citado no registro (do Nexus Mods, com o Gantry) e faça o deploy de novo.",
+      "pl": "Zainstaluj framework wskazany w logu (z Nexus Mods, przez Gantry), a potem wykonaj Deploy ponownie.",
+      "tr": "Günlükte adı geçen çatıyı (Nexus Mods'tan, Gantry ile) kur ve yeniden dağıt."
+    }
   }
 ]

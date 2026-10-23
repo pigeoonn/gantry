@@ -1,5 +1,21 @@
 # Changes
 
+## Unreleased
+
+- **Trainers start the way Steam starts the game.** A trainer only works when it is in the same Wine session as the game.
+  Gantry used to start it three seconds after Play with whichever compatibility tool it had picked itself; for a Steam game that is
+  often not the one Steam uses, so the trainer never saw the game. Now it uses the compatibility tool Steam is set to use for that
+  game (started with `proton run`, same compatibility data), waits until the game is really running, and falls back to the build's own
+  Wine if that fails. What the trainer prints goes to `~/.cache/rig/trainer.log`; known causes (missing Visual C++ or
+  .NET, a different build) are explained in the activity log, a missing trainer file is reported, and an installer
+  attached by mistake (for example a WeMod setup) is flagged. `rig --doctor` shows which trainer a game has and the
+  compatibility tool it would run with.
+- **Cyberpunk 2077 and RED4ext/Redscript/CET logs** are read: the log viewer lists them and 8 new known problems explain
+  the usual messages (game version too old or too new for RED4ext, plugin made for another patch, hook failed,
+  Redscript compile failed, a missing framework such as Codeware, watchdog timeout, GPU crash), in all ten languages.
+- **Mods that load through a proxy DLL** (Cyber Engine Tweaks' `version.dll`, `winmm.dll`, ...) now raise the *Steam is
+  missing the launch option* warning with its *Fix the launch option* button; before, only BepInEx/MelonLoader games did.
+
 ## 5.3.0
 
 - **Updates for mods from GitHub.** A mod installed from a GitHub release remembers which repository and file it came from;
