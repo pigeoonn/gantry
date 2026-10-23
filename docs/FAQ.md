@@ -29,13 +29,13 @@ you trust where it came from. You can check them with VirusTotal (optional).
 **Why is a game "Protected"?** It uses an anti-cheat (EasyAntiCheat, BattlEye and others). Mods there can get you banned, so Gantry
 does not add any.
 
-**Does it work on Windows and macOS?** Yes; Windows is tested on every change, macOS early. Some Linux-only parts (Proton,
+**Does it work on Windows and macOS?** The builds exist and their automated tests run on every change, but Gantry is developed and used on Linux, so treat both as beta (macOS more than Windows). Please report what breaks. Some Linux-only parts (Proton,
 Wine settings, memory and processor numbers) are hidden or empty there. See [TESTING](TESTING.md).
 
 **Why no Flatpak?** A Flatpak sandbox cannot start your games or reach their folders the way a mod manager must. Use the AppImage,
 the Arch package or build from source ([INSTALL](INSTALL.md)).
 
-**Does it work on the Steam Deck?** Yes: `rig --deck` (or Controller mode in Settings) gives big controls and gamepad navigation.
+**Does it work on the Steam Deck?** There is a controller mode (`rig --deck`, or Controller mode in Settings) with big controls and gamepad navigation, but it has not been tried on a real Deck yet. If you try it, please tell us how it went.
 
 **How do I move to another computer?** *Tools → Backup & Disk → Save a backup* writes one file; restore it on the other computer.
 Mod files themselves are fetched again from where they came from (a modpack can carry the ones that cannot be).
@@ -43,4 +43,4 @@ Mod files themselves are fetched again from where they came from (a modpack can 
 **How do I uninstall?** `rig --uninstall` removes the menu entry and `~/.local/bin/rig`; delete the settings folder to remove the
 rest. Your games are not changed by that (use *Back to vanilla* first if mods are still deployed).
 
-**Something is wrong or missing.** *Tools → Problem Report* copies a report without keys; paste it into a GitHub issue.
+**Something is wrong or missing.** *Settings → Report a problem* opens a GitHub issue with your version filled in; *Tools → Problem Report* copies a report without keys to paste into it. *Settings → Ask for a game* asks for a game to be supported.
