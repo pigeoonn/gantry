@@ -6,16 +6,17 @@ modded game in about ten minutes.
 
 ## 1. Install
 
-**Arch / CachyOS / Manjaro:** from a checkout, `cd packaging/arch && makepkg -si`, or (once the project is public) install
-`gantry-git` from the AUR with your helper (`yay -S gantry-git`).
+**Arch / CachyOS / Manjaro:** `git clone https://github.com/pigeoonn/gantry && cd gantry/packaging/arch && makepkg -si`.
 
-**Any Linux:** download the AppImage from the Releases page, make it executable (`chmod +x Gantry-*.AppImage`) and run it.
+**Any Linux:** download the AppImage from the [Releases page](https://github.com/pigeoonn/gantry/releases/latest), make it executable (`chmod +x Gantry-*.AppImage`) and run it.
 
 **From source:** install Rust (`rustup`), then `cargo build --release`; the program is `target/release/rig`. Run
 `rig --install` to add a menu entry and an icon.
 
-**Windows:** unzip the release anywhere and run `rig.exe` (or `winget install pigeoonn.Gantry` once published).
-**macOS:** the release has a Gantry.app inside a zip.
+**Windows:** unzip the release anywhere and run `rig.exe`. Windows SmartScreen may warn because the file is not signed:
+choose *More info*, then *Run anyway*.
+**macOS (Apple silicon):** `brew install --cask pigeoonn/gantry/gantry`, or download the `.tar.gz` and follow the macOS
+steps in the [installation guide](INSTALL.md).
 
 Gantry needs a Chromium based browser (Brave, Chrome, Chromium, Edge) for its window; it uses an "app window" so it
 looks like a normal program. Nothing is installed into your browser.

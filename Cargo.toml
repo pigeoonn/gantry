@@ -4,7 +4,12 @@ version = "5.1.0"
 edition = "2021"
 authors = ["David"]
 license = "GPL-3.0-or-later"
-description = "Gantry: mod, trainer and crash-hunting hub for Proton games on Linux"
+description = "Gantry: mod manager for games, with a Crash Detective that finds the mod that crashes your game"
+repository = "https://github.com/pigeoonn/gantry"
+homepage = "https://github.com/pigeoonn/gantry"
+readme = "README.md"
+keywords = ["mods", "games", "proton", "modding", "steam"]
+categories = ["games"]
 
 [dependencies]
 tiny_http = "0.12"

@@ -2,7 +2,7 @@
 
 Gantry is a mod, trainer and crash-hunting hub for games that run through **Proton / Wine on Linux**
 (Steam, Hydra, Heroic, Lutris or games you add by hand). It is one small program that shows its interface
-in an app window of your browser. Once a release is published you can download an AppImage or a tar.gz; otherwise you build it once from the
+in an app window of your browser. You can download an AppImage (Linux), a zip (Windows) or a tar.gz from the **Releases** page, or build it once from the
 source (about a minute). This page walks through it for each system.
 
 ## Which systems work
@@ -28,7 +28,8 @@ source (about a minute). This page walks through it for each system.
 ## Windows
 
 Download `gantry-<version>-windows-x86_64.zip` from the **Releases** page, unpack it anywhere and run
-`rig.exe` (nothing is installed; delete the folder to remove it). To get a Start menu entry and a permanent
+`rig.exe` (nothing is installed; delete the folder to remove it). The file is not signed, so Windows SmartScreen may say
+"Windows protected your PC": choose *More info*, then *Run anyway*. To get a Start menu entry and a permanent
 place for the program, open a terminal in that folder and run:
 
 ```powershell
@@ -209,5 +210,6 @@ with host access is wanted anyway, it can be added later.
 
 ## AUR
 
-`packaging/arch/PKGBUILD` builds from a checkout. `packaging/arch/aur/PKGBUILD` is the `gantry-git` package for the AUR
-(it needs the repository to be public).
+`packaging/arch/PKGBUILD` builds from a checkout. `packaging/arch/aur-release/PKGBUILD` (the tagged release) and
+`packaging/arch/aur/PKGBUILD` (`gantry-git`, the newest commit) are the recipes for the AUR; they are built and tested
+here, but not yet published there.

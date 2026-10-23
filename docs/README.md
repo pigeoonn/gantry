@@ -6,6 +6,7 @@ Start with the [tutorial](TUTORIAL.md) (ten minutes from nothing to a modded gam
 |---|---|
 | [Install](INSTALL.md) | every way to install, packages, building from source |
 | [User guide](GUIDE.md) | everything in one long page |
+| [Reference](REFERENCE.md) | every feature and how it works, in detail |
 | [Questions and answers](FAQ.md) | safety, keys, privacy, Windows, Deck |
 | [What Steam does well](STEAM-LESSONS.md) | a read-only look at Steam and the ideas worth borrowing |
 

@@ -1,0 +1,18 @@
+name: Support for a game
+description: A game Gantry does not know yet, or knows wrongly (loader, Nexus page, save folder)
+labels: [game-support]
+body:
+  - type: input
+    id: game
+    attributes: { label: 'The game, and where you have it (Steam id if you know it)' }
+    validations: { required: true }
+  - type: textarea
+    id: mods
+    attributes: { label: 'Which mods do you want to use, and where do they come from (Nexus Mods link, Thunderstore, GitHub)?' }
+    validations: { required: true }
+  - type: textarea
+    id: where
+    attributes: { label: 'If you know it: where do the files go, and where does the game keep its saves?', description: 'For example "into the Mods folder next to the exe" and "Documents/My Games/Name". Tools → Support entry shows what Gantry sees.' }
+  - type: textarea
+    id: more
+    attributes: { label: Anything else }

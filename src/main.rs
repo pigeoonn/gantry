@@ -915,14 +915,15 @@ fn library_of(g: &GameEntry) -> Option<deploy::Library> {
 /// How many save folders Gantry can see for a game (looked up at most every 30 seconds).
 fn save_folder_count(g: &GameEntry) -> usize {
     static CACHE: std::sync::LazyLock<Mutex<std::collections::HashMap<String, (Instant, usize)>>> = std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
-    if let Some((at, n)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&g.appid) {
+    let key = format!("{}|{}|{}", g.appid, g.game_dir, g.pfx);
+    if let Some((at, n)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
         if at.elapsed() < Duration::from_secs(30) {
             return *n;
         }
     }
     let custom = recipes::rules_saves(&g.appid, &g.steam_appid);
     let n = profsaves::roots(g, &custom).len();
-    CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(g.appid.clone(), (Instant::now(), n));
+    CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(key, (Instant::now(), n));
     n
 }
 
