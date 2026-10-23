@@ -37,11 +37,18 @@ process.on('SIGINT', () => finish(1));
 
 try {
   for (let i = 0; i < 50; i++) { try { await fetch(`http://127.0.0.1:${port}/`); break; } catch (e) { await sleep(200); } }
-  browser = spawn(browserBin, ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run', `--remote-debugging-port=${dbg}`, `--user-data-dir=${join(home, 'profile')}`, 'about:blank'], { stdio: 'ignore' });
-  for (let i = 0; ; i++) {
-    try { await fetch(`http://127.0.0.1:${dbg}/json/version`); break; } catch (e) { if (i > 100) throw new Error('the browser did not start its debugging port'); await sleep(200); }
+  // a browser on a busy machine sometimes does not open its debugging port in time: try again (new port, new profile) before giving up
+  let dbgPort = dbg, up = false;
+  for (let attempt = 0; attempt < 3 && !up; attempt++) {
+    dbgPort = dbg + attempt;
+    browser = spawn(browserBin, ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run', `--remote-debugging-port=${dbgPort}`, `--user-data-dir=${join(home, 'profile' + attempt)}`, 'about:blank'], { stdio: 'ignore' });
+    for (let i = 0; i < 150 && !up; i++) {
+      try { await fetch(`http://127.0.0.1:${dbgPort}/json/version`); up = true; } catch (e) { await sleep(200); }
+    }
+    if (!up) { try { browser.kill(); } catch (e) {} }
   }
-  const target = await (await fetch(`http://127.0.0.1:${dbg}/json/new?http://127.0.0.1:${port}/`, { method: 'PUT' })).json();
+  if (!up) throw new Error('the browser did not start its debugging port');
+  const target = await (await fetch(`http://127.0.0.1:${dbgPort}/json/new?http://127.0.0.1:${port}/`, { method: 'PUT' })).json();
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise(r => (ws.onopen = r));
   let id = 0; const pending = new Map();
