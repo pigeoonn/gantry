@@ -1,3 +1,35 @@
+# Road to 1.0
+
+Gantry is a **beta** today: the features are there, but it has mostly been used on one computer. It becomes a full
+release (6.0) when these are true. Testers: this is the list of what still needs *you*.
+
+**Proven by real use**
+- [ ] A few weeks of use by people other than the author on Linux, with the serious bugs they found fixed.
+- [ ] Windows: mods installed, a game launched and the Crash Detective used by hand on a real Windows PC (the automated
+      tests already pass on every change).
+- [ ] macOS: the same, on a real Mac.
+- [ ] Steam Deck: the controller mode tried on a real Deck, or clearly labelled as unproven.
+- [ ] No known bug that can lose saves, mods or game files.
+
+**Easy to get and to keep up to date**
+- [x] GitHub releases for Linux (AppImage, tarball), Windows (zip) and macOS (tarball) with checksums.
+- [x] Homebrew tap; an AUR package and winget files that build and pass their checks.
+- [ ] Published on the AUR and in winget (needs the author's accounts).
+- [x] The app tells you when a newer version exists.
+- [ ] Windows downloads that do not trigger the "unknown publisher" warning (needs a code-signing certificate).
+- [ ] A Flatpak, if it can be done without giving up what a mod manager must do (see the FAQ).
+
+**Polish**
+- [x] Ten languages, with a test that fails when a sentence is missing.
+- [x] Accessibility checks on every screen and theme.
+- [ ] Fresh screenshots of the newest screens in the README.
+- [ ] A short video of the main flow.
+
+**After 1.0 (ideas, not promises)**
+- More hand-made starter packs; community-contributed game entries.
+- Mod updates for things installed from GitHub; screenshots before and after mods; syncing your setup between computers
+  through a folder you choose. (Being built now; see the changelog.)
+
 # Gantry roadmap
 
 Goal: the most dependable mod manager for Linux gaming: it explains what it is doing, fixes common

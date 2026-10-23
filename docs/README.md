@@ -26,4 +26,4 @@ Start with the [tutorial](TUTORIAL.md) (ten minutes from nothing to a modded gam
 - [Controller and Steam Deck mode](features/controller.md)
 - [Accessibility](features/accessibility.md)
 
-For people who work on Gantry: [ROADMAP](ROADMAP.md), [TESTING](TESTING.md), [RELEASING](RELEASING.md), [CONTRIBUTING](../CONTRIBUTING.md).
+For people who work on Gantry: [Road to 1.0 and ROADMAP](ROADMAP.md), [TESTING](TESTING.md), [RELEASING](RELEASING.md), [CONTRIBUTING](../CONTRIBUTING.md).
