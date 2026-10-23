@@ -2,7 +2,7 @@
 # then put this file in a tap (homebrew-gantry/Casks/gantry.rb) or submit it to homebrew-cask.
 cask "gantry" do
   version "5.1.0"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "cf284888c15f3ce174df4f6fa4673781bc00fc7486e0e7b8cd6fb2574493f484"
 
   url "https://github.com/pigeoonn/gantry/releases/download/v#{version}/gantry-v#{version}-macos-arm64.tar.gz"
   name "Gantry"

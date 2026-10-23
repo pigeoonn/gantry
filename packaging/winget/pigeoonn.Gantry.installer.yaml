@@ -8,6 +8,6 @@ NestedInstallerFiles:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/pigeoonn/gantry/releases/download/v5.1.0/gantry-v5.1.0-windows-x86_64.zip
-    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+    InstallerSha256: C2789328F6863A92FC3D26A42121E93F9454E3C0EC2500A5BBE27ABCBA8D10D1
 ManifestType: installer
 ManifestVersion: 1.6.0
