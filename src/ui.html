@@ -2635,7 +2635,7 @@
       const modChip = g.mod_count > 0 ? `<span class="mod-count-chip">${g.mod_count}</span>` : '';
       const sid = steamArtId(g);
       const thumb = sid
-        ? `<img class="gthumb" loading="lazy" src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${encodeURIComponent(sid)}/header.jpg" onerror="this.outerHTML='<span class=gthumb>${escapeHtml(g.name.slice(0, 1).toUpperCase())}</span>'" alt="">`
+        ? `<img class="gthumb" loading="lazy" src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${encodeURIComponent(sid)}/header.jpg" data-fb="${escapeHtml('<span class=gthumb>' + escapeHtml(g.name.slice(0, 1).toUpperCase()) + '</span>')}" onerror="this.outerHTML=this.dataset.fb" alt="">`
         : `<span class="gthumb">${escapeHtml(g.name.slice(0, 1).toUpperCase())}</span>`;
       div.innerHTML = `
         ${thumb}
@@ -3389,7 +3389,7 @@
       h += `<div class="cd-card" style="display:flex; gap:12px; align-items:center;">${pic}
         <div style="min-width:0; flex:1;"><b>${escapeHtml(i.title || t('Item {}', i.id))}</b>${i.removed ? ` <span class="ml-chip" style="margin-left:6px">${t('Removed from the Workshop')}</span>` : ''}
         <div style="color:var(--text-muted); font-size:12px; margin-top:2px;">${escapeHtml(bits)}</div></div>
-        <div style="display:flex; gap:6px; flex:none;"><button class="btn" onclick="ipcSend('/api/open_link', { which: 'workshop', id: '${escapeHtml(i.id)}' })">${t('↗ Steam page')}</button><button class="btn" onclick="ipcSend('/api/workshop_folder', { id: '${escapeHtml(i.id)}' })">${t('📁 Folder')}</button></div></div>`;
+        <div style="display:flex; gap:6px; flex:none;"><button class="btn" onclick='ipcSend("/api/open_link", { which: "workshop", id: ${JS(String(i.id))} })'>${t('↗ Steam page')}</button><button class="btn" onclick="ipcSend('/api/workshop_folder', { id: '${escapeHtml(i.id)}' })">${t('📁 Folder')}</button></div></div>`;
     });
     box.innerHTML = h;
   }
@@ -3660,7 +3660,7 @@
     const game = appState.games.find(x => x.appid === g.appid) || {};
     const sid = steamArtId(game);
     return sid
-      ? `<img class="wl-art" loading="lazy" src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${encodeURIComponent(sid)}/header.jpg" onerror="this.outerHTML='<span class=wl-art>${escapeHtml(g.name.slice(0, 1).toUpperCase())}</span>'" alt="">`
+      ? `<img class="wl-art" loading="lazy" src="https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${encodeURIComponent(sid)}/header.jpg" data-fb="${escapeHtml('<span class=wl-art>' + escapeHtml(g.name.slice(0, 1).toUpperCase()) + '</span>')}" onerror="this.outerHTML=this.dataset.fb" alt="">`
       : `<span class="wl-art" style="background:${tileColor(g.name)}">${escapeHtml(g.name.slice(0, 1).toUpperCase())}</span>`;
   }
   function renderWelcome(rows, working) {
@@ -3809,7 +3809,7 @@
     const oldSaves = (d.games || []).reduce((a, g) => a + (g.old_saves_bytes || 0), 0), trash = (d.games || []).reduce((a, g) => a + g.trash_bytes, 0), orphans = (d.games || []).reduce((a, g) => a + (g.orphans || []).length, 0);
     let auto = { backups: [] };
     try { auto = await (await fetch('/api/auto_backups')).json(); } catch (e) { /* the list is a convenience */ }
-    const autoRows = (auto.backups || []).map(b => `<div class="disk-row"><b>${escapeHtml(new Date(b.at_ms).toLocaleString(LANG))}</b><span>${escapeHtml(ago(b.at_ms))} · ${fmtBytes(b.size)}</span><button class="btn" onclick="restoreAutoBackup('${escapeHtml(b.name)}')">${t('Restore')}</button></div>`).join('') || `<div class="lib-empty">${t('No automatic backups yet.')}</div>`;
+    const autoRows = (auto.backups || []).map(b => `<div class="disk-row"><b>${escapeHtml(new Date(b.at_ms).toLocaleString(LANG))}</b><span>${escapeHtml(ago(b.at_ms))} · ${fmtBytes(b.size)}</span><button class="btn" onclick='restoreAutoBackup(${JS(b.name)})'>${t('Restore')}</button></div>`).join('') || `<div class="lib-empty">${t('No automatic backups yet.')}</div>`;
     body.innerHTML = `
       <div><div class="cp-h">${t('Automatic backups')}</div>
         <div class="cp-note" style="margin:0 0 8px">${t('Once a week Gantry keeps a copy of your settings and mod lists. The newest {} stay.', auto.keep || 8)}</div>
@@ -3941,7 +3941,7 @@
           const kb = fmtSize(s.bytes);
           h += `<div class="cd-card" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
             <div><b>${escapeHtml(when)}</b> <span style="color:var(--text-muted);">· ${escapeHtml(labels[s.label] || s.label)} · ${tp(s.files, '{} file', '{} files')} · ${kb}</span></div>
-            <button class="btn" onclick="saveGuardRestore('${escapeHtml(s.id)}')">${t('Restore')}</button></div>`;
+            <button class="btn" onclick='saveGuardRestore(${JS(s.id)})'>${t('Restore')}</button></div>`;
         });
       }
       box.innerHTML = h;

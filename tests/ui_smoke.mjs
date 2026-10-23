@@ -55,11 +55,12 @@ try {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result || m.error); pending.delete(m.id); }
-    if (m.method === 'Runtime.exceptionThrown') failures.push('script error: ' + JSON.stringify(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text).slice(0, 300));
+    if (m.method === 'Runtime.exceptionThrown') failures.push('script error: ' + JSON.stringify(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text).slice(0, 300) + ' (line ' + m.params.exceptionDetails.lineNumber + ', column ' + m.params.exceptionDetails.columnNumber + ', while: ' + lastExpr.replace(/\s+/g, ' ').slice(0, 120) + ')');
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') failures.push('console error: ' + m.params.args.map(a => a.value || a.description).join(' ').slice(0, 300));
   };
   const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-  const ev = async expr => { const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) failures.push('evaluate failed: ' + expr.slice(0, 80) + ' -> ' + JSON.stringify(r.exceptionDetails.exception?.description || '').slice(0, 200)); return r.result && r.result.value; };
+  let lastExpr = '';
+  const ev = async expr => { lastExpr = expr; const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) failures.push('evaluate failed: ' + expr.slice(0, 80) + ' -> ' + JSON.stringify(r.exceptionDetails.exception?.description || '').slice(0, 200)); return r.result && r.result.value; };
   await send('Runtime.enable');
   if (shotsDir) { mkdirSync(shotsDir, { recursive: true }); await send('Page.enable'); }
   const [VW, VH] = (process.env.SMOKE_VIEW || '1360x860').split('x').map(Number);
@@ -140,6 +141,32 @@ try {
       }
     }
     await ev(`appState.settings.theme = 'dark'; appState.settings.custom_theme = null; applyLook(appState.settings)`);
+  }
+  // hostile and awkward names (markup, quotes, template syntax, very long, right-to-left, emoji) in every list must stay text
+  {
+    const nasty = ['<img src=x onerror=window.__pwn=1>', `'"><svg onload=window.__pwn=1>`, '${window.__pwn=1}', '`+window.__pwn+`', '</script><script>window.__pwn=1</script>', 'A'.repeat(300), '😀 emoji ✓ 日本語', '\u202e rtl text', `O'Brien "quoted" & <b>bold</b>`];
+    await ev(fake);
+    await ev(`(() => {
+      const nasty = ${JSON.stringify(nasty)};
+      const base = appState.games[0];
+      appState.games = nasty.map((n, i) => Object.assign({}, base, { appid: '9' + i, steam_appid: '9' + i, name: n, trainer_name: n }));
+      appState.selected_idx = 0;
+      const m = (n, i) => ({ id: 'm' + i, name: n, version: n.slice(0, 20), enabled: i % 2 === 0, target: n.slice(0, 30), source: n, files: 3, size: 1234, conflicts: i % 3 === 0, nexus: null, thunderstore: null, notes: 1, note: n, depends_on: [n], needed_by: [n], placed_by: 'names', group: n.slice(0, 12) });
+      appState.library = Object.assign({}, appState.library, { mods: nasty.map(m), profiles: nasty.slice(0, 4), history: nasty.slice(0, 3).map(n => ({ label: n, ts: Date.now() })), undo: nasty[0], conflicts: [{ path: nasty[1], mods: [nasty[0], nasty[2]], ids: ['m0', 'm2'], winner: nasty[2], winner_id: 'm2', pinned: false }], pending_pack: null });
+      appState.meta = {}; nasty.forEach((n, i) => { appState.meta['9' + i] = { fav: true, notes: n, tags: [n.slice(0, 15)], playtime_s: 99 }; });
+      appState.notes = { unread: 1, items: [{ id: 1, ts: Date.now(), kind: 'crash', text: nasty[0], appid: '90', read: false }] };
+      appState.nexus = Object.assign(appState.nexus || {}, { updates: [], needs: [{ appid: '90', lib_id: 'm0', name: nasty[0], missing: [{ name: nasty[1], page_url: 'https://www.nexusmods.com/x/mods/5', notes: nasty[2] }] }] });
+      renderUI(true);
+    })()`);
+    for (const shot of ["renderModLib()", "openLibrary()", "setTab('tools')", "setTab('mods')", "toggleNotes()", "openFind('store')", "openLibConflicts()", "openSettings()", ...screens]) {
+      await ev(`closeModals(); (typeof closePalette === "function" && closePalette()); appState.pending_install = null; renderPlaceDialog(); ${shot}`);
+      await sleep(120);
+    }
+    const pwn = await ev('window.__pwn');
+    if (pwn) failures.push('a name with markup ran script: ' + pwn);
+    const injected = await ev(`[...document.querySelectorAll('img, svg, script')].filter(e => /__pwn/.test(e.outerHTML)).length`);
+    if (injected > 0) failures.push('a name with markup became elements: ' + injected + ' script/img/svg nodes');
+    await ev('closeModals(); document.getElementById("notesPanel")?.classList.remove("open")');
   }
   const bad = /(\{\}|\{\d\}|undefined|\[object |NaN)/;
   for (const lang of ['en', 'ro', 'it', 'fr', 'es', 'ru', 'de', 'pt', 'pl', 'tr']) {
