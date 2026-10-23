@@ -140,6 +140,33 @@ impl Page {
 }
 
 /// A Thunderstore package (`/api/experimental/package/<owner>/<name>/`) with its README and changelog (Markdown).
+/// The page of a mod.io mod: its own text, the changelog of the current file and the mods it needs.
+pub fn modio_page(c: &crate::modio::Card, deps: &[crate::modio::Dep]) -> Page {
+    let mut changes = Vec::new();
+    if !c.changelog.trim().is_empty() {
+        changes.push(Change { version: c.version.clone(), name: "Changelog".into(), category: "main".into(), date_ms: c.updated_ms, html: richtext::text_html(&c.changelog) });
+    }
+    let page_url = richtext::safe_url(&c.page_url).unwrap_or_default();
+    Page {
+        source: "modio".into(),
+        name: c.name.clone(),
+        summary: c.summary.clone(),
+        author: c.author.clone(),
+        version: c.version.clone(),
+        picture: richtext::image_url(&c.picture).unwrap_or_default(),
+        endorsements: 0,
+        downloads: c.downloads,
+        rating: 0,
+        created_ms: c.created_ms,
+        updated_ms: c.updated_ms,
+        page_url,
+        categories: c.tags.clone(),
+        description_html: richtext::text_html(&c.description),
+        changes,
+        requirements: deps.iter().map(|d| Req { name: d.name.clone(), page_url: String::new(), notes: String::new(), external: false, installed: false, nexus_id: 0, key: format!("modio:{}", d.mod_id) }).collect(),
+    }
+}
+
 pub fn thunder_page(pkg: &Value, readme_md: &str, changelog_md: &str) -> Page {
     let latest = pkg.get("latest").cloned().unwrap_or(Value::Null);
     let (owner, name) = (s(pkg, "owner").to_string(), s(pkg, "name"));

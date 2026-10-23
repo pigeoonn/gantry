@@ -3052,6 +3052,7 @@
       row('accent_from_game', st.accent_from_game, t('Accent follows the game'), t('The colour of buttons and highlights is taken from the cover art of the game you are looking at.')) +
       row('virustotal', st.virustotal, t('Check program files with VirusTotal'), t('Off by default. Only the SHA-256 fingerprint of a program file is sent to VirusTotal, never the file or its name. Needs your own free key.')) +
       (st.virustotal ? vtKeyRow(st) : '') +
+      `<div class="cp-preset" style="align-items:center"><span style="flex:1"><b>mod.io</b><code>${(appState.modio || {}).configured ? t('mod.io key saved.') : t('No mod.io key yet. The mod.io list in Find mods asks for it.')}</code></span>${(appState.modio || {}).configured ? `<button class="btn" onclick='if (confirm(${JS(t('Remove the saved key from this computer?'))})) ipcSend("/api/modio_key_clear", {})'>${t('Remove saved key')}</button>` : `<button class="btn" onclick='ipcSend("/api/open_link", { which: "modio_key" })'>${t('Open the mod.io key page')}</button>`}</div>` +
       syncRow(st) +
       row('auto_backup', st.auto_backup !== false, t('Back up Gantry every week'), t('Your settings and mod lists are copied once a week; the newest 8 are kept.')) +
       row('show_adult', st.show_adult, t('Show adult mods in the store'), t('Mods their authors marked as adult stay hidden unless you switch this on.')) +
@@ -4740,7 +4741,7 @@
       : nx ? `<button class="btn btn-play" onclick='storeGetNexus(${JS(c.id)}, this, ${JS(c.name)})'>${(appState.nexus || {}).premium ? t('Install') : t('Get it')}</button>`
       : mio ? `<button class="btn btn-play" title="${escapeHtml(c.has_deps ? t('Installs what it needs first') : '')}" onclick='modioInstall(${JS(c.id)}, this)'>${t('Install')}</button>`
       : `<button class="btn btn-play" onclick='tsInstall(${JS(c.id)}, this)'>${t('Install')}</button>`;
-    return `<div class="s-card" tabindex="0" role="button" style="animation-delay:${Math.min(i, 12) * 28}ms" onclick='${mio ? `ipcSend("/api/open_link", { which: "modio_page", url: ${JS(c.page_url)} })` : `openStorePage(${JS(c.source)}, ${JS(c.id)})`}' onkeydown="if (event.key === 'Enter' && event.target === this) this.click()"><div class="s-thumb"><span class="tile" style="background:${tileColor(c.name)}">${escapeHtml(c.name.slice(0, 1).toUpperCase())}</span>${thumb}<span class="s-src">${nx ? 'Nexus Mods' : (mio ? 'mod.io' : 'Thunderstore')}</span>${c.category ? `<span class="s-cat">${escapeHtml(c.category)}</span>` : ''}</div>
+    return `<div class="s-card" tabindex="0" role="button" style="animation-delay:${Math.min(i, 12) * 28}ms" onclick='openStorePage(${JS(c.source)}, ${JS(c.id)})' onkeydown="if (event.key === 'Enter' && event.target === this) this.click()"><div class="s-thumb"><span class="tile" style="background:${tileColor(c.name)}">${escapeHtml(c.name.slice(0, 1).toUpperCase())}</span>${thumb}<span class="s-src">${nx ? 'Nexus Mods' : (mio ? 'mod.io' : 'Thunderstore')}</span>${c.category ? `<span class="s-cat">${escapeHtml(c.category)}</span>` : ''}</div>
       <div class="s-body"><div class="s-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div><div class="s-by">${escapeHtml(c.author)}${c.version ? ' · v' + escapeHtml(c.version) : ''}</div><div class="s-sum">${escapeHtml(c.summary || '')}</div>${c.why ? `<div class="s-why">✨ ${escapeHtml(c.why)}</div>` : ''}
       <div class="s-stats">${stats}</div><div class="s-foot" onclick="event.stopPropagation()">${act}<button class="btn heart ${isSaved(c) ? 'on' : ''}" ${mio ? 'style="display:none"' : ''} title="${escapeHtml(isSaved(c) ? t('Saved: press to remove') : t('Save for later'))}" aria-label="${escapeHtml(isSaved(c) ? t('Saved: press to remove') : t('Save for later'))}" onclick='storeSave(${JS(c)}, this)'>${isSaved(c) ? '♥' : '♡'}</button><button class="btn" title="${escapeHtml(t('Open its page'))}" aria-label="${escapeHtml(t('Open its page'))}" onclick='ipcSend("/api/open_link", { which: "${nx ? 'nexus_page' : (mio ? 'modio_page' : 'thunder_page')}", url: ${JS(c.page_url)} })'>↗</button></div></div></div>`;
   }
@@ -4775,6 +4776,10 @@
     ipcSend('/api/modio_key_set', { key });
     el.value = '';
     setTimeout(storeReload, 3000);
+  }
+  function modioPick(id) {
+    ipcSend('/api/modio_game_set', { id: Number(id) });
+    setTimeout(storeReload, 1500);
   }
   function modioInstall(id, btn) {
     ipcSend('/api/modio_install', { id: Number(id) });
@@ -4823,7 +4828,7 @@
       storePack = cards.filter(c => !c.installed);
       list.insertAdjacentHTML('afterbegin', `<div class="s-all"><span>${d.curated ? t('A short list of mods worth starting with for this game.') : t('The most downloaded mods that people also liked.')}</span><button class="btn btn-play" onclick="storeGetAll()">${t('Get all ({})', storePack.length)}</button></div>`);
     }
-    const notes = (d.notes || []).map(n => n.source === 'game' ? escapeHtml(tm(n.error)) : n.need_domain ? `${t('Nexus Mods')}: ${tm(n.error)} <button class="btn" onclick="nxChooseDomain()">${t('Choose the game')}</button>` : n.need_community ? `${tm(n.error)} <button class="btn" onclick="tsChooseCommunity()">${t('Choose the community')}</button>` : n.need_key ? `mod.io: ${escapeHtml(tm(n.error))} <button class="btn" onclick='ipcSend("/api/open_link", { which: "modio_key" })'>${t('Open the mod.io key page')}</button> <input type="password" id="modioKeyInput" class="input-field" style="max-width:240px; display:inline-block" placeholder="${escapeHtml(t('Paste your key'))}" autocomplete="off" spellcheck="false"> <button class="btn btn-heal" onclick="saveModioKey()">${t('Save &amp; test')}</button>` : `${n.source === 'nexus' ? 'Nexus Mods' : (n.source === 'modio' ? 'mod.io' : 'Thunderstore')}: ${escapeHtml(tm(n.error))}`);
+    const notes = (d.notes || []).map(n => n.source === 'game' ? escapeHtml(tm(n.error)) : n.need_domain ? `${t('Nexus Mods')}: ${tm(n.error)} <button class="btn" onclick="nxChooseDomain()">${t('Choose the game')}</button>` : n.need_community ? `${tm(n.error)} <button class="btn" onclick="tsChooseCommunity()">${t('Choose the community')}</button>` : (n.choose && n.choose.length) ? `mod.io: ${escapeHtml(tm(n.error))} ${t('Which one is it?')} ${n.choose.map(x => `<button class="btn" onclick='modioPick(${JS(x.id)})'>${escapeHtml(x.name)}</button>`).join(' ')}` : n.need_key ? `mod.io: ${escapeHtml(tm(n.error))} <button class="btn" onclick='ipcSend("/api/open_link", { which: "modio_key" })'>${t('Open the mod.io key page')}</button> <input type="password" id="modioKeyInput" class="input-field" style="max-width:240px; display:inline-block" placeholder="${escapeHtml(t('Paste your key'))}" autocomplete="off" spellcheck="false"> <button class="btn btn-heal" onclick="saveModioKey()">${t('Save &amp; test')}</button>` : `${n.source === 'nexus' ? 'Nexus Mods' : (n.source === 'modio' ? 'mod.io' : 'Thunderstore')}: ${escapeHtml(tm(n.error))}`);
     document.getElementById('tsSub').innerHTML = notes.map(n => `<span class="mp-note" style="display:inline-block">${n}</span>`).join(' ');
     if (!list.querySelector('.s-card')) {
       list.classList.remove('store-grid');
@@ -5223,6 +5228,7 @@
     const s = mpData && mpData.store;
     if (!s) return;
     if (s.source === 'nexus') { ipcSend('/api/nexus_get', { mod_id: Number(s.id) }); showToast(s.premium ? t('Getting it from Nexus Mods…') : t('The Nexus page opens: press Slow download and Gantry takes it from there.')); }
+    else if (s.source === 'modio') { ipcSend('/api/modio_install', { id: Number(s.id) }); showToast(t('Getting it from mod.io…')); }
     else { ipcSend('/api/thunder_install', { input: s.id }); showToast(t('Installing {}…', mpData.name || s.id)); }
     closeModals();
   }

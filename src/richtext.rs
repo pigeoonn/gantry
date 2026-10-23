@@ -25,6 +25,9 @@ pub const IMAGE_HOSTS: &[&str] = &[
     "i.imgur.com",
     "images.steamusercontent.com",
     "steamuserimages-a.akamaihd.net",
+    "image.modcdn.io",
+    "thumb.modcdn.io",
+    "media.modcdn.io",
 ];
 
 pub fn esc(s: &str) -> String {

@@ -53,6 +53,13 @@ pub struct Card {
     pub file_id: u64,
     pub file_name: String,
     pub download_url: String,
+    /// The author's text as plain text (empty in lists).
+    pub description: String,
+    /// What the author wrote about the current file.
+    pub changelog: String,
+    pub created_ms: u64,
+    pub images: Vec<String>,
+    pub tags: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,6 +117,19 @@ pub fn card_of(v: &Value) -> Option<Card> {
         file_id: n(&file, "id"),
         file_name: s(&file, "filename"),
         download_url: file.get("download").map(|d| s(d, "binary_url")).unwrap_or_default(),
+        description: s(v, "description_plaintext"),
+        changelog: s(&file, "changelog"),
+        created_ms: n(v, "date_added") * 1000,
+        images: v
+            .get("media")
+            .and_then(|m| m.get("images"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|i| Some(if s(i, "thumb_1280x720").is_empty() { s(i, "original") } else { s(i, "thumb_1280x720") }).filter(|u| !u.is_empty()))
+            .take(6)
+            .collect(),
+        tags: v.get("tags").and_then(Value::as_array).into_iter().flatten().filter_map(|t| Some(s(t, "name")).filter(|n| !n.is_empty())).take(8).collect(),
     })
 }
 
@@ -180,6 +200,18 @@ impl Modio {
             .collect())
     }
 
+    /// One game by its number (None when mod.io does not know it).
+    pub fn game(&self, id: u64) -> Result<Option<Game>, String> {
+        match self.get(&format!("/games/{id}")) {
+            Ok(g) => {
+                let bits = n(&g, "api_access_options");
+                Ok(Some(Game { id: n(&g, "id"), name: s(&g, "name"), open: bits & 1 != 0 && bits & 2 != 0 && bits & 12 == 0 }).filter(|g| g.id > 0))
+            }
+            Err(e) if e.contains("no such game") => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// One page of a game's mods and how many there are in all.
     pub fn mods(&self, game_id: u64, q: &Query) -> Result<(Vec<Card>, u64), String> {
         let mut path = format!("/games/{game_id}/mods?_sort={}&_limit={}&_offset={}", sort_of(&q.sort), q.limit.clamp(1, 100), q.offset);
@@ -236,6 +268,8 @@ pub mod fake {
 
     pub struct FakeModio {
         pub base: String,
+        /// Added to every file number: raising it makes every mod look updated.
+        pub bump: Arc<std::sync::atomic::AtomicU64>,
         /// Every request line the server saw (the key is replaced).
         pub requests: Arc<Mutex<Vec<String>>>,
     }
@@ -245,17 +279,19 @@ pub mod fake {
         let server = Server::http("127.0.0.1:0").unwrap();
         let base = format!("http://{}", server.server_addr().to_ip().unwrap());
         let requests: Arc<Mutex<Vec<String>>> = Arc::default();
-        let (b2, r2) = (base.clone(), requests.clone());
+        let bump = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let (b2, r2, bump2) = (base.clone(), requests.clone(), bump.clone());
         std::thread::spawn(move || {
             for req in server.incoming_requests() {
                 let url = req.url().to_string();
                 r2.lock().unwrap().push(url.replace(KEY, "KEY"));
-                let file = |id: u64| format!(r#"{{"id":{id},"filename":"mod{id}.zip","filesize":2048,"version":"1.{id}","download":{{"binary_url":"{b2}/download/{id}.zip","date_expires":4102444800}}}}"#);
+                let plus = bump2.load(std::sync::atomic::Ordering::SeqCst);
+                let file = |id: u64| format!(r#"{{"id":{id},"filename":"mod{id}.zip","filesize":2048,"version":"1.{id}","changelog":"Fixed things in {id}","download":{{"binary_url":"{b2}/download/{id}.zip","date_expires":4102444800}}}}"#);
                 let modv = |id: u64, deps: bool, adult: u8| {
                     format!(
-                        r#"{{"id":{id},"name":"Mod {id}","summary":"About {id}","profile_url":"https://mod.io/g/coolracer/m/mod-{id}","maturity_option":{adult},"dependencies":{deps},"date_updated":1700000000,"submitted_by":{{"username":"maker"}},"stats":{{"downloads_total":{}}},"logo":{{"thumb_320x180":"https://image.modcdn.io/{id}.png"}},"modfile":{file}}}"#,
+                        r#"{{"id":{id},"name":"Mod {id}","summary":"About {id}","description_plaintext":"Long text about {id}","media":{{"images":[{{"original":"https://image.modcdn.io/pic{id}.png"}}]}},"tags":[{{"name":"Cars"}}],"date_added":1690000000,"profile_url":"https://mod.io/g/coolracer/m/mod-{id}","maturity_option":{adult},"dependencies":{deps},"date_updated":1700000000,"submitted_by":{{"username":"maker"}},"stats":{{"downloads_total":{}}},"logo":{{"thumb_320x180":"https://image.modcdn.io/{id}.png"}},"modfile":{file}}}"#,
                         id * 100,
-                        file = file(id * 10)
+                        file = file(id * 10 + plus)
                     )
                 };
                 let path = url.split('?').next().unwrap_or("").to_string();
@@ -268,6 +304,8 @@ pub mod fake {
                     let (c, t) = match path.as_str() {
                         "/v1/games" => (200, r#"{"data":[{"id":7,"name":"Cool Racer","api_access_options":3},{"id":8,"name":"Cool Racer Closed","api_access_options":1}],"result_total":2}"#.to_string()),
                         "/v1/games/7/mods" => (200, format!(r#"{{"data":[{},{},{},{}],"result_total":4,"result_offset":0,"result_limit":18}}"#, modv(1, false, 0), modv(2, true, 0), modv(3, true, 0), modv(9, false, 1))),
+                        "/v1/games/7" => (200, r#"{"id":7,"name":"Cool Racer","api_access_options":3}"#.to_string()),
+                        "/v1/games/8" => (200, r#"{"id":8,"name":"Cool Racer Closed","api_access_options":1}"#.to_string()),
                         "/v1/games/7/mods/1" => (200, modv(1, false, 0)),
                         "/v1/games/7/mods/2" => (200, modv(2, true, 0)),
                         "/v1/games/7/mods/3" => (200, modv(3, true, 0)),
@@ -281,7 +319,7 @@ pub mod fake {
                 let _ = req.respond(Response::from_data(body).with_status_code(code).with_header("Content-Type: application/json".parse::<tiny_http::Header>().unwrap()));
             }
         });
-        FakeModio { base, requests }
+        FakeModio { base, bump, requests }
     }
 }
 

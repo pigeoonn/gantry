@@ -217,6 +217,7 @@ pub struct AppState {
     /// The home page's "trending for your games" shelf and when it was made (it is kept for a few minutes).
     pub home_trending: Option<(Instant, Value)>,
     pub github_updates: Vec<GithubUpdate>,
+    pub modio_updates: Vec<ModioUpdate>,
     /// `LastPlayed` per Steam appid (seconds), read from Steam's own config.
     pub steam_played: std::collections::HashMap<String, u64>,
     pub thunder: ThunderState,
@@ -643,6 +644,7 @@ impl AppState {
             steam_lib: SteamLibState::default(),
             home_trending: None,
             github_updates: Vec::new(),
+            modio_updates: Vec::new(),
             steam_played: Default::default(),
             thunder: ThunderState::default(),
         }
@@ -787,7 +789,7 @@ impl AppState {
             "steam_lib": self.steam_lib_json(),
             "last_played": self.last_played_json(),
             "modio": json!({ "configured": self.modio.key.is_some() }),
-            "thunder_updates": self.thunder.updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null)).chain(self.github_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).collect::<Vec<_>>(),
+            "thunder_updates": self.thunder.updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null)).chain(self.github_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).chain(self.modio_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).collect::<Vec<_>>(),
         })
     }
 
@@ -917,6 +919,7 @@ fn refresh_mods_shared(state: &SharedState) {
 fn prune_updates(state: &SharedState) {
     prune_thunder_updates(state);
     prune_github_updates(state);
+    prune_modio_updates(state);
     let (rows, games) = {
         let st = read_state(state);
         if st.nexus.updates.is_empty() {
@@ -1845,7 +1848,11 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
     }
     if want_modio {
         match modio_game_for(state, g).and_then(|id| modio_client(state).map(|c| (id, c))) {
-            Err(e) => notes.push(json!({ "source": "modio", "error": e, "need_key": read_state(state).modio.key.is_none() })),
+            Err(e) => {
+                let has_key = read_state(state).modio.key.is_some();
+                let choose = if has_key && e.contains("has no game called") { modio_candidates(state, g) } else { Vec::new() };
+                notes.push(json!({ "source": "modio", "error": e, "need_key": !has_key, "choose": choose }));
+            }
             Ok((game_id, client)) => match client.mods(game_id, &modio::Query { text: ask.query.clone(), sort: ask.sort.clone(), offset: ask.off_nexus, limit: ask.per }) {
                 Err(e) => notes.push(json!({ "source": "modio", "error": e })),
                 Ok((list, total)) => {
@@ -1855,7 +1862,7 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
                         cards.push(json!({
                             "source": "modio", "id": c.id.to_string(), "name": c.name, "summary": c.summary, "author": c.author, "version": c.version,
                             "downloads": c.downloads, "endorsements": 0, "updated_ms": c.updated_ms, "size_kb": c.size_kb,
-                            "picture": c.picture, "category": "", "installed": have_modio.contains(&c.id), "page_url": c.page_url, "has_deps": c.has_deps,
+                            "picture": richtext::image_url(&c.picture).unwrap_or_default(), "category": "", "installed": have_modio.contains(&c.id), "page_url": c.page_url, "has_deps": c.has_deps,
                         }));
                     }
                 }
@@ -4556,6 +4563,16 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             clear_modio_key(state);
             log(state, "WARN", "mod.io API key removed from this computer.");
         }
+        "/api/modio_game_set" => {
+            let id: u64 = body.get("id").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(0);
+            if let Some(g) = selected_game(state).filter(|g| g.is_installed && id > 0) {
+                let state_bg = Arc::clone(state);
+                thread::spawn(move || match modio_game_set(&state_bg, &g, id) {
+                    Ok(m) => log(&state_bg, "OK", m),
+                    Err(e) => log(&state_bg, "ERR", e),
+                });
+            }
+        }
         "/api/modio_install" => {
             let id: u64 = body.get("id").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(0);
             if let Some(g) = selected_game(state).filter(|g| g.is_installed && id > 0) {
@@ -4621,9 +4638,11 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                     (None, Some(g)) => {
                         // looked up first: a lock taken inside the `match` line would be held while the update runs
                         let found = read_state(&state_bg).github_updates.iter().find(|u| u.appid == appid && u.lib_id == id).cloned();
-                        match found {
-                            Some(u) => github_update_apply(&state_bg, &g, &u),
-                            None => log(&state_bg, "WARN", "That update is no longer listed. Check for updates again."),
+                        let from_modio = read_state(&state_bg).modio_updates.iter().find(|u| u.appid == appid && u.lib_id == id).cloned();
+                        match (found, from_modio) {
+                            (Some(u), _) => github_update_apply(&state_bg, &g, &u),
+                            (None, Some(u)) => modio_update_apply(&state_bg, &g, &u),
+                            (None, None) => log(&state_bg, "WARN", "That update is no longer listed. Check for updates again."),
                         }
                     }
                     _ => log(&state_bg, "WARN", "That update is no longer listed. Check for updates again."),
@@ -6634,22 +6653,59 @@ fn modio_game_for(state: &SharedState, g: &GameEntry) -> Result<u64, String> {
     Ok(hit.id)
 }
 
+/// Games on mod.io that look like `g` (the first words of its name), for the person to pick from when the name does not match.
+fn modio_candidates(state: &SharedState, g: &GameEntry) -> Vec<Value> {
+    let Ok(client) = modio_client(state) else { return Vec::new() };
+    let words: Vec<&str> = g.name.split_whitespace().collect();
+    let mut out: Vec<Value> = Vec::new();
+    for q in [g.name.clone(), words.iter().take(2).cloned().collect::<Vec<_>>().join(" ")] {
+        if q.trim().len() < 3 {
+            continue;
+        }
+        for x in client.find_games(&q).unwrap_or_default().into_iter().filter(|x| x.open) {
+            if !out.iter().any(|o| o["id"] == x.id) && out.len() < 8 {
+                out.push(json!({ "id": x.id, "name": x.name }));
+            }
+        }
+    }
+    out
+}
+
+/// The person chose which mod.io game is this one.
+fn modio_game_set(state: &SharedState, g: &GameEntry, id: u64) -> Result<String, String> {
+    let client = modio_client(state)?;
+    let game = client.game(id)?.ok_or("mod.io has no such game or mod.")?;
+    if !game.open {
+        return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so Gantry cannot download them.", game.name));
+    }
+    let file = read_state(state).cache_root().join("modio_games.json");
+    let mut known: std::collections::HashMap<String, u64> = fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    known.insert(g.appid.clone(), game.id);
+    fsutil::atomic_write(&file, serde_json::to_string(&known).unwrap_or_default()).map_err(|e| e.to_string())?;
+    Ok(format!("{} will use the mod.io game {}.", g.name, game.name))
+}
+
 /// One mod.io mod (and the mods it needs, deepest first) into `g`'s library; what is already there is skipped.
 fn modio_install(state: &SharedState, g: &GameEntry, mod_id: u64) -> Result<String, String> {
+    modio_install_with(state, g, mod_id, None)
+}
+
+/// `replaces` makes the mod an update of that library mod (the mods it needs that are missing are added first).
+fn modio_install_with(state: &SharedState, g: &GameEntry, mod_id: u64, replaces: Option<String>) -> Result<String, String> {
     let game_id = modio_game_for(state, g)?;
     let client = modio_client(state)?;
     let lib = library_of(g).ok_or_else(|| format!("{} is not installed.", g.name))?;
     let have: HashSet<u64> = lib.mods().iter().filter_map(|m| m.modio.as_ref().map(|r| r.mod_id)).collect();
-    let mut plan: Vec<u64> = client.dependencies(game_id, mod_id).unwrap_or_default().into_iter().map(|d| d.mod_id).filter(|id| !have.contains(id)).collect();
-    if !have.contains(&mod_id) {
-        plan.push(mod_id);
+    let mut plan: Vec<(u64, Option<String>)> = client.dependencies(game_id, mod_id).unwrap_or_default().into_iter().map(|d| d.mod_id).filter(|id| !have.contains(id)).map(|id| (id, None)).collect();
+    if replaces.is_some() || !have.contains(&mod_id) {
+        plan.push((mod_id, replaces));
     }
     if plan.is_empty() {
         return Ok("That mod is already in the library.".to_string());
     }
     let drops = read_state(state).cache_root().join("drops");
     let mut done = 0;
-    for id in plan {
+    for (id, replaces) in plan {
         let card = client.one(game_id, id)?;
         if card.download_url.is_empty() {
             return Err(format!("{} has no file to download.", card.name));
@@ -6669,6 +6725,7 @@ fn modio_install(state: &SharedState, g: &GameEntry, mod_id: u64) -> Result<Stri
             version: card.version.clone(),
             name: Some(card.name.clone()),
             modio: Some(modio::ModioRef { game_id, mod_id: id, file_id: card.file_id }),
+            replaces,
             ..Default::default()
         };
         install_routed(dest, true, Arc::clone(state), opts);
@@ -6676,6 +6733,97 @@ fn modio_install(state: &SharedState, g: &GameEntry, mod_id: u64) -> Result<Stri
     }
     refresh_mods_shared(state);
     Ok(if done == 1 { "mod.io: 1 mod installed.".to_string() } else { format!("mod.io: {} mods installed (with what they need).", done) })
+}
+
+/// A mod from mod.io with a newer file.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ModioUpdate {
+    pub appid: String,
+    pub game: String,
+    pub lib_id: String,
+    pub name: String,
+    pub installed_version: String,
+    pub new_version: String,
+    pub kind: &'static str,
+    #[serde(skip)]
+    pub mod_id: u64,
+    #[serde(skip)]
+    pub old_file: u64,
+}
+
+/// Ask mod.io about every library mod that came from there; the answer replaces the list of known updates.
+fn check_modio_updates(state: &SharedState) -> usize {
+    let Ok(client) = modio_client(state) else {
+        write_state(state).modio_updates.clear();
+        return 0;
+    };
+    let games: Vec<GameEntry> = read_state(state).games.iter().filter(|g| g.is_installed).cloned().collect();
+    let mut rows: Vec<ModioUpdate> = Vec::new();
+    let mut seen: std::collections::HashMap<(u64, u64), Result<modio::Card, String>> = Default::default();
+    'games: for g in &games {
+        let Some(lib) = library_of(g) else { continue };
+        for m in lib.mods() {
+            let Some(r) = m.modio.clone().filter(|r| r.valid() && m.update_rule != "never") else { continue };
+            match seen.entry((r.game_id, r.mod_id)).or_insert_with(|| client.one(r.game_id, r.mod_id)) {
+                Ok(card) if card.file_id > r.file_id => rows.push(ModioUpdate {
+                    appid: g.appid.clone(),
+                    game: g.name.clone(),
+                    lib_id: m.id.clone(),
+                    name: m.name.clone(),
+                    installed_version: m.version.clone(),
+                    new_version: if card.version.is_empty() { format!("#{}", card.file_id) } else { card.version.clone() },
+                    kind: "modio",
+                    mod_id: r.mod_id,
+                    old_file: r.file_id,
+                }),
+                Ok(_) => {}
+                // the key was refused or the limit reached: asking on would only repeat it
+                Err(e) if e.contains("rejected") || e.contains("rate limit") => {
+                    let e = e.clone();
+                    log(state, "WARN", e);
+                    break 'games;
+                }
+                Err(_) => {}
+            }
+        }
+    }
+    let n = rows.len();
+    let mut st = write_state(state);
+    st.modio_updates = rows;
+    st.notifier.bump();
+    if n > 0 {
+        st.log("INFO", if n == 1 { "1 mod.io update is available.".to_string() } else { format!("{} mod.io updates are available.", n) });
+    }
+    n
+}
+
+/// Install the newer file of one mod from mod.io.
+fn modio_update_apply(state: &SharedState, g: &GameEntry, row: &ModioUpdate) {
+    match modio_install_with(state, g, row.mod_id, Some(row.lib_id.clone())) {
+        Ok(m) => log(state, "OK", m),
+        Err(e) => log(state, "ERR", e),
+    }
+}
+
+/// Forget mod.io updates whose mod was updated or removed since.
+fn prune_modio_updates(state: &SharedState) {
+    let (rows, games) = {
+        let st = read_state(state);
+        if st.modio_updates.is_empty() {
+            return;
+        }
+        (st.modio_updates.clone(), st.games.clone())
+    };
+    let keep: Vec<ModioUpdate> = rows
+        .iter()
+        .filter(|r| games.iter().find(|g| g.appid == r.appid).and_then(library_of).map(|l| l.mods().iter().any(|m| m.id == r.lib_id && m.modio.as_ref().map(|x| x.file_id == r.old_file).unwrap_or(false))).unwrap_or(false))
+        .cloned()
+        .collect();
+    if keep.len() != rows.len() {
+        let mut st = write_state(state);
+        st.modio_updates = keep;
+        st.notifier.bump();
+    }
 }
 
 fn vt_key_file(st: &AppState) -> PathBuf {
@@ -6803,7 +6951,15 @@ fn mod_page_json(state: &SharedState, mod_id: &str) -> Result<Value, String> {
             Ok(modinfo::thunder_page(&pkg, &client.document(&t.namespace, &t.name, &version, "readme"), &client.document(&t.namespace, &t.name, &version, "changelog")))
         }))
     } else {
-        None
+        m.modio.clone().filter(|r| r.valid()).map(|r| {
+            modio_client(state).and_then(|client| {
+                modinfo::cached(&format!("mio:{}:{}", r.game_id, r.mod_id), || {
+                    let card = client.one(r.game_id, r.mod_id)?;
+                    let deps = client.dependencies(r.game_id, r.mod_id).unwrap_or_default();
+                    Ok(modinfo::modio_page(&card, &deps))
+                })
+            })
+        })
     };
     let (mut page, stale, online_error) = match online {
         Some(Ok((p, stale))) => (p, stale, String::new()),
@@ -6816,6 +6972,7 @@ fn mod_page_json(state: &SharedState, mod_id: &str) -> Result<Value, String> {
         let st = read_state(state);
         st.nexus.updates.iter().find(|u| u.lib_id == m.id && u.appid == g.appid).map(|u| json!({ "version": u.new_version, "file": u.new_file_name, "changes": u.changes, "page_url": u.page_url }))
             .or_else(|| st.thunder.updates.iter().find(|u| u.lib_id == m.id && u.appid == g.appid).map(|u| json!({ "version": u.new_version, "file": "", "changes": "", "page_url": "" })))
+            .or_else(|| st.modio_updates.iter().find(|u| u.lib_id == m.id && u.appid == g.appid).map(|u| json!({ "version": u.new_version, "file": "", "changes": "", "page_url": "" })))
     };
     let notes: Vec<Value> = lib.notes(&m.id).into_iter().map(|(name, text)| json!({ "name": name, "html": richtext::text_html(&text.chars().take(40_000).collect::<String>()) })).collect();
     let mut v = serde_json::to_value(&page).map_err(|e| e.to_string())?;
@@ -6871,11 +7028,28 @@ fn store_page_json(state: &SharedState, source: &str, id: &str) -> Result<Value,
                 Ok(modinfo::thunder_page(&pkg, &client.document(&r.namespace, &r.name, &version, "readme"), &client.document(&r.namespace, &r.name, &version, "changelog")))
             })?
         }
+        "modio" => {
+            let mod_id: u64 = id.parse().map_err(|_| "That is not a mod.io mod.".to_string())?;
+            let game_id = modio_game_for(state, &g)?;
+            let client = modio_client(state)?;
+            modinfo::cached(&format!("mio:{game_id}:{mod_id}"), || {
+                let card = client.one(game_id, mod_id)?;
+                let deps = client.dependencies(game_id, mod_id).unwrap_or_default();
+                Ok(modinfo::modio_page(&card, &deps))
+            })?
+        }
         _ => return Err("Unknown mod site.".into()),
     };
     page.mark_installed(&nexus_ids, &thunder_keys);
+    let modio_ids: HashSet<u64> = mods.iter().filter_map(|x| x.modio.as_ref().map(|r| r.mod_id)).collect();
+    for r in page.requirements.iter_mut() {
+        if let Some(n) = r.key.strip_prefix("modio:").and_then(|n| n.parse::<u64>().ok()) {
+            r.installed = modio_ids.contains(&n);
+        }
+    }
     let already = match source {
         "nexus" => id.parse::<u64>().map(|n| nexus_ids.contains(&n)).unwrap_or(false),
+        "modio" => id.parse::<u64>().map(|n| modio_ids.contains(&n)).unwrap_or(false),
         _ => thunder_keys.contains(&id.to_lowercase()),
     };
     let mut v = serde_json::to_value(&page).map_err(|e| e.to_string())?;
@@ -7358,6 +7532,15 @@ fn auto_update(state: &SharedState) -> usize {
             Err(e) => log(state, "ERR", e),
         }
     }
+    let modio_rows = read_state(state).modio_updates.clone();
+    for u in &modio_rows {
+        if rule_of(&u.appid, &u.lib_id) != "auto" {
+            continue;
+        }
+        let Some(g) = game_by_appid(state, &u.appid) else { continue };
+        modio_update_apply(state, &g, u);
+        done += 1;
+    }
     for u in &nexus_rows {
         // free accounts cannot download without the website, so those stay as updates to click
         if !premium || rule_of(&u.appid, &u.lib_id) != "auto" {
@@ -7602,7 +7785,7 @@ fn spawn_update_checker(state: Weak<RwLock<AppState>>) {
             // one quiet desktop message when there is more to update than the last time we said
             let (n, lang, summary) = {
                 let s = read_state(&st);
-                (s.nexus.updates.len() + s.thunder.updates.len() + s.github_updates.len(), s.config.language.clone(), update_summary(&s.nexus.updates, &s.thunder.updates))
+                (s.nexus.updates.len() + s.thunder.updates.len() + s.github_updates.len() + s.modio_updates.len(), s.config.language.clone(), update_summary(&s.nexus.updates, &s.thunder.updates))
             };
             if n > told {
                 add_note(&st, "updates", if n == 1 { "1 mod update available on Nexus Mods.".to_string() } else { format!("{} mod updates available on Nexus Mods.", n) }, "");
@@ -7687,7 +7870,8 @@ fn update_all(state: &SharedState) {
         (st.thunder.updates.clone(), st.nexus.updates.clone(), st.nexus.user.as_ref().map(|u| u.premium).unwrap_or(false))
     };
     let github_rows = read_state(state).github_updates.clone();
-    if thunder.is_empty() && nexus_rows.is_empty() && github_rows.is_empty() {
+    let modio_rows = read_state(state).modio_updates.clone();
+    if thunder.is_empty() && nexus_rows.is_empty() && github_rows.is_empty() && modio_rows.is_empty() {
         return log(state, "OK", "All mods are up to date.");
     }
     let game_of = |appid: &str| read_state(state).games.iter().find(|g| g.appid == appid).cloned();
@@ -7705,6 +7889,11 @@ fn update_all(state: &SharedState) {
     for u in github_rows.iter().filter(|u| !u.url.is_empty()) {
         let Some(g) = game_of(&u.appid) else { continue };
         github_update_apply(state, &g, u);
+        done += 1;
+    }
+    for u in &modio_rows {
+        let Some(g) = game_of(&u.appid) else { continue };
+        modio_update_apply(state, &g, u);
         done += 1;
     }
     let mut waiting = 0;
@@ -7814,7 +8003,8 @@ fn check_thunder_updates(state: &SharedState) -> Result<usize, String> {
     }
     drop(st);
     let github_n = check_github_updates(state);
-    Ok(n + github_n)
+    let modio_n = check_modio_updates(state);
+    Ok(n + github_n + modio_n)
 }
 
 /// Hand an `nxm://` link to the Gantry that is already running (it owns the window and the key).
@@ -11671,6 +11861,74 @@ mod tests {
         assert!(f.requests.lock().unwrap().iter().filter(|u| u.contains("/download/")).all(|u| !u.contains("KEY")));
         api(&h, "/api/modio_key_clear", json!({}));
         assert!(!keyfile.exists());
+    }
+
+    #[test]
+    fn mod_io_mods_are_updated_have_pages_and_games_can_be_chosen() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("modio2");
+        add_plain_game(&h);
+        let zip = zip_of(&h, "mio2", &[("Data/from_modio.esp", "M")]);
+        let f = modio::fake::start(zip);
+        {
+            let mut st = h.state.write().unwrap();
+            st.modio.base = f.base.clone();
+            st.modio.allow_http = true;
+            st.modio.key = Some(modio::fake::KEY.to_string());
+            let i = st.selected_idx;
+            st.games[i].name = "Cool Racers".into(); // not the name mod.io knows
+        }
+        let get = |path: &str| -> Value {
+            let (code, body) = http(&h, "GET", path, &[("X-Rig-Token", &h.token)], b"");
+            assert_eq!(code, 200, "{body}");
+            serde_json::from_str(&body).unwrap()
+        };
+        // the name does not match: the person is offered the games that look like it, and the open one is chosen
+        let none = get("/api/store?source=modio&sort=popular");
+        let choose = none["notes"][0]["choose"].clone();
+        assert_eq!(choose.as_array().map(|c| c.len()), Some(1), "only a game others may use is offered: {none}");
+        assert_eq!(choose[0]["name"], "Cool Racer");
+        api(&h, "/api/modio_game_set", json!({ "id": 8 }));
+        wait_until("a closed game is refused", || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("only allow their mod.io mods")));
+        api(&h, "/api/modio_game_set", json!({ "id": 7 }));
+        wait_until("chosen", || get("/api/store?source=modio&sort=popular")["cards"].as_array().map(|c| c.len()) == Some(3));
+        // a mod page inside the app: text, what changed, what it needs
+        let page = get("/api/store_page?source=modio&id=2");
+        assert_eq!((page["name"].as_str(), page["source"].as_str(), page["store"]["already"].as_bool()), (Some("Mod 2"), Some("modio"), Some(false)), "{page}");
+        assert!(page["description_html"].as_str().unwrap().contains("Long text about 2"));
+        assert!(page["changes"][0]["html"].as_str().unwrap().contains("Fixed things"));
+        assert_eq!((page["requirements"][0]["name"].as_str(), page["requirements"][0]["installed"].as_bool()), (Some("Mod 1"), Some(false)));
+        // install, then the page of the library mod knows where it came from
+        api(&h, "/api/modio_install", json!({ "id": 1 }));
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        wait_until("installed", || lib.mods().len() == 1);
+        let id = lib.mods()[0].id.clone();
+        let own = get(&format!("/api/mod_page?id={id}"));
+        assert_eq!((own["source"].as_str(), own["installed"]["name"].as_str()), (Some("modio"), Some("Mod 1")), "{own}");
+        // no newer file yet; then the maker uploads one
+        assert_eq!(check_modio_updates(&h.state), 0);
+        f.bump.store(5, Ordering::SeqCst);
+        assert_eq!(check_modio_updates(&h.state), 1);
+        let u = api(&h, "/api/state", json!({}))["thunder_updates"][0].clone();
+        assert_eq!((u["name"].as_str(), u["kind"].as_str(), u["new_version"].as_str()), (Some("Mod 1"), Some("modio"), Some("1.15")), "{u}");
+        assert_eq!(get(&format!("/api/mod_page?id={id}"))["update"]["version"], "1.15");
+        api(&h, "/api/thunder_update", json!({ "appid": g.appid, "id": id }));
+        wait_until("replaced by the new file", || lib.mods().first().and_then(|m| m.modio.as_ref()).map(|r| r.file_id) == Some(15));
+        assert_eq!(lib.mods().len(), 1, "an update replaces, it does not add");
+        assert_eq!(lib.mods()[0].version, "1.15");
+        wait_until("the list clears", || {
+            prune_modio_updates(&h.state);
+            h.state.read().unwrap().modio_updates.is_empty()
+        });
+        // a mod set to keep its version is not offered anything
+        let current = lib.mods()[0].id.clone();
+        lib.set_update_rule(&current, "never").unwrap();
+        f.bump.store(9, Ordering::SeqCst);
+        assert_eq!(check_modio_updates(&h.state), 0);
     }
 
     #[test]
