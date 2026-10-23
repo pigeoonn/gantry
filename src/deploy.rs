@@ -398,20 +398,21 @@ fn slug(name: &str) -> String {
 
 /// `Cool Mod-123-1-2-1700000000.zip` (Nexus naming) → (`Cool Mod`, `1.2`).
 pub fn friendly_name(file_name: &str) -> (String, String) {
+    if let Some(n) = crate::nexus::parse_download_name(file_name) {
+        return (if n.name.is_empty() { "Mod".into() } else { n.name }, n.version);
+    }
     let stem = Path::new(file_name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let stem = stem.trim_end_matches(".tar").to_string();
-    let re = regex::Regex::new(r"^(.*?)-(\d+)((?:-\d+)+)$").expect("static regex");
-    let (name, version) = match re.captures(&stem) {
-        Some(c) => {
-            let segs: Vec<&str> = c[3].split('-').filter(|s| !s.is_empty()).collect();
-            let v = if segs.len() >= 2 { segs[..segs.len() - 1].join(".") } else { String::new() };
-            (c[1].to_string(), v)
-        }
-        None => (stem.clone(), String::new()),
-    };
-    let name = if name.contains(' ') { name } else { name.replace('_', " ") };
+    let name = if stem.contains(' ') { stem } else { stem.replace('_', " ") };
     let name = name.trim().to_string();
-    (if name.is_empty() { "Mod".into() } else { name }, version)
+    (if name.is_empty() { "Mod".into() } else { name }, String::new())
+}
+
+/// `mods/<name>` for a REDmod, the name coming from its `info.json`.
+fn redmod_folder(info_json: &[u8]) -> String {
+    let named = serde_json::from_slice::<Value>(info_json).ok().and_then(|v| v.get("name")?.as_str().map(str::to_string)).unwrap_or_default();
+    let name: String = named.chars().filter(|c| c.is_alphanumeric() || " -_.".contains(*c)).collect::<String>().trim().trim_matches('.').to_string();
+    format!("mods/{}", if name.is_empty() { "REDmod" } else { name.as_str() })
 }
 
 fn is_junk(rel: &Path) -> bool {
@@ -711,6 +712,23 @@ impl Library {
     }
 
     /// How many leading folders of the archive to drop and which game folder to lay it onto.
+    /// A REDmod is an `info.json` next to `archives/`, `tweaks/`, `scripts/` or similar. The game only looks for it in
+    /// `mods/<its name>/`, so a mod zipped without that folder is given it. Only for games that have Cyberpunk's folders.
+    fn redmod_target(&self, stage: &Path, files: &[PathBuf], cleaned: &[Option<String>]) -> Option<String> {
+        if !(self.exists_ci(Path::new(""), "r6") || self.exists_ci(Path::new(""), "REDprelauncher.exe")) {
+            return None;
+        }
+        let info = cleaned.iter().position(|c| c.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("info.json")))?;
+        let has_content = cleaned.iter().flatten().any(|c| {
+            let top = c.split('/').next().unwrap_or("").to_lowercase();
+            c.contains('/') && ["archives", "tweaks", "scripts", "customsounds", "localization"].contains(&top.as_str())
+        });
+        if !has_content {
+            return None;
+        }
+        Some(redmod_folder(&fs::read(stage.join(&files[info])).unwrap_or_default()))
+    }
+
     fn detect_layout(&self, files: &[PathBuf]) -> (usize, String) {
         // BepInEx (a Unity mod loader) installed or about to be: its folder names are never wrappers
         let has_bepinex = self.exists_ci(Path::new(""), "BepInEx") || self.load().mods.iter().any(|m| m.files.iter().any(|f| f.starts_with("BepInEx/")));
@@ -1260,6 +1278,12 @@ impl Library {
         if let Some(t) = forced_target {
             return Ok(Analysis { files, cleaned, note_idx, content_idx, smart: None, target: clean_rel(t.trim()).ok_or("The folder may not contain '..'.")?, placed_by: "manual" });
         }
+        // a REDmod (Cyberpunk 2077's own mod format) belongs in the game's mods folder, in a folder of its own
+        if target.is_empty() {
+            if let Some(t) = self.redmod_target(stage, &files, &cleaned) {
+                target = t;
+            }
+        }
         // no folder structure that fits the game: look for the game's own files of the same names
         let smart = if target.is_empty() && !content_rels.is_empty() { self.smart_plan(&content_rels) } else { None };
         // ...or follow what the mod's own instructions say, when that folder exists in the game
@@ -1442,6 +1466,86 @@ impl Library {
         let mut lf = self.load();
         let m = lf.mods.iter_mut().find(|m| m.id == id).ok_or("Unknown mod.")?;
         m.thunderstore = Some(r);
+        self.save(&lf)
+    }
+
+    /// REDmods added before Gantry knew about them sit in the game's root; give them their `mods/<name>` folder (the
+    /// change can be undone and takes effect at the next deploy). Returns the names of the mods that were changed.
+    pub fn fix_redmod_targets(&self) -> Vec<String> {
+        if !(self.exists_ci(Path::new(""), "r6") || self.exists_ci(Path::new(""), "REDprelauncher.exe")) {
+            return Vec::new();
+        }
+        let _g = lock();
+        let mut lf = self.load();
+        let mut fixed: Vec<(String, String)> = Vec::new();
+        for m in lf.mods.iter().filter(|m| m.target.is_empty()) {
+            let has_info = m.files.iter().any(|f| f.eq_ignore_ascii_case("info.json"));
+            let has_content = m.files.iter().any(|f| {
+                let top = f.split('/').next().unwrap_or("").to_lowercase();
+                f.contains('/') && ["archives", "tweaks", "scripts", "customsounds", "localization"].contains(&top.as_str())
+            });
+            if has_info && has_content {
+                let info = m.files.iter().find(|f| f.eq_ignore_ascii_case("info.json")).cloned().unwrap_or_default();
+                let folder = redmod_folder(&fs::read(self.mod_files_dir(&m.id).join(info)).unwrap_or_default());
+                fixed.push((m.id.clone(), folder));
+            }
+        }
+        if fixed.is_empty() {
+            return Vec::new();
+        }
+        let names: Vec<String> = fixed.iter().filter_map(|(id, _)| lf.mods.iter().find(|m| &m.id == id).map(|m| m.name.clone())).collect();
+        lf.snapshot(format!("Moved {} into its REDmod folder", names.join(", ")));
+        for (id, folder) in &fixed {
+            if let Some(m) = lf.mods.iter_mut().find(|m| &m.id == id) {
+                m.target = folder.clone();
+            }
+        }
+        lf.dirty = true;
+        if self.save(&lf).is_err() {
+            return Vec::new();
+        }
+        names
+    }
+
+    /// A mod that was added from a Nexus-named file keeps the file's whole name when the name was never changed: give it
+    /// the real one (and its version). Returns how many were fixed; nothing is written when none were.
+    pub fn tidy_names(&self) -> usize {
+        let _g = lock();
+        let mut lf = self.load();
+        let mut n = 0;
+        for m in lf.mods.iter_mut() {
+            let own = Path::new(&m.source).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+            if m.name.is_empty() || m.name != own {
+                continue;
+            }
+            if let Some(d) = crate::nexus::parse_download_name(&m.source).filter(|d| !d.name.is_empty() && d.name != m.name) {
+                m.name = d.name;
+                if m.version.is_empty() {
+                    m.version = d.version;
+                }
+                n += 1;
+            }
+        }
+        if n > 0 && self.save(&lf).is_err() {
+            return 0;
+        }
+        n
+    }
+
+    /// Remember which Nexus Mods file a mod came from (found from its file name); a name that is still the file's own
+    /// is replaced by the clean one, and a missing version is filled in.
+    pub fn set_nexus(&self, id: &str, r: crate::nexus::NexusRef, clean_name: &str, version: &str) -> Result<(), String> {
+        let _g = lock();
+        let mut lf = self.load();
+        let m = lf.mods.iter_mut().find(|m| m.id == id).ok_or("Unknown mod.")?;
+        let own = Path::new(&m.source).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        if !clean_name.is_empty() && (m.name == own || m.name == m.source) {
+            m.name = clean_name.to_string();
+        }
+        if m.version.is_empty() {
+            m.version = version.to_string();
+        }
+        m.nexus = Some(r);
         self.save(&lf)
     }
 
@@ -2589,6 +2693,72 @@ mod tests {
         write(&game.join("Racer.exe"), "MZ");
         let lib = Library::locate(&game, &d.join("data"), "1");
         (d, game, lib)
+    }
+
+    #[test]
+    fn a_redmod_that_was_placed_in_the_root_before_is_moved_into_its_folder_at_the_next_deploy() {
+        let d = TempDir::new("redmod-fix");
+        let game = d.join("lib/common/Cyberpunk 2077");
+        write(&game.join("bin/x64/Cyberpunk2077.exe"), "MZ");
+        let lib = Library::locate(&game, &d.join("data"), "1091500");
+        // an older Gantry did not know the game: the mod landed in the root
+        let s = stage(&d, "npc", &[("info.json", "{\"name\": \"NPCs Gone Wild\"}"), ("archives/a.archive", "X")]);
+        lib.add_with(&s, "NPCs Gone Wild", "n.zip", None, "").unwrap();
+        lib.deploy(false).unwrap();
+        assert!(game.join("archives/a.archive").is_file());
+        assert!(lib.fix_redmod_targets().is_empty(), "a game without Cyberpunk's folders is left alone");
+        write(&game.join("r6/config/settings.json"), "{}");
+        assert_eq!(lib.fix_redmod_targets(), vec!["NPCs Gone Wild".to_string()]);
+        assert_eq!(lib.mods()[0].target, "mods/NPCs Gone Wild");
+        assert!(lib.fix_redmod_targets().is_empty(), "once is enough");
+        lib.deploy(false).unwrap();
+        assert!(game.join("mods/NPCs Gone Wild/archives/a.archive").is_file());
+        assert!(!game.join("archives").exists() && !game.join("info.json").exists(), "the root is clean again");
+        lib.undo().unwrap();
+        assert_eq!(lib.mods()[0].target, "", "and it can be undone");
+    }
+
+    #[test]
+    fn mods_named_after_their_whole_download_get_their_real_name_once() {
+        let (d, _game, lib) = racing_setup("tidy");
+        let s = stage(&d, "t", &[("VEHICLES/VEH_3_HI.BNDL", "A")]);
+        let raw = "Fast Cars 790 2.14 2026-10-21T20-49Z psSjsvvdX";
+        let m = lib.add_with(&s, raw, "Fast Cars 790 2.14 2026-10-21T20-49Z psSjsvvdX.zip", None, "").unwrap();
+        let s2 = stage(&d, "t2", &[("VEHICLES/VEH_3_LO.BNDL", "B")]);
+        let kept = lib.add_with(&s2, "My own name", "Slow Cars 5 1.0 2026-10-21T20-49Z abc.zip", None, "").unwrap();
+        assert_eq!(lib.tidy_names(), 1);
+        let after = lib.mods();
+        let a = after.iter().find(|x| x.id == m.id).unwrap();
+        assert_eq!((a.name.as_str(), a.version.as_str()), ("Fast Cars", "2.14"));
+        assert_eq!(after.iter().find(|x| x.id == kept.id).unwrap().name, "My own name", "a name the user chose stays");
+        assert_eq!(lib.tidy_names(), 0, "done once");
+    }
+
+    #[test]
+    fn a_redmod_goes_into_its_own_folder_under_the_games_mods_folder() {
+        let d = TempDir::new("redmod");
+        let game = d.join("lib/common/Cyberpunk 2077");
+        write(&game.join("r6/config/settings.json"), "{}");
+        write(&game.join("archive/pc/content/base.archive"), "A");
+        write(&game.join("bin/x64/Cyberpunk2077.exe"), "MZ");
+        let lib = Library::locate(&game, &d.join("data"), "1091500");
+        // as the author zipped it: the manifest and the archives folder, no mods/<name> around them
+        let s = stage(&d, "npc", &[("info.json", "{\"name\": \"NPCs Gone Wild\", \"version\": \"4.3.2\"}"), ("archives/00NPC_GW.archive", "X")]);
+        let m = lib.add_with(&s, "NPCs Gone Wild", "NPCs Gone Wild-1436-4-3-2-1671831997.zip", None, "4.3.2").unwrap();
+        assert_eq!(m.target, "mods/NPCs Gone Wild");
+        lib.deploy(false).unwrap();
+        assert!(game.join("mods/NPCs Gone Wild/archives/00NPC_GW.archive").is_file() && game.join("mods/NPCs Gone Wild/info.json").is_file());
+        assert!(!game.join("info.json").exists() && !game.join("archives").exists(), "nothing lands in the game's root");
+        // a wrapper folder is still removed, and a plain mod with an info.json and no REDmod folders is left alone
+        let wrapped = stage(&d, "w", &[("Cool Cars/info.json", "{\"name\": \"Cool Cars\"}"), ("Cool Cars/tweaks/cars.yaml", "t")]);
+        assert_eq!(lib.preview(&wrapped).unwrap().target, "mods/Cool Cars");
+        let plain = stage(&d, "p", &[("info.json", "{}"), ("readme.txt", "r")]);
+        assert_eq!(lib.preview(&plain).unwrap().target, "");
+        // a game without Cyberpunk's folders never gets this treatment
+        let other = d.join("lib/common/Other");
+        write(&other.join("Other.exe"), "MZ");
+        let olib = Library::locate(&other, &d.join("data"), "2");
+        assert_eq!(olib.preview(&stage(&d, "o", &[("info.json", "{\"name\": \"x\"}"), ("archives/a.archive", "x")])).unwrap().target, "");
     }
 
     #[test]

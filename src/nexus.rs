@@ -32,6 +32,64 @@ pub struct NexusRef {
     pub file_id: u64,
 }
 
+/// When a downloaded file was uploaded to Nexus Mods, as its name tells it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Uploaded {
+    /// Old names end in the upload time in seconds.
+    Second(u64),
+    /// New names carry it to the minute, as `2026-10-20T10-52Z`.
+    Minute(u64),
+}
+
+/// What the name of a file downloaded from Nexus Mods says about it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DownloadName {
+    pub name: String,
+    pub mod_id: u64,
+    pub version: String,
+    pub uploaded: Option<Uploaded>,
+    /// The newer naming (`Name 4198 1.27.5 2026-10-20T10-52Z q7jg7fflx`) rather than `Name-4198-1-27-5-1760956320`.
+    pub modern: bool,
+}
+
+/// Seconds since 1970 of a calendar time in UTC.
+fn epoch_of(y: i64, mo: i64, d: i64, h: i64, mi: i64) -> u64 {
+    let y2 = if mo <= 2 { y - 1 } else { y };
+    let era = y2.div_euclid(400);
+    let yoe = y2 - era * 400;
+    let doy = (153 * (mo + if mo > 2 { -3 } else { 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    (days * 86_400 + h * 3600 + mi * 60).max(0) as u64
+}
+
+/// Reads both naming styles of Nexus downloads (`Cool Mod-123-1-2-1700000000.zip` and
+/// `Cool Mod 123 1.2 2026-10-20T10-52Z q7jg7fflx.zip`); `None` when the name is not one of them.
+pub fn parse_download_name(file_name: &str) -> Option<DownloadName> {
+    let stem = std::path::Path::new(file_name).file_stem()?.to_string_lossy().to_string();
+    let stem = stem.trim_end_matches(".tar").to_string();
+    static NEW: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| regex::Regex::new(r"^(.+?) (\d{1,9}) (\S+) (\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})Z \S+$").expect("static regex"));
+    static OLD: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| regex::Regex::new(r"^(.*?)-(\d+)((?:-v?\d+)+)$").expect("static regex"));
+    if let Some(c) = NEW.captures(&stem) {
+        let n = |i: usize| c[i].parse::<i64>().unwrap_or(0);
+        let (mo, d, h, mi) = (n(5), n(6), n(7), n(8));
+        let ok = (1..=12).contains(&mo) && (1..=31).contains(&d) && h < 24 && mi < 60;
+        return Some(DownloadName {
+            name: c[1].trim().to_string(),
+            mod_id: c[2].parse().ok()?,
+            version: c[3].to_string(),
+            uploaded: ok.then(|| Uploaded::Minute(epoch_of(n(4), mo, d, h, mi))),
+            modern: true,
+        });
+    }
+    let c = OLD.captures(&stem)?;
+    let segs: Vec<&str> = c[3].split('-').filter(|s| !s.is_empty()).collect();
+    let version = if segs.len() >= 2 { segs[..segs.len() - 1].join(".") } else { String::new() };
+    let uploaded = segs.last().filter(|t| t.len() >= 9).and_then(|t| t.parse().ok()).map(Uploaded::Second);
+    let name = if c[1].contains(' ') { c[1].to_string() } else { c[1].replace('_', " ") };
+    Some(DownloadName { name: name.trim().to_string(), mod_id: c[2].parse().ok()?, version, uploaded, modern: false })
+}
+
 /// Game domains end up inside request URLs, so anything hand-edited is checked again.
 pub fn domain_ok(g: &str) -> bool {
     !g.is_empty() && g.len() <= 64 && g.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
@@ -262,6 +320,30 @@ pub struct ModFiles {
 }
 
 impl ModFiles {
+    /// The file on the site that a downloaded file came from: the one uploaded at the time its name says, else the only one
+    /// with its version.
+    pub fn find_download(&self, d: &DownloadName) -> Option<&ModFile> {
+        let by_time: Vec<&ModFile> = self
+            .files
+            .iter()
+            .filter(|f| match d.uploaded {
+                Some(Uploaded::Second(s)) => f.uploaded == s,
+                Some(Uploaded::Minute(m)) => f.uploaded / 60 == m / 60,
+                None => false,
+            })
+            .collect();
+        match by_time.as_slice() {
+            [one] => return Some(one),
+            [] => {}
+            many => return many.iter().copied().find(|f| f.version.eq_ignore_ascii_case(&d.version)),
+        }
+        let by_version: Vec<&ModFile> = self.files.iter().filter(|f| !d.version.is_empty() && f.version.eq_ignore_ascii_case(&d.version)).collect();
+        match by_version.as_slice() {
+            [one] => Some(one),
+            _ => None,
+        }
+    }
+
     /// The newest file that replaced `file_id` (following the author's replacement chain), if any.
     /// Files that merely exist next to it (optional files, other mains) never count as updates,
     /// and a malformed chain that loops back is resolved by upload time, not by position.
@@ -990,6 +1072,44 @@ pub mod fake {
 mod tests {
     use super::fake::*;
     use super::*;
+
+    #[test]
+    fn both_naming_styles_of_nexus_downloads_are_read() {
+        let n = parse_download_name("Appearance Menu Mod 790 2.14 2026-10-21T20-49Z psSjsvvdX.zip").unwrap();
+        assert_eq!((n.name.as_str(), n.mod_id, n.version.as_str(), n.modern), ("Appearance Menu Mod", 790, "2.14", true));
+        assert_eq!(n.uploaded, Some(Uploaded::Minute(1_792_615_740)));
+        let c = parse_download_name("CET 1.38.0 - Game version 2.5 107 1.38.0 2026-10-22T12-57Z Q6xF6lly7.zip").unwrap();
+        assert_eq!((c.name.as_str(), c.mod_id, c.version.as_str(), c.uploaded), ("CET 1.38.0 - Game version 2.5", 107, "1.38.0", Some(Uploaded::Minute(1_792_673_820))));
+        let b = parse_download_name("EasyTrainer 23227 beta2.1 2026-08-14T14-49Z k8Iw8mS76.zip").unwrap();
+        assert_eq!((b.name.as_str(), b.mod_id, b.version.as_str()), ("EasyTrainer", 23227, "beta2.1"));
+        let o = parse_download_name("Backpack Search-14264-1-2-1-1752387587.zip").unwrap();
+        assert_eq!((o.name.as_str(), o.mod_id, o.version.as_str(), o.uploaded, o.modern), ("Backpack Search", 14264, "1.2.1", Some(Uploaded::Second(1_752_387_587)), false));
+        let u = parse_download_name("vehiclehandling_v1.3-210-v1-3-1726943022.7z").unwrap();
+        assert_eq!((u.name.as_str(), u.mod_id), ("vehiclehandling v1.3", 210));
+        for no in ["notes.zip", "My Mod 3.zip", "Cool Mod 2026-10-21T20-49Z abc.zip", "Mod 5 1.0 2026-13-40T25-99Z x.zip"] {
+            let r = parse_download_name(no);
+            assert!(r.is_none() || r.as_ref().is_some_and(|d| d.uploaded.is_none()), "{no}: {r:?}");
+        }
+        assert_eq!(epoch_of(1970, 1, 1, 0, 0), 0);
+        assert_eq!(epoch_of(2000, 3, 1, 0, 0), 951_868_800);
+    }
+
+    #[test]
+    fn the_file_a_download_came_from_is_found_by_upload_time_then_by_version() {
+        let f = |file_id, version: &str, uploaded| ModFile { file_id, name: String::new(), file_name: String::new(), version: version.into(), category: "MAIN".into(), uploaded, description: String::new(), changelog: String::new() };
+        let mf = ModFiles { files: vec![f(1, "1.0", 1_000_000), f(2, "1.1", 1_792_615_765), f(3, "2.0", 1_792_700_000)], updates: vec![] };
+        let by_minute = parse_download_name("X 5 1.1 2026-10-21T20-49Z abc.zip").unwrap();
+        assert_eq!(mf.find_download(&by_minute).map(|x| x.file_id), Some(2), "the same minute as the upload");
+        let by_second = parse_download_name("X-5-1-0-1000000.zip").unwrap();
+        assert_eq!(mf.find_download(&by_second).map(|x| x.file_id), Some(1));
+        let by_version = parse_download_name("X 5 2.0 2026-01-01T00-00Z abc.zip").unwrap();
+        assert_eq!(mf.find_download(&by_version).map(|x| x.file_id), Some(3), "time says nothing, the version is unique");
+        let nothing = parse_download_name("X 5 9.9 2026-01-01T00-00Z abc.zip").unwrap();
+        assert!(mf.find_download(&nothing).is_none());
+        // two files with one version and no time to tell them apart: no guess
+        let twins = ModFiles { files: vec![f(1, "1.0", 5), f(2, "1.0", 6)], updates: vec![] };
+        assert!(twins.find_download(&parse_download_name("X 5 1.0 2026-01-01T00-00Z abc.zip").unwrap()).is_none());
+    }
     use crate::fsutil::testutil::TempDir;
 
     #[test]

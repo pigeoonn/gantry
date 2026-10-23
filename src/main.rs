@@ -854,6 +854,13 @@ fn refresh_mods_shared(state: &SharedState) {
         return;
     };
     prune_updates(state);
+    if let Some(lib) = library_of(&game) {
+        lib.tidy_names();
+        let moved = lib.fix_redmod_targets();
+        if !moved.is_empty() {
+            log(state, "INFO", format!("{} is a REDmod, so it now goes into the game's mods folder. Deploy to apply it.", moved.join(", ")));
+        }
+    }
     let list = ModManager::list_mods(&game);
     let first = read_state(state).config.library_first.contains(&game.appid);
     let mut lib = library_status(&game, first);
@@ -7108,6 +7115,37 @@ fn is_fatal_nexus_error(e: &str) -> bool {
     e.contains("rejected the API key") || e.contains("Could not reach") || e.contains("rate limit") || e.contains("Could not run curl")
 }
 
+/// The Nexus file a hand-added mod came from, found from its archive's name (mod number, upload time, version), and
+/// remembered in the library. `Ok(None)` when the name says nothing or the site has no such file.
+fn link_by_file_name(
+    state: &SharedState,
+    client: &nexus::Nexus,
+    g: &GameEntry,
+    lib: &deploy::Library,
+    m: &deploy::LibMod,
+    domain: &mut Option<Option<String>>,
+    cache: &mut std::collections::HashMap<(String, u64), Result<nexus::ModFiles, String>>,
+) -> Result<Option<nexus::NexusRef>, String> {
+    let Some(d) = nexus::parse_download_name(&m.source) else { return Ok(None) };
+    let dom = domain
+        .get_or_insert_with(|| {
+            let from_recipe = recipes::find(&read_state(state).recipes, &g.appid, g.recipe_steam_id()).map(|r| r.nexus.clone()).filter(|n| !n.is_empty());
+            from_recipe.or_else(|| nexus_domain_for(state, g).ok())
+        })
+        .clone();
+    let Some(dom) = dom.filter(|d| nexus::domain_ok(d)) else { return Ok(None) };
+    match cache.entry((dom.clone(), d.mod_id)).or_insert_with(|| client.mod_files(&dom, d.mod_id)) {
+        Ok(mf) => {
+            let Some(f) = mf.find_download(&d) else { return Ok(None) };
+            let r = nexus::NexusRef { game: dom, mod_id: d.mod_id, file_id: f.file_id };
+            let _ = lib.set_nexus(&m.id, r.clone(), &d.name, &f.version);
+            Ok(Some(r))
+        }
+        Err(e) if is_fatal_nexus_error(e) => Err(e.clone()),
+        Err(_) => Ok(None),
+    }
+}
+
 /// Ask Nexus about every library mod that came from there. Replaces the list of known updates.
 fn check_nexus_updates(state: &SharedState) -> Result<usize, String> {
     let client = nexus_client(state)?;
@@ -7121,6 +7159,7 @@ fn check_nexus_updates(state: &SharedState) -> Result<usize, String> {
         st.notifier.bump();
     }
     let games: Vec<GameEntry> = read_state(state).games.iter().filter(|g| g.is_installed).cloned().collect();
+    let mut linked = 0usize;
     let outcome = (|| -> Result<(Vec<UpdateRow>, Vec<NeedRow>), String> {
         let mut cache: std::collections::HashMap<(String, u64), Result<nexus::ModFiles, String>> = Default::default();
         let mut req_cache: std::collections::HashMap<(String, u64), Result<Vec<nexus::Requirement>, String>> = Default::default();
@@ -7128,7 +7167,20 @@ fn check_nexus_updates(state: &SharedState) -> Result<usize, String> {
         let mut needs = Vec::new();
         for g in &games {
             let Some(lib) = library_of(g) else { continue };
-            let mods = lib.mods();
+            let mut mods = lib.mods();
+            // a mod added by hand from a file with a Nexus name is tied to its page first, so it is checked like the others
+            // and counts as installed when another mod asks for it
+            let mut domain: Option<Option<String>> = None;
+            let mut found = false;
+            for m in mods.iter().filter(|m| m.nexus.is_none() && m.thunderstore.is_none() && m.github.is_none()) {
+                if link_by_file_name(state, &client, g, &lib, m, &mut domain, &mut cache)?.is_some() {
+                    linked += 1;
+                    found = true;
+                }
+            }
+            if found {
+                mods = lib.mods();
+            }
             for m in mods.iter().cloned() {
                 let Some(nx) = m.nexus.clone().filter(|n| n.valid()) else { continue };
                 let never = m.update_rule == "never";
@@ -7177,6 +7229,11 @@ fn check_nexus_updates(state: &SharedState) -> Result<usize, String> {
             st.nexus.updates = rows;
             st.nexus.needs = needs;
             st.nexus.checked_ms = now_ms();
+            if linked == 1 {
+                st.log("INFO", "Linked 1 mod to its Nexus Mods page by its file name, so its updates and requirements can be checked.");
+            } else if linked > 1 {
+                st.log("INFO", format!("Linked {} mods to their Nexus Mods pages by their file names, so their updates and requirements can be checked.", linked));
+            }
             if n > 0 {
                 st.log(
                     "INFO",
@@ -11255,6 +11312,36 @@ mod tests {
         assert!(fs::read_to_string(&path).unwrap().contains("*A.esp"));
         assert!(h.state.read().unwrap().logs.iter().any(|l| l.message.contains("Close the game first: it reads")));
         let _ = g;
+    }
+
+    #[test]
+    fn a_mod_added_by_hand_is_tied_to_its_nexus_file_by_its_name_when_updates_are_checked() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let (h, f, _dir, _id) = nexus_update_setup("nxlink", false);
+        let g = h.state.read().unwrap().games.last().unwrap().clone();
+        h.state.write().unwrap().recipes = vec![recipes::Recipe { appid: g.appid.clone(), nexus: "coolgame".into(), ..Default::default() }];
+        let lib = library_of(&g).unwrap();
+        let stage = h._dir.join("hand-stage");
+        fs::create_dir_all(stage.join("Data")).unwrap();
+        fs::write(stage.join("Data/other.esp"), "O").unwrap();
+        // what a browser saves from the current Nexus site: the name is the whole file name
+        let source = "Other Mod 8 2.0 1970-01-01T00-05Z AbC123.zip";
+        let hand = lib.add_from_dir(&stage, "Other Mod 8 2.0 1970-01-01T00-05Z AbC123", source).unwrap();
+        assert!(hand.nexus.is_none());
+        api(&h, "/api/nexus_check", json!({}));
+        wait_until("check finished", || nexus_state(&h)["checked_ms"].as_u64().unwrap_or(0) > 0);
+        let m = lib.mods().into_iter().find(|m| m.id == hand.id).unwrap();
+        assert_eq!(m.nexus, Some(nexus::NexusRef { game: "coolgame".into(), mod_id: 8, file_id: 12 }));
+        assert_eq!((m.name.as_str(), m.version.as_str()), ("Other Mod", "2.0"), "the clean name and the version of the file");
+        assert!(h.state.read().unwrap().logs.iter().any(|l| l.message.contains("Linked 1 mod to its Nexus Mods page")));
+        assert_eq!(nexus_state(&h)["updates"].as_array().unwrap().len(), 1, "only the older Cool Pack has an update; the linked one is current");
+        // a mod that is not named like a Nexus download stays alone
+        let manual = lib.mods().into_iter().find(|m| m.name == "Manual").unwrap();
+        assert!(manual.nexus.is_none());
+        let _ = f;
     }
 
     #[test]

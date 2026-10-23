@@ -13,6 +13,14 @@
 - **Cyberpunk 2077 and RED4ext/Redscript/CET logs** are read: the log viewer lists them and 8 new known problems explain
   the usual messages (game version too old or too new for RED4ext, plugin made for another patch, hook failed,
   Redscript compile failed, a missing framework such as Codeware, watchdog timeout, GPU crash), in all ten languages.
+- **Nexus Mods' new download names are understood.** Files now come named like `Appearance Menu Mod 790 2.14
+  2026-10-21T20-49Z q7jg7fflx.zip`; Gantry showed that whole text as the mod's name and knew nothing else about it. Now
+  the name and version are read from it, mods that already carry such a name are renamed (once, and only if you had not
+  renamed them), and *Check for updates* ties a hand-added mod to its Nexus page by its number and upload time. After
+  that its updates and the mods it needs (a missing Codeware, TweakXL ...) are checked like any other.
+- **REDmods** (Cyberpunk 2077's own format: `info.json` next to `archives/`) now go into `mods/<name>/` where the game
+  looks for them; before, they landed in the game's root and did nothing. One that was placed wrong earlier is moved at
+  the next deploy (undoable).
 - **Mods that load through a proxy DLL** (Cyber Engine Tweaks' `version.dll`, `winmm.dll`, ...) now raise the *Steam is
   missing the launch option* warning with its *Fix the launch option* button; before, only BepInEx/MelonLoader games did.
 
