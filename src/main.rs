@@ -701,7 +701,7 @@ impl AppState {
             "mods": self.mods,
             "library": self.library,
             "vanilla": self.config.vanilla_sessions,
-            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.config.deck_mode || std::env::var_os("RIG_DECK").is_some(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
+            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.config.deck_mode || std::env::var_os("RIG_DECK").is_some(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
             "notes": self.notes.json(),
             "meta": self.meta_json(),
             "health": self.health,
@@ -942,6 +942,71 @@ fn workshop_count(g: &GameEntry) -> usize {
     let n = workshop::installed(Path::new(&g.game_dir), g.steam_id()).len();
     CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(key, (Instant::now(), n));
     n
+}
+
+/// A card the person set aside, cleaned: only the fields the store shows, short, and only web pictures.
+fn saved_card(body: &Value) -> Option<Value> {
+    let text = |k: &str, max: usize| body.get(k).and_then(Value::as_str).unwrap_or("").chars().filter(|c| !c.is_control()).take(max).collect::<String>();
+    let num = |k: &str| body.get(k).and_then(Value::as_u64).unwrap_or(0);
+    let (source, id) = (text("source", 20), text("id", 120));
+    let id_ok = match source.as_str() {
+        "nexus" => !id.is_empty() && id.len() <= 12 && id.bytes().all(|b| b.is_ascii_digit()),
+        "thunderstore" => !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.'),
+        _ => false,
+    };
+    let name = text("name", 120);
+    if !id_ok || name.is_empty() {
+        return None;
+    }
+    let picture = text("picture", 400);
+    let page = text("page_url", 400);
+    let page_ok = (source == "nexus" && page.starts_with("https://www.nexusmods.com/")) || (source == "thunderstore" && page.starts_with("https://thunderstore.io/"));
+    Some(json!({
+        "source": source, "id": id, "name": name, "summary": text("summary", 300), "author": text("author", 80), "version": text("version", 40),
+        "downloads": num("downloads"), "endorsements": num("endorsements"), "updated_ms": num("updated_ms"), "size_kb": num("size_kb"),
+        "picture": if picture.starts_with("https://") { picture } else { String::new() }, "category": text("category", 60),
+        "page_url": if page_ok && !page.contains(char::is_whitespace) { page } else { String::new() },
+    }))
+}
+
+/// The "Saved" view of the store: what the person set aside for this game, with what is in the library marked.
+fn saved_page(state: &SharedState, g: &GameEntry) -> Value {
+    let (have_nexus, have_thunder): (HashSet<u64>, HashSet<String>) = library_of(g)
+        .map(|l| {
+            let mods = l.mods();
+            (mods.iter().filter_map(|m| m.nexus.as_ref().map(|n| n.mod_id)).collect(), mods.iter().filter_map(|m| m.thunderstore.as_ref().map(|t| t.full_name().to_lowercase())).collect())
+        })
+        .unwrap_or_default();
+    let cards: Vec<Value> = read_state(state)
+        .config
+        .saved_mods
+        .get(&g.appid)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|mut c| {
+            let installed = match c["source"].as_str() {
+                Some("nexus") => c["id"].as_str().and_then(|i| i.parse::<u64>().ok()).map(|i| have_nexus.contains(&i)).unwrap_or(false),
+                _ => c["id"].as_str().map(|i| have_thunder.contains(&i.to_lowercase())).unwrap_or(false),
+            };
+            c["installed"] = json!(installed);
+            c
+        })
+        .collect();
+    json!({ "cards": cards, "next": { "n": 0, "t": 0 }, "more": false, "categories": [], "notes": [], "premium": read_state(state).nexus.user.as_ref().map(|u| u.premium).unwrap_or(false), "adult": false, "saved_view": true })
+}
+
+/// The folder a quick button opens: the game's own (the default), where its saves are, its Wine prefix, or Gantry's cache
+/// (logs, backups). Only folders that exist; anything else gives nothing.
+fn folder_target(g: &GameEntry, which: &str, cache_root: &Path, save_places: &[String]) -> Option<PathBuf> {
+    let p = match which {
+        "saves" => profsaves::roots(g, save_places).first().map(|r| r.live.clone()),
+        "prefix" if !g.pfx.is_empty() => Some(PathBuf::from(&g.pfx)),
+        "logs" => Some(cache_root.to_path_buf()),
+        "" | "game" => Some(PathBuf::from(&g.game_dir)),
+        _ => None,
+    };
+    p.filter(|p| p.is_dir())
 }
 
 /// The home page's shelf: for the games played last, the mods people download most among those changed lately, leaving
@@ -1501,6 +1566,9 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
     }
     if ask.sort == "starter" && ask.query.trim().is_empty() {
         return starter_page(state, g);
+    }
+    if ask.sort == "saved" {
+        return saved_page(state, g);
     }
     let adult = read_state(state).config.show_adult;
     let premium = read_state(state).nexus.user.as_ref().map(|u| u.premium).unwrap_or(false);
@@ -4339,6 +4407,25 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 xdg_open(format!("steam://install/{}", appid));
             }
         }
+        "/api/saved_toggle" => {
+            // set a mod aside (or take it back out) for the selected game; the list is kept to 200
+            if let (Some(card), Some(g)) = (saved_card(body), selected_game(state)) {
+                let mut st = write_state(state);
+                let list = st.config.saved_mods.entry(g.appid.clone()).or_default();
+                match list.iter().position(|c| c["source"] == card["source"] && c["id"] == card["id"]) {
+                    Some(i) => {
+                        list.remove(i);
+                    }
+                    None if list.len() < 200 => list.insert(0, card),
+                    None => {}
+                }
+                if list.is_empty() {
+                    st.config.saved_mods.remove(&g.appid);
+                }
+                st.save_config();
+                st.notifier.bump();
+            }
+        }
         "/api/workshop_folder" => {
             if let Some(f) = selected_game(state).and_then(|g| workshop::item_folder(Path::new(&g.game_dir), g.steam_id(), &body_str(body, "id"))) {
                 xdg_open(f);
@@ -5131,7 +5218,11 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/open_folder" => {
             if let Some(g) = selected_game(state) {
-                xdg_open(&g.game_dir);
+                let cache = read_state(state).cache_root();
+                let places = save_places(state, &g);
+                if let Some(p) = folder_target(&g, &body_str(body, "which"), &cache, &places) {
+                    xdg_open(p);
+                }
             }
         }
         "/api/open_mods" => {
@@ -11369,6 +11460,60 @@ mod tests {
         let t = Instant::now();
         lib.purge().unwrap();
         assert!(t.elapsed() < Duration::from_secs(20));
+    }
+
+    #[test]
+    fn the_quick_folder_buttons_open_only_folders_that_exist() {
+        let h = harness("quickfolders");
+        let g = selected_game(&h.state).unwrap();
+        let cache = h._dir.join("cache");
+        fs::create_dir_all(&cache).unwrap();
+        assert_eq!(folder_target(&g, "", &cache, &[]), Some(PathBuf::from(&g.game_dir)));
+        assert_eq!(folder_target(&g, "game", &cache, &[]), Some(PathBuf::from(&g.game_dir)));
+        assert_eq!(folder_target(&g, "prefix", &cache, &[]), Some(PathBuf::from(&g.pfx)));
+        assert_eq!(folder_target(&g, "logs", &cache, &[]), Some(cache.clone()));
+        assert_eq!(folder_target(&g, "../../etc", &cache, &[]), None);
+        assert_eq!(folder_target(&g, "logs", &h._dir.join("nowhere"), &[]), None);
+        let mut no_prefix = g.clone();
+        no_prefix.pfx = String::new();
+        assert_eq!(folder_target(&no_prefix, "prefix", &cache, &[]), None);
+        // the saves folder is the first place the game keeps saves
+        #[cfg(not(windows))]
+        {
+            let live = PathBuf::from(&g.pfx).join("drive_c/users/steamuser/AppData/Local/Demo/Saved/SaveGames");
+            fs::create_dir_all(&live).unwrap();
+            assert_eq!(folder_target(&g, "saves", &cache, &[]), Some(live));
+        }
+        api(&h, "/api/open_folder", json!({ "which": "saves" }));
+        api(&h, "/api/open_folder", json!({}));
+    }
+
+    #[test]
+    fn mods_can_be_set_aside_in_the_store_and_found_again() {
+        let h = harness("savedmods");
+        let appid = selected_game(&h.state).unwrap().appid;
+        let card = json!({ "source": "nexus", "id": "77", "name": "Cool Cars", "summary": "cars", "author": "n", "version": "1.2", "downloads": 900, "endorsements": 5, "picture": "https://images.nexusmods.com/x.png", "page_url": "https://www.nexusmods.com/coolgame/mods/77" });
+        api(&h, "/api/saved_toggle", card.clone());
+        let st = api(&h, "/api/state", json!({}));
+        assert_eq!(st["saved_mods"], json!(["nexus:77"]));
+        let (code, body) = http(&h, "GET", "/api/store?sort=saved", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(code, 200);
+        let page: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!((page["cards"][0]["name"].as_str(), page["cards"][0]["downloads"].as_u64(), page["cards"][0]["installed"].as_bool()), (Some("Cool Cars"), Some(900), Some(false)), "{page}");
+        // it survives a restart of the settings file, and a second press takes it out again
+        assert!(fs::read_to_string(&h.state.read().unwrap().paths.config_file).unwrap().contains("Cool Cars"));
+        // hostile cards are refused or cleaned
+        for bad in [json!({ "source": "evil", "id": "1", "name": "x" }), json!({ "source": "nexus", "id": "../1", "name": "x" }), json!({ "source": "nexus", "id": "5", "name": "" }), json!({ "source": "thunderstore", "id": "a b", "name": "x" })] {
+            api(&h, "/api/saved_toggle", bad);
+        }
+        api(&h, "/api/saved_toggle", json!({ "source": "thunderstore", "id": "Own-Mod", "name": "Own Mod", "picture": "javascript:alert(1)", "page_url": "https://evil.example/x" }));
+        let list = h.state.read().unwrap().config.saved_mods.get(&appid).cloned().unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!((list[0]["picture"].as_str(), list[0]["page_url"].as_str()), (Some(""), Some("")), "only web pictures and the sites' own pages");
+        api(&h, "/api/saved_toggle", card);
+        api(&h, "/api/saved_toggle", json!({ "source": "thunderstore", "id": "Own-Mod", "name": "Own Mod" }));
+        assert!(!h.state.read().unwrap().config.saved_mods.contains_key(&appid), "an empty list is not kept");
+        assert_eq!(api(&h, "/api/state", json!({}))["saved_mods"], json!([]));
     }
 
     #[test]

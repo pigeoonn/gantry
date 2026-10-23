@@ -12,6 +12,9 @@
   opens and Gantry takes the file when you press *Slow download*; Premium accounts download directly.
 - **Starter pack:** a short, hand-made list for the games people play most, with a line on why each mod is there.
   *Get all* fetches them one after another.
+- **Save for later:** the heart on a card sets a mod aside for this game; the *Saved* sort shows them again (and marks
+  the ones you have since installed). *More → Copy the mod list* puts your switched-on mods on the clipboard as a plain
+  list (names, versions, Nexus links) to paste into a chat or a post.
 - **Adult mods** are hidden unless *Settings → Show adult mods in the store* is on.
 - Games with anti-cheat show a note instead of mods: Gantry will not put mods there.
 

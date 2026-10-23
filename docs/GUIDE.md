@@ -189,7 +189,10 @@ Gantry only reads what Steam keeps; it never changes Steam's files. **Updates:**
 ## Tools
 Launch Options, Rig Doctor, Crash Detective (finds the mod that crashes a game), Save Guard, Mod Settings (edit
 `.cfg`/`.ini` files of mods), Problem Report, **Backup & Disk** (backup file of all your settings, notes and mod lists;
-disk use; cleanup), Compatibility.
+disk use; cleanup), Compatibility, **Workshop** (Steam Workshop items of the game), and quick folder buttons: the game's
+folder, its saves (when Gantry knows where they are) and its Wine prefix (Linux). *More → Copy the mod list* copies your
+switched-on mods as a plain list for a chat or a post. In a terminal, `rig --doctor` prints every installed game with
+its loader, its mods and what is wrong.
 
 ## Files and safety
 - Settings: `~/.config/protonrig/`. Your own game knowledge goes in `recipes.json` there

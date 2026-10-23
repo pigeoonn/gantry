@@ -507,6 +507,8 @@
   .lib-tag.warn { background: rgba(251,191,36,0.16); color: color-mix(in srgb, #fbbf24, var(--ink) var(--lift)); }
   .lib-tag.mods { background: rgba(167,139,250,0.18); color: color-mix(in srgb, #c4b5fd, var(--ink) var(--lift)); }
   .lib-banner { display:flex; gap:10px; align-items:center; justify-content:space-between; padding:9px 12px; border-radius:10px; background:rgba(56,189,248,0.10); border:1px solid rgba(56,189,248,0.3); font-size:12px; color: color-mix(in srgb, #bae6fd, var(--ink) var(--lift)); z-index:2; }
+  .heart { padding: 4px 9px; font-size: 14px; line-height: 1; }
+  .heart.on { color: var(--danger, #f87171); border-color: color-mix(in srgb, var(--danger, #f87171) 55%, transparent); }
   .trend-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap:10px; margin-bottom:10px; }
   .trend-card { display:flex; gap:10px; align-items:center; padding:8px; border-radius:12px; background: var(--n3); border:1px solid var(--line); cursor:pointer; transition: transform .22s var(--spring), border-color .2s ease; }
   .trend-card:hover, .trend-card:focus-visible { transform: translateY(-2px); border-color: var(--accent-border, var(--line)); }
@@ -1406,6 +1408,8 @@
           <div class="tool-grid">
             <button class="btn tool" onclick="openNexus()">🌐 Nexus Mods</button>
             <button class="btn tool" onclick="ipcSend('/api/open_folder')">📂 Game Folder</button>
+            <button class="btn tool" id="btnSavesFolder" data-dyn style="display:none" onclick="ipcSend('/api/open_folder', { which: 'saves' })">💾 Saves Folder</button>
+            <button class="btn tool" id="btnPrefixFolder" data-dyn style="display:none" onclick="ipcSend('/api/open_folder', { which: 'prefix' })">🍷 Prefix Folder</button>
             <button class="btn tool" onclick="openConfigs()">⚙ Mod Settings</button>
             <button class="btn tool" onclick="copyReport()">📋 Problem Report</button>
             <button class="btn tool" onclick="openLogs()">📜 Logs</button>
@@ -4222,10 +4226,15 @@
       [t('🩺 Rig Doctor'), openDoctor, !!g],
       [t('🕵️ Crash Detective'), openCrashDetective, !!g],
       [t('💾 Save Guard'), openSaveGuard, !!g],
+      [t('🧩 Workshop ({})', (appState.library || {}).workshop || 0), openWorkshop, !!g && ((appState.library || {}).workshop || 0) > 0],
+      [t('📋 Copy the mod list'), copyModList, !!g],
+      [t('🐞 Report a problem'), () => ipcSend('/api/open_link', { which: 'report', kind: 'bug' }), true],
+      [t('🎮 Ask for a game'), () => ipcSend('/api/open_link', { which: 'report', kind: 'game' }), true],
       [t('🌐 Nexus Mods'), openNexus, true],
       [t('🔑 Steam library'), openSteamLib, true],
       [t('🚀 Launch Options'), openLaunchModal, !!g],
       [t('📂 Game Folder'), () => ipcSend('/api/open_folder', {}), !!g],
+      [t('💾 Saves Folder'), () => ipcSend('/api/open_folder', { which: 'saves' }), !!g && ((appState.library || {}).save_folders || 0) > 0],
       [t('⚙ Mod Settings'), openConfigs, !!g],
       [t('📋 Problem Report'), copyReport, !!g],
       [t('🛠 Compatibility'), openCompat, !!g],
@@ -4634,7 +4643,7 @@
 
   // ---------- The mod store: Nexus Mods and Thunderstore as one shop window ----------
   let storeSort = 'popular', storeSource = 'both', storeCat = '', storeHide = false, storeLibs = false, storeNext = { n: 0, t: 0 }, storeMore = false, storeBusy = false, storeCats = [], storeSeq = 0, storeIO = null;
-  const STORE_SORTS = () => [['starter', t('Starter pack')], ['popular', t('Most downloaded')], ['lately', t('Popular lately')], ['endorsed', t('Most liked')], ['new', t('New')], ['updated', t('Recently updated')]];
+  const STORE_SORTS = () => [['starter', t('Starter pack')], ['popular', t('Most downloaded')], ['lately', t('Popular lately')], ['endorsed', t('Most liked')], ['new', t('New')], ['updated', t('Recently updated')], ['saved', t('Saved')]];
   function renderStoreBar() {
     const bar = document.getElementById('storeBar');
     const chip = (k, label, cur, fn) => `<button class="ml-chip ${cur === k ? 'on' : ''}" onclick="${fn}('${k}')">${escapeHtml(label)}</button>`;
@@ -4666,7 +4675,20 @@
       : `<button class="btn btn-play" onclick='tsInstall(${JS(c.id)}, this)'>${t('Install')}</button>`;
     return `<div class="s-card" tabindex="0" role="button" style="animation-delay:${Math.min(i, 12) * 28}ms" onclick='openStorePage(${JS(c.source)}, ${JS(c.id)})' onkeydown="if (event.key === 'Enter' && event.target === this) this.click()"><div class="s-thumb"><span class="tile" style="background:${tileColor(c.name)}">${escapeHtml(c.name.slice(0, 1).toUpperCase())}</span>${thumb}<span class="s-src">${nx ? 'Nexus Mods' : 'Thunderstore'}</span>${c.category ? `<span class="s-cat">${escapeHtml(c.category)}</span>` : ''}</div>
       <div class="s-body"><div class="s-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div><div class="s-by">${escapeHtml(c.author)}${c.version ? ' · v' + escapeHtml(c.version) : ''}</div><div class="s-sum">${escapeHtml(c.summary || '')}</div>${c.why ? `<div class="s-why">✨ ${escapeHtml(c.why)}</div>` : ''}
-      <div class="s-stats">${stats}</div><div class="s-foot" onclick="event.stopPropagation()">${act}<button class="btn" title="${escapeHtml(t('Open its page'))}" aria-label="${escapeHtml(t('Open its page'))}" onclick='ipcSend("/api/open_link", { which: "${nx ? 'nexus_page' : 'thunder_page'}", url: ${JS(c.page_url)} })'>↗</button></div></div></div>`;
+      <div class="s-stats">${stats}</div><div class="s-foot" onclick="event.stopPropagation()">${act}<button class="btn heart ${isSaved(c) ? 'on' : ''}" title="${escapeHtml(isSaved(c) ? t('Saved: press to remove') : t('Save for later'))}" aria-label="${escapeHtml(isSaved(c) ? t('Saved: press to remove') : t('Save for later'))}" onclick='storeSave(${JS(c)}, this)'>${isSaved(c) ? '♥' : '♡'}</button><button class="btn" title="${escapeHtml(t('Open its page'))}" aria-label="${escapeHtml(t('Open its page'))}" onclick='ipcSend("/api/open_link", { which: "${nx ? 'nexus_page' : 'thunder_page'}", url: ${JS(c.page_url)} })'>↗</button></div></div></div>`;
+  }
+  const savedKey = c => (c.source === 'thunderstore' ? 'thunderstore' : 'nexus') + ':' + c.id;
+  const isSaved = c => ((appState.saved_mods) || []).includes(savedKey(c));
+  async function storeSave(c, btn) {
+    const was = isSaved(c);
+    const keys = new Set(appState.saved_mods || []);
+    if (was) keys.delete(savedKey(c)); else keys.add(savedKey(c));
+    appState.saved_mods = [...keys];
+    btn.classList.toggle('on', !was);
+    btn.textContent = was ? '♡' : '♥';
+    showToast(was ? t('Removed from your saved mods.') : t('Saved. Find it under “Saved”.'));
+    await ipcPost('/api/saved_toggle', c);
+    if (storeSort === 'saved' && was) storeReload();
   }
   let storePack = [];
   async function storeGetAll() {
@@ -4929,6 +4951,16 @@
   }
 
   // less-used actions of the Mod Library, out of the way
+  // the mods of this game as a plain list to paste into a chat or a post (Markdown: it reads fine as it is)
+  function copyModList() {
+    const g = appState.games[appState.selected_idx];
+    const mods = ((appState.library || {}).mods || []).filter(m => m.enabled);
+    if (!g || !mods.length) { showToast(t('There are no mods switched on to list.')); return; }
+    const lines = mods.map((m, i) => `${i + 1}. ${m.name}${m.version ? ' v' + m.version : ''}${m.nexus && m.nexus.url ? ' — ' + m.nexus.url : ''}`);
+    const text = `**${g.name}**: ${mods.length} ${mods.length === 1 ? 'mod' : 'mods'} (made with Gantry)\n\n${lines.join('\n')}\n`;
+    navigator.clipboard.writeText(text).then(() => showToast(t('Copied.')), () => showToast(t('Could not copy.')));
+  }
+
   function openMoreMenu(e) {
     e.stopPropagation();
     closeCtx();
@@ -4936,6 +4968,7 @@
       [t('📤 Share as modpack'), () => shareModpack()],
       [t('📥 Import a modpack'), () => ipcSend('/api/lib_import', {})],
       [t('🔑 Import a profile code'), () => importProfileCode()],
+      [t('📋 Copy the mod list'), () => copyModList()],
       [t('🧭 Fix placement'), () => modLibRelayout()],
       [t('📁 Folder'), () => ipcSend('/api/lib_open')],
     ];
@@ -5651,6 +5684,8 @@
       document.getElementById('mlFirst').checked = !!lib.first;
     }
     document.getElementById('btnPlugins').style.display = lib && lib.plugins ? '' : 'none';
+    document.getElementById('btnSavesFolder').style.display = lib && lib.save_folders > 0 ? '' : 'none';
+    { const g0 = appState.games[appState.selected_idx]; document.getElementById('btnPrefixFolder').style.display = g0 && g0.has_pfx && appState.os === 'linux' ? '' : 'none'; }
     const wsBtn = document.getElementById('btnWorkshop');
     wsBtn.style.display = lib && lib.workshop > 0 ? '' : 'none';
     if (lib && lib.workshop > 0) wsBtn.textContent = t('🧩 Workshop ({})', lib.workshop);

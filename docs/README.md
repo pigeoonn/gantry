@@ -19,6 +19,7 @@ Start with the [tutorial](TUTORIAL.md) (ten minutes from nothing to a modded gam
 - [Game health and crashes](features/health.md)
 - [Playing, saves and play time](features/play.md)
 - [Why is it slow?](features/performance.md)
+- [Steam, Workshop and downloads](features/steam.md)
 - [Backups and storage](features/backups.md)
 - [Safety and VirusTotal](features/safety.md)
 - [Look, layout and languages](features/looks.md)
