@@ -8126,6 +8126,15 @@ mod tests {
         out
     }
 
+    /// The archive program the tests use to make zips: bsdtar, which Windows ships under the name tar.
+    fn tar_tool() -> &'static str {
+        if fsutil::find_in_path("bsdtar").is_some() {
+            "bsdtar"
+        } else {
+            "tar"
+        }
+    }
+
     fn api(h: &Harness, path: &str, body: Value) -> Value {
         let (code, text) = http(h, "POST", path, &[("X-Rig-Token", &h.token)], body.to_string().as_bytes());
         assert_eq!(code, 200, "{path}: {text}");
@@ -8396,7 +8405,7 @@ mod tests {
         fs::write(src.join("crashreporter.exe"), b"MZ").unwrap();
         let zip = h._dir.join("pkg.zip");
         let ok = if fsutil::find_in_path("bsdtar").is_some() {
-            Command::new("bsdtar").args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success()
+            Command::new(tar_tool()).args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success()
         } else {
             Command::new("7z").arg("a").arg(&zip).arg(format!("{}/*", src.display())).stdout(Stdio::null()).status().unwrap().success()
         };
@@ -8446,9 +8455,7 @@ mod tests {
         fs::write(src.join("ue4ss/UE4SS-settings.ini"), "[General]\nbUseUObjectArrayCache = true\n").unwrap();
         fs::write(src.join("ue4ss/Mods/Keybinds/Scripts/main.lua"), "--").unwrap();
         let zip = h._dir.join("rt.zip");
-        // Windows ships the same program under the name tar
-        let tar = if fsutil::find_in_path("bsdtar").is_some() { "bsdtar" } else { "tar" };
-        assert!(Command::new(tar).args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
+        assert!(Command::new(tar_tool()).args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
         let (code, _) = http(&h, "POST", "/api/drop_upload?name=UE4SS_v3.zip", &[("X-Rig-Token", &h.token)], &fs::read(&zip).unwrap());
         assert_eq!(code, 200);
         wait_until("runtime installed", || bin.join("ue4ss/UE4SS.dll").is_file() && bin.join("dwmapi.dll").is_file());
@@ -8493,7 +8500,7 @@ mod tests {
             fs::write(src.join(p), c).unwrap();
         }
         let zip = h._dir.join(&format!("{name}.zip"));
-        assert!(Command::new("bsdtar").args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
+        assert!(Command::new(tar_tool()).args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
         fs::read(&zip).unwrap()
     }
 
@@ -8966,7 +8973,7 @@ mod tests {
         fs::write(src.join("ue4ss/MemberVarLayoutTemplates/MemberVariableLayout_5_03_Template.ini"), "[m]\n").unwrap();
         fs::write(src.join("ue4ss/Mods/Keybinds/Scripts/main.lua"), "--").unwrap();
         let zip = h.state.read().unwrap().paths.cache_dir.join(ue4ss::MANUAL_OVERRIDE);
-        assert!(Command::new("bsdtar").args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
+        assert!(Command::new(tar_tool()).args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
     }
 
     #[test]
@@ -9042,7 +9049,7 @@ mod tests {
         fs::write(src.join("ue4ss/VTableLayoutTemplates/VTableLayout_5_03_Template.ini"), "[v]\n").unwrap();
         fs::write(src.join("ue4ss/MemberVarLayoutTemplates/MemberVariableLayout_5_03_Template.ini"), "[m]\n").unwrap();
         let zip = h._dir.join("release.zip");
-        assert!(Command::new("bsdtar").args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
+        assert!(Command::new(tar_tool()).args(["-a", "-cf"]).arg(&zip).arg("-C").arg(&src).arg(".").status().unwrap().success());
         let fake = ue4ss::fake_release("zDEV-UE4SS_v9.9.9-1-gabc.zip", fs::read(&zip).unwrap());
         h.state.write().unwrap().ue4ss_source = fake.src.clone();
 
@@ -10152,7 +10159,7 @@ mod tests {
         let msg = export_pack_file(&h.state, &from, "Cool setup", &pack).unwrap();
         assert!(msg.contains("1 with their files"), "{msg}");
         // inside: the list, the files of the hand-added mod only
-        let listing = String::from_utf8_lossy(&Command::new("bsdtar").arg("-tf").arg(&pack).output().unwrap().stdout).to_string();
+        let listing = String::from_utf8_lossy(&Command::new(tar_tool()).arg("-tf").arg(&pack).output().unwrap().stdout).to_string();
         assert!(listing.contains("pack.json") && listing.contains("own.esp") && !listing.contains("nx.esp"), "{listing}");
 
         // another game takes it in
