@@ -507,6 +507,12 @@
   .lib-tag.warn { background: rgba(251,191,36,0.16); color: color-mix(in srgb, #fbbf24, var(--ink) var(--lift)); }
   .lib-tag.mods { background: rgba(167,139,250,0.18); color: color-mix(in srgb, #c4b5fd, var(--ink) var(--lift)); }
   .lib-banner { display:flex; gap:10px; align-items:center; justify-content:space-between; padding:9px 12px; border-radius:10px; background:rgba(56,189,248,0.10); border:1px solid rgba(56,189,248,0.3); font-size:12px; color: color-mix(in srgb, #bae6fd, var(--ink) var(--lift)); z-index:2; }
+  .shot-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap:10px; }
+  .shot { position:relative; padding:0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background: var(--n3); cursor:pointer; aspect-ratio: 16/9; transition: transform .22s var(--spring), border-color .2s ease; }
+  .shot:hover, .shot:focus-visible { transform: translateY(-2px); border-color: var(--accent-border, var(--line)); }
+  .shot img { width:100%; height:100%; object-fit:cover; display:block; }
+  .shot .tag { position:absolute; left:6px; bottom:6px; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; background: rgba(8,10,16,.78); color:#fff; }
+  .shot .tag.modded { background: rgba(35,120,80,.92); }
   .heart { padding: 4px 9px; font-size: 14px; line-height: 1; }
   .heart.on { color: var(--danger, #f87171); border-color: color-mix(in srgb, var(--danger, #f87171) 55%, transparent); }
   .trend-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap:10px; margin-bottom:10px; }
@@ -1414,6 +1420,7 @@
             <button class="btn tool" onclick="copyReport()">📋 Problem Report</button>
             <button class="btn tool" onclick="openLogs()">📜 Logs</button>
             <button class="btn tool" id="btnWorkshop" data-dyn style="display:none" onclick="openWorkshop()"></button>
+            <button class="btn tool" id="btnShots" data-dyn style="display:none" onclick="openShots()"></button>
             <button class="btn tool" onclick="openDisk()">💾 Backup &amp; Disk</button>
             <button class="btn tool" onclick="openPack()">🧩 Support entry</button>
             <button class="btn tool" id="btnPlugins" style="display:none" onclick="openPlugins()">🔌 Plugins</button>
@@ -1512,6 +1519,16 @@
       <button class="btn" onclick="closeModals()" aria-label="Close">✕</button>
     </div>
     <div id="lcContent" data-dyn style="font-size:13px; line-height:1.6; color:var(--ink); z-index:2;"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="shotsModal">
+  <div class="glass-card modal-window" style="width:calc(900 * var(--vw)); max-width:94vw; max-height:calc(88 * var(--vh)); display:flex; flex-direction:column;">
+    <div class="modal-hdr">
+      <span>📸 Screenshots of the game</span>
+      <button class="btn" onclick="closeModals()" aria-label="Close">✕</button>
+    </div>
+    <div id="shotsBody" data-dyn style="display:flex; flex-direction:column; gap:10px; min-height:0; overflow-y:auto; z-index:2;"></div>
   </div>
 </div>
 
@@ -3329,6 +3346,31 @@
 
   // ---------- Logs of the game, all in one place ----------
   let logSrc = '', logQ = '', logTimer = null;
+  // ---------- Screenshots: before and after mods ----------
+  let shotsData = null, shotsFilter = 'all';
+  const shotUrl = (n, thumb) => `/api/screenshot?n=${n}${thumb ? '&thumb=1' : ''}&t=${encodeURIComponent(RIG_TOKEN)}`;
+  async function openShots() {
+    shotsFilter = 'all';
+    document.getElementById('shotsBody').textContent = t('Loading…');
+    document.getElementById('shotsModal').classList.add('open');
+    try { shotsData = await (await fetch('/api/screenshots')).json(); } catch (e) { document.getElementById('shotsBody').textContent = t('Could not load: {}', e); return; }
+    renderShots();
+  }
+  function setShotsFilter(f) { shotsFilter = f; renderShots(); }
+  function renderShots() {
+    const box = document.getElementById('shotsBody');
+    const d = shotsData || { items: [], modded: 0, plain: 0 };
+    if (!d.items.length) { box.innerHTML = `<div class="cd-card">${t('No screenshots yet. Press the Steam screenshot key (F12) in the game.')}</div>`; return; }
+    const chips = [['all', t('All'), d.items.length], ['modded', t('With mods'), d.modded], ['plain', t('Without mods'), d.plain]];
+    const shown = d.items.filter(i => shotsFilter === 'all' || i.kind === shotsFilter);
+    box.innerHTML = `<div style="color:var(--text-muted); font-size:12.5px;">${t('Pictures taken with Steam\'s screenshot key. “With mods” and “Without mods” come from Gantry\'s own record of when you played.')}</div>
+      <div class="lib-chips">${chips.map(([k, l, n]) => `<button class="lib-chip ${shotsFilter === k ? 'active' : ''}" onclick="setShotsFilter('${k}')">${l} · ${n}</button>`).join('')}</div>
+      <div class="shot-grid">${shown.map((i, at) => `<button class="shot" aria-label="${escapeHtml(t('Open the screenshot of {}', new Date(i.at_ms).toLocaleString(LANG)))}" onclick="openShotAt(${at})"><img src="${shotUrl(i.n, true)}" alt="" loading="lazy" onerror="this.remove()">${i.kind === 'unknown' ? '' : `<span class="tag ${i.kind}">${i.kind === 'modded' ? t('With mods') : t('Without mods')}</span>`}</button>`).join('')}</div>`;
+    shotsShown = shown;
+  }
+  let shotsShown = [];
+  function openShotAt(at) { openLightbox(shotsShown.map(i => shotUrl(i.n, false)), at); }
+
   // ---------- Steam Workshop (read-only list of what Steam installed) ----------
   async function openWorkshop() {
     const box = document.getElementById('wsBody');
@@ -4249,6 +4291,7 @@
       [t('🕵️ Crash Detective'), openCrashDetective, !!g],
       [t('💾 Save Guard'), openSaveGuard, !!g],
       [t('🧩 Workshop ({})', (appState.library || {}).workshop || 0), openWorkshop, !!g && ((appState.library || {}).workshop || 0) > 0],
+      [t('📸 Screenshots ({})', (appState.library || {}).screenshots || 0), openShots, !!g && ((appState.library || {}).screenshots || 0) > 0],
       [t('📋 Copy the mod list'), copyModList, !!g],
       [t('🐞 Report a problem'), () => ipcSend('/api/open_link', { which: 'report', kind: 'bug' }), true],
       [t('🎮 Ask for a game'), () => ipcSend('/api/open_link', { which: 'report', kind: 'game' }), true],
@@ -5708,6 +5751,9 @@
     document.getElementById('btnPlugins').style.display = lib && lib.plugins ? '' : 'none';
     document.getElementById('btnSavesFolder').style.display = lib && lib.save_folders > 0 ? '' : 'none';
     { const g0 = appState.games[appState.selected_idx]; document.getElementById('btnPrefixFolder').style.display = g0 && g0.has_pfx && appState.os === 'linux' ? '' : 'none'; }
+    const shBtn = document.getElementById('btnShots');
+    shBtn.style.display = lib && lib.screenshots > 0 ? '' : 'none';
+    if (lib && lib.screenshots > 0) shBtn.textContent = t('📸 Screenshots ({})', lib.screenshots);
     const wsBtn = document.getElementById('btnWorkshop');
     wsBtn.style.display = lib && lib.workshop > 0 ? '' : 'none';
     if (lib && lib.workshop > 0) wsBtn.textContent = t('🧩 Workshop ({})', lib.workshop);

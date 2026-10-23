@@ -39,6 +39,7 @@ pub mod perf;
 pub mod recipes;
 pub mod repair;
 pub mod saves;
+pub mod screenshots;
 pub mod steam;
 pub mod steamlib;
 pub mod workshop;
@@ -927,6 +928,37 @@ fn save_folder_count(g: &GameEntry) -> usize {
     n
 }
 
+/// The Steam screenshots of a game, each told apart by the session (with or without mods) it was taken in.
+fn shots_for(state: &SharedState, g: &GameEntry) -> Vec<screenshots::Shot> {
+    let (roots, sessions_file) = {
+        let st = read_state(state);
+        (st.steam_lib.roots.clone().unwrap_or_else(RigPaths::steam_roots), st.paths.config_file.with_file_name("sessions.jsonl"))
+    };
+    let id = g.steam_id();
+    if id.is_empty() {
+        return Vec::new();
+    }
+    let sessions: Vec<stats::Session> = stats::read(&sessions_file).into_iter().filter(|s| s.appid == g.appid).collect();
+    screenshots::list(&roots, id, &sessions)
+}
+
+/// How many screenshots the game has (looked up at most every 30 seconds).
+fn screenshot_count(g: &GameEntry) -> usize {
+    if g.steam_id().is_empty() {
+        return 0;
+    }
+    static CACHE: std::sync::LazyLock<Mutex<std::collections::HashMap<String, (Instant, usize)>>> = std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+    let key = format!("{}|{}", g.steam_id(), g.game_dir);
+    if let Some((at, n)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
+        if at.elapsed() < Duration::from_secs(30) {
+            return *n;
+        }
+    }
+    let n = screenshots::list(&RigPaths::steam_roots(), g.steam_id(), &[]).len();
+    CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(key, (Instant::now(), n));
+    n
+}
+
 /// How many Workshop items the game has installed (looked up at most every 30 seconds).
 fn workshop_count(g: &GameEntry) -> usize {
     if g.steam_id().is_empty() || g.game_dir.is_empty() {
@@ -1053,6 +1085,7 @@ fn library_status(g: &GameEntry, first: bool) -> Value {
             v["saves_of"] = json!(lib.saves_of());
             v["save_folders"] = json!(save_folder_count(g));
             v["workshop"] = json!(workshop_count(g));
+            v["screenshots"] = json!(screenshot_count(g));
             // Steam syncs the copy it installed itself, not one that came from another launcher
             v["steam_cloud"] = json!(steamlib::manifest_for(Path::new(&g.game_dir), g.steam_id()).is_some() && steamlib::cloud_synced(&RigPaths::steam_roots(), g.steam_id()));
             v["plugins"] = json!(has_plugins(g));
@@ -3679,6 +3712,26 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             return respond_json(req, 200, body.to_string());
         }
         "/api/home_trending" => return respond_json(req, 200, trending_for_home(&state, query_param(&query, "refresh").as_deref() == Some("1")).to_string()),
+        "/api/screenshots" => {
+            let shots = selected_game(&state).map(|g| shots_for(&state, &g)).unwrap_or_default();
+            let count = |k: &str| shots.iter().filter(|s| s.kind == k).count();
+            let items: Vec<Value> = shots.iter().enumerate().map(|(n, s)| json!({ "n": n, "name": s.name, "at_ms": s.at_ms, "kind": s.kind })).collect();
+            return respond_json(req, 200, json!({ "items": items, "modded": count("modded"), "plain": count("plain") }).to_string());
+        }
+        "/api/screenshot" => {
+            // the browser names a place in the list, never a file
+            let n = query_param(&query, "n").and_then(|v| v.parse::<usize>().ok());
+            let found = selected_game(&state).and_then(|g| {
+                let shots = shots_for(&state, &g);
+                screenshots::bytes(shots.get(n?)?, query_param(&query, "thumb").as_deref() == Some("1"))
+            });
+            return match found {
+                Some((bytes, ctype)) => {
+                    let _ = req.respond(Response::from_data(bytes).with_header(Header::from_bytes(&b"Content-Type"[..], ctype.as_bytes()).unwrap()).with_header(nocache_header()));
+                }
+                None => respond_json(req, 404, json!({ "error": "no such picture" }).to_string()),
+            };
+        }
         "/api/sync_info" => {
             let folder = read_state(&state).config.sync_folder.clone();
             let copies = if folder.is_empty() { Vec::new() } else { autobackup::list(&sync_dir(&folder)) };
@@ -11695,6 +11748,44 @@ mod tests {
         // switching it off
         api(&h, "/api/sync_folder_set", json!({ "path": "" }));
         assert!(h.state.read().unwrap().config.sync_folder.is_empty());
+    }
+
+    #[test]
+    fn screenshots_are_listed_and_served_by_their_place_in_the_list() {
+        let h = harness("screenshots");
+        let dir = add_plain_game(&h);
+        let _ = dir;
+        h.state.write().unwrap().games.last_mut().unwrap().steam_appid = "620".into();
+        let root = h._dir.join("FakeSteam");
+        let shots = root.join("userdata/9/760/remote/620/screenshots");
+        fs::create_dir_all(shots.join("thumbnails")).unwrap();
+        let now = now_ms();
+        for (name, ago_ms) in [("new.jpg", 1000u64), ("old.jpg", 5_000_000)] {
+            let p = shots.join(name);
+            fs::write(&p, format!("FULL {name}")).unwrap();
+            fs::File::options().write(true).open(&p).unwrap().set_modified(std::time::UNIX_EPOCH + Duration::from_millis(now - ago_ms)).unwrap();
+        }
+        fs::write(shots.join("thumbnails/new.jpg"), "SMALL new.jpg").unwrap();
+        h.state.write().unwrap().steam_lib.roots = Some(vec![root]);
+        // one session with mods around the newer picture
+        let g = selected_game(&h.state).unwrap();
+        let sessions = h.state.read().unwrap().paths.config_file.with_file_name("sessions.jsonl");
+        stats::record(&sessions, &stats::Session { appid: g.appid.clone(), name: g.name.clone(), start_ms: now - 600_000, end_ms: now, secs: 600, crashed: false, mods: 2, perf: None });
+        let (code, body) = http(&h, "GET", "/api/screenshots", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(code, 200);
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!((v["items"][0]["name"].as_str(), v["items"][0]["kind"].as_str(), v["items"][1]["kind"].as_str(), v["modded"].as_u64()), (Some("new.jpg"), Some("modded"), Some("unknown"), Some(1)), "{v}");
+        let get = |q: &str| http(&h, "GET", &format!("/api/screenshot?{q}"), &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(get("n=0&thumb=1"), (200, "SMALL new.jpg".to_string()));
+        assert_eq!(get("n=0"), (200, "FULL new.jpg".to_string()));
+        assert_eq!(get("n=1&thumb=1"), (200, "FULL old.jpg".to_string()), "no small copy: the picture itself");
+        for bad in ["n=2", "n=-1", "n=abc", "", "n=0/../../etc/passwd"] {
+            assert_eq!(get(bad).0, 404, "{bad}");
+        }
+        // the token can also come in the address, which is what an <img> tag can do
+        let (c, _) = http(&h, "GET", &format!("/api/screenshot?n=0&t={}", h.token), &[], b"");
+        assert_eq!(c, 200);
+        assert_eq!(http(&h, "GET", "/api/screenshot?n=0", &[], b"").0, 403);
     }
 
     #[test]
