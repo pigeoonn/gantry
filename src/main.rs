@@ -7,6 +7,7 @@ pub mod crash;
 pub mod deploy;
 pub mod engine;
 pub mod fomod;
+pub mod frameworks;
 pub mod fsutil;
 pub mod github;
 pub mod gamelogs;
@@ -188,6 +189,8 @@ pub struct AppState {
     pub undo: Vec<UndoEntry>,
     pub nexus: NexusState,
     pub modio: ModioState,
+    /// Where new downloads are looked for (tests point it at a temporary folder).
+    pub downloads_dir: Option<PathBuf>,
     pub vt: VtState,
     /// Where the UE4SS release is looked up (tests point this at a local fake).
     pub ue4ss_source: ue4ss::Source,
@@ -628,6 +631,7 @@ impl AppState {
             undo: Vec::new(),
             nexus: NexusState::default(),
             modio: ModioState::default(),
+            downloads_dir: None,
             vt: VtState::default(),
             ue4ss_source: ue4ss::Source::default(),
             loader_sources: loaders::Sources::default(),
@@ -2527,6 +2531,29 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
     if !needs.is_empty() {
         out.push(issue("needs", "warn", "", vec![needs.join(", ")]));
     }
+    // the same mod twice (two versions of one Nexus page, say) is a common reason for scripts that do not compile
+    {
+        let mut groups: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        for m in mods.iter().filter(|m| m.enabled) {
+            let key = m.nexus.as_ref().filter(|n| n.valid()).map(|n| format!("nx:{}:{}", n.game, n.mod_id)).or_else(|| m.thunderstore.as_ref().map(|t| format!("ts:{}", t.full_name().to_lowercase()))).or_else(|| m.modio.as_ref().map(|r| format!("mio:{}:{}", r.game_id, r.mod_id)));
+            if let Some(k) = key {
+                groups.entry(k).or_default().push(if m.version.is_empty() { m.name.clone() } else { format!("{} v{}", m.name, m.version) });
+            }
+        }
+        for names in groups.values().filter(|v| v.len() > 1).take(3) {
+            out.push(issue("duplicate_mod", "warn", "", vec![names.join(", ")]));
+        }
+    }
+    // core mods (RED4ext, ArchiveXL, a script extender ...) that the enabled mods ask for and the game does not have
+    {
+        let enabled: Vec<String> = mods.iter().filter(|m| m.enabled).flat_map(|m| m.files.iter().map(|f| if m.target.is_empty() { f.clone() } else { format!("{}/{}", m.target, f) })).collect();
+        let fw = frameworks::missing(&dir, &enabled);
+        if !fw.is_empty() {
+            let mut i = issue("needs_framework", "warn", "", fw.iter().map(|x| x.name.to_string()).collect());
+            i["links"] = json!(fw.iter().map(|x| json!({ "name": x.name, "url": x.page })).collect::<Vec<_>>());
+            out.push(i);
+        }
+    }
     if status["dirty"].as_bool().unwrap_or(false) && !mods.is_empty() && drift == 0 {
         out.push(issue("dirty", "info", "deploy", vec![]));
     }
@@ -3966,6 +3993,7 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             return respond_json(req, 200, body.to_string());
         }
         "/api/home_trending" => return respond_json(req, 200, trending_for_home(&state, query_param(&query, "refresh").as_deref() == Some("1")).to_string()),
+        "/api/inbox" => return respond_json(req, 200, inbox_json(&state).to_string()),
         "/api/screenshots" => {
             let shots = selected_game(&state).map(|g| shots_for(&state, &g)).unwrap_or_default();
             let count = |k: &str| shots.iter().filter(|s| s.kind == k).count();
@@ -4599,6 +4627,12 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         "/api/modio_key_clear" => {
             clear_modio_key(state);
             log(state, "WARN", "mod.io API key removed from this computer.");
+        }
+        "/api/inbox_add" | "/api/inbox_hide" => {
+            let names: Vec<String> = body.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).take(40).collect()).unwrap_or_default();
+            let install = path == "/api/inbox_add";
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || inbox_take(&state_bg, &names, install));
         }
         "/api/modio_game_set" => {
             let id: u64 = body.get("id").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(0);
@@ -6720,6 +6754,108 @@ fn modio_game_set(state: &SharedState, g: &GameEntry, id: u64) -> Result<String,
     known.insert(g.appid.clone(), game.id);
     fsutil::atomic_write(&file, serde_json::to_string(&known).unwrap_or_default()).map_err(|e| e.to_string())?;
     Ok(format!("{} will use the mod.io game {}.", g.name, game.name))
+}
+
+// ───────────────────────────── new downloads in the Downloads folder ─────────────────────────────
+
+/// The folder the browser saves to.
+fn downloads_folder() -> PathBuf {
+    if cfg!(target_os = "linux") {
+        if let Ok(t) = fs::read_to_string(home_dir().join(".config/user-dirs.dirs")) {
+            let found = t.lines().find_map(|l| l.trim().strip_prefix("XDG_DOWNLOAD_DIR=")).map(|v| v.trim().trim_matches('"').replace("$HOME", &home_dir().to_string_lossy()));
+            if let Some(d) = found.filter(|d| d.starts_with('/') && !d.contains("..")) {
+                return PathBuf::from(d);
+            }
+        }
+    }
+    home_dir().join("Downloads")
+}
+
+fn inbox_file(st: &AppState) -> PathBuf {
+    st.cache_root().join("inbox.json")
+}
+
+/// "name|size" of the files that were added or hidden already.
+fn inbox_handled(state: &SharedState) -> HashSet<String> {
+    let file = inbox_file(&read_state(state));
+    fs::read(file).ok().and_then(|b| serde_json::from_slice::<Vec<String>>(&b).ok()).unwrap_or_default().into_iter().collect()
+}
+
+fn inbox_mark(state: &SharedState, keys: impl IntoIterator<Item = String>) {
+    let mut all = inbox_handled(state);
+    all.extend(keys);
+    let mut list: Vec<String> = all.into_iter().collect();
+    list.sort();
+    let skip = list.len().saturating_sub(500);
+    let file = inbox_file(&read_state(state));
+    let _ = fsutil::atomic_write(&file, serde_json::to_string(&list[skip..]).unwrap_or_default());
+}
+
+/// Mod archives that arrived in `dir` lately and are finished: `(path, size, age in seconds)`, newest first.
+fn inbox_scan(dir: &Path, handled: &HashSet<String>, now: std::time::SystemTime) -> Vec<(PathBuf, u64, u64)> {
+    let mut out: Vec<(PathBuf, u64, u64, std::time::SystemTime)> = Vec::new();
+    for e in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = e.path();
+        let ext = path.extension().map(|x| x.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let Ok(meta) = e.metadata() else { continue };
+        if !meta.is_file() || !ARCHIVE_EXTS.contains(&ext.as_str()) || meta.len() < 64 || meta.len() > 10 << 30 {
+            continue;
+        }
+        let Ok(modified) = meta.modified() else { continue };
+        let age = now.duration_since(modified).map(|d| d.as_secs()).unwrap_or(0);
+        // still being written, or too old to be what the person just downloaded
+        if !(8..=14 * 86_400).contains(&age) {
+            continue;
+        }
+        let name = e.file_name().to_string_lossy().to_string();
+        if handled.contains(&format!("{}|{}", name, meta.len())) || handled.contains(&name) {
+            continue;
+        }
+        out.push((path, meta.len(), age, modified));
+    }
+    out.sort_by_key(|x| std::cmp::Reverse(x.3));
+    out.truncate(30);
+    out.into_iter().map(|(p, s, a, _)| (p, s, a)).collect()
+}
+
+/// Files already in this game's library are not offered again: its mods remember the file they came from.
+fn inbox_installed(g: &GameEntry) -> HashSet<String> {
+    library_of(g).map(|l| l.mods().into_iter().map(|m| m.source).collect()).unwrap_or_default()
+}
+
+fn inbox_json(state: &SharedState) -> Value {
+    let Some(g) = selected_game(state).filter(|g| g.is_installed) else { return json!({ "items": [] }) };
+    let dir = read_state(state).downloads_dir.clone().unwrap_or_else(downloads_folder);
+    let mut handled = inbox_handled(state);
+    handled.extend(inbox_installed(&g));
+    let items: Vec<Value> = inbox_scan(&dir, &handled, std::time::SystemTime::now())
+        .into_iter()
+        .map(|(p, size, age)| {
+            let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let (clean, version) = deploy::friendly_name(&name);
+            json!({ "name": name, "clean": clean, "version": version, "size": size, "age_s": age })
+        })
+        .collect();
+    json!({ "items": items, "game": g.name })
+}
+
+/// Add (or just hide) archives from the Downloads folder. Only names the scan itself lists are taken.
+fn inbox_take(state: &SharedState, names: &[String], install: bool) {
+    let Some(g) = selected_game(state).filter(|g| g.is_installed) else { return };
+    let dir = read_state(state).downloads_dir.clone().unwrap_or_else(downloads_folder);
+    let mut handled = inbox_handled(state);
+    handled.extend(inbox_installed(&g));
+    let listed = inbox_scan(&dir, &handled, std::time::SystemTime::now());
+    let mut keys = Vec::new();
+    for want in names {
+        let Some((path, size, _)) = listed.iter().find(|(p, _, _)| p.file_name().map(|n| n.to_string_lossy() == want.as_str()).unwrap_or(false)).cloned() else { continue };
+        keys.push(format!("{}|{}", want, size));
+        if install {
+            install_routed(path, false, Arc::clone(state), InstallOpts { to_library: true, ..Default::default() });
+        }
+    }
+    inbox_mark(state, keys);
+    write_state(state).notifier.bump();
 }
 
 /// One mod.io mod (and the mods it needs, deepest first) into `g`'s library; what is already there is skipped.
@@ -9695,7 +9831,7 @@ mod tests {
         let huge = d.join("huge.zip");
         fs::File::create(&huge).unwrap().set_len(1 << 46).unwrap();
         let e = ensure_room(&huge, &d.join("")).unwrap_err();
-        assert!(e.starts_with("Not enough free space for huge.zip") && e.contains("TB") == false && e.contains("GB"), "{e}");
+        assert!(e.starts_with("Not enough free space for huge.zip") && !e.contains("TB") && e.contains("GB"), "{e}");
         assert!(fsutil::free_bytes(&d.join("")).unwrap_or(0) > 0);
         assert_eq!(fsutil::size_text(5 << 20), "5 MB");
         assert_eq!(fsutil::size_text(3 << 30), "3.0 GB");
@@ -9731,6 +9867,109 @@ mod tests {
         wait_until("answered", || state()["pending_install"].is_null());
         assert_eq!(mods(), 1, "the one that was refused was not added");
         assert_eq!(fs::read_to_string(dir.join("VEHICLES/VEH_2_HI.BNDL")).unwrap(), "ORIGINAL");
+    }
+
+    #[test]
+    fn a_mod_that_needs_a_core_mod_the_game_lacks_is_reported_with_where_to_get_it() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("frameworks");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("bin/x64")).unwrap();
+        fs::write(dir.join("bin/x64/Cyberpunk2077.exe"), b"MZ").unwrap();
+        let issues = || -> Vec<Value> {
+            let (_, body) = http(&h, "GET", "/api/health", &[("X-Rig-Token", &h.token)], b"");
+            serde_json::from_str::<Value>(&body).unwrap()["issues"].as_array().unwrap().clone()
+        };
+        assert!(issues().iter().all(|i| i["code"] != "needs_framework"));
+        let zip = zip_of(&h, "xl", &[("archive/pc/mod/Cat.archive", "A"), ("archive/pc/mod/Cat.archive.xl", "X")]);
+        let (code, _) = http(&h, "POST", "/api/drop_upload?name=Cat-1-1-0-1700000000.zip", &[("X-Rig-Token", &h.token)], &zip);
+        assert_eq!(code, 200);
+        wait_until("mod added", || api(&h, "/api/state", json!({}))["library"]["mods"].as_array().map(|m| m.len()) == Some(1));
+        let found = issues().into_iter().find(|i| i["code"] == "needs_framework").expect("ArchiveXL is asked for and missing");
+        assert_eq!(found["args"][0], "ArchiveXL");
+        assert!(found["links"][0]["url"].as_str().unwrap().starts_with("https://www.nexusmods.com/cyberpunk2077/"));
+        // once it is in the game the line goes away
+        fs::create_dir_all(dir.join("red4ext/plugins/ArchiveXL")).unwrap();
+        fs::write(dir.join("red4ext/plugins/ArchiveXL/ArchiveXL.dll"), b"x").unwrap();
+        assert!(issues().iter().all(|i| i["code"] != "needs_framework"));
+    }
+
+    #[test]
+    fn the_same_mod_installed_twice_is_pointed_out() {
+        let h = harness("dupes");
+        add_plain_game(&h);
+        let g = h.state.read().unwrap().games.last().unwrap().clone();
+        let lib = library_of(&g).unwrap();
+        for (n, v) in [("Cool Pack", "1.0"), ("Cool Pack renamed", "2.0")] {
+            let s = h._dir.join(&format!("dupe-{v}"));
+            fs::create_dir_all(s.join("Data")).unwrap();
+            fs::write(s.join(format!("Data/{v}.esp")), v).unwrap();
+            lib.add_with(&s, n, &format!("{n}.zip"), Some(nexus::NexusRef { game: "coolgame".into(), mod_id: 5, file_id: if v == "1.0" { 10 } else { 12 } }), v).unwrap();
+        }
+        refresh_mods_shared(&h.state);
+        let (issues, _) = game_issues(&h.state, &g, false);
+        let d = issues.iter().find(|i| i["code"] == "duplicate_mod").expect("two copies of Nexus mod 5");
+        assert!(d["args"][0].as_str().unwrap().contains("Cool Pack v1.0") && d["args"][0].as_str().unwrap().contains("Cool Pack renamed v2.0"), "{d}");
+        // turning one off clears it
+        let id = lib.mods()[0].id.clone();
+        lib.set_enabled(&id, false).unwrap();
+        let (again, _) = game_issues(&h.state, &g, false);
+        assert!(again.iter().all(|i| i["code"] != "duplicate_mod"));
+    }
+
+    #[test]
+    fn finished_mod_files_in_the_downloads_folder_are_offered_once_and_added_on_request() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("inbox");
+        add_plain_game(&h);
+        let dl = h._dir.join("Downloads");
+        fs::create_dir_all(&dl).unwrap();
+        h.state.write().unwrap().downloads_dir = Some(dl.clone());
+        let ago = |p: &Path, secs: u64| {
+            let f = fs::File::options().write(true).open(p).unwrap();
+            f.set_modified(std::time::SystemTime::now() - Duration::from_secs(secs)).unwrap();
+        };
+        let put = |name: &str, bytes: &[u8], secs: u64| {
+            fs::write(dl.join(name), bytes).unwrap();
+            ago(&dl.join(name), secs);
+        };
+        let zip = zip_of(&h, "dl", &[("Data/from_downloads.esp", "D")]);
+        put("Fast Cars 790 2.14 2026-10-21T20-49Z abc.zip", &zip, 120);
+        put("Still Coming 5 1.0 2026-10-21T20-49Z abc.zip", &zip, 2);
+        put("Ancient-1-1-0-100.zip", &zip, 30 * 86_400);
+        put("notes.txt", &[b'x'; 2000], 120);
+        put("Unconfirmed 123.crdownload", &[b'x'; 2000], 120);
+        put("tiny.zip", b"PK", 120);
+        let get = || -> Value {
+            let (code, body) = http(&h, "GET", "/api/inbox", &[("X-Rig-Token", &h.token)], b"");
+            assert_eq!(code, 200, "{body}");
+            serde_json::from_str(&body).unwrap()
+        };
+        let first = get();
+        let names: Vec<&str> = first["items"].as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap()).collect();
+        assert_eq!(names, vec!["Fast Cars 790 2.14 2026-10-21T20-49Z abc.zip"], "only a finished, recent mod archive: {first}");
+        assert_eq!((first["items"][0]["clean"].as_str(), first["items"][0]["version"].as_str()), (Some("Fast Cars"), Some("2.14")));
+        // a name that is not in the list is ignored, whatever it points at
+        api(&h, "/api/inbox_add", json!({ "names": ["../../etc/passwd", "notes.txt"] }));
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(api(&h, "/api/state", json!({}))["library"]["mods"].as_array().unwrap().len(), 0);
+        api(&h, "/api/inbox_add", json!({ "names": ["Fast Cars 790 2.14 2026-10-21T20-49Z abc.zip"] }));
+        wait_until("added", || api(&h, "/api/state", json!({}))["library"]["mods"].as_array().map(|m| m.len()) == Some(1));
+        assert_eq!(api(&h, "/api/state", json!({}))["library"]["mods"][0]["name"], "Fast Cars");
+        assert!(dl.join("Fast Cars 790 2.14 2026-10-21T20-49Z abc.zip").exists(), "the download itself stays where it was");
+        wait_until("offered no more", || get()["items"].as_array().unwrap().is_empty());
+        // hiding is remembered too
+        put("Another 6 1.0 2026-10-21T20-49Z abc.zip", &zip, 120);
+        assert_eq!(get()["items"].as_array().unwrap().len(), 1);
+        api(&h, "/api/inbox_hide", json!({ "names": ["Another 6 1.0 2026-10-21T20-49Z abc.zip"] }));
+        wait_until("hidden", || get()["items"].as_array().unwrap().is_empty());
+        assert_eq!(api(&h, "/api/state", json!({}))["library"]["mods"].as_array().unwrap().len(), 1, "hiding adds nothing");
     }
 
     #[test]

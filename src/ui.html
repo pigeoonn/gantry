@@ -1316,6 +1316,7 @@
       <div class="loader-card" id="loaderCard" data-dyn style="display:none"></div>
       <div class="pack-bar" id="packBar" data-dyn style="display:none"></div>
       <div class="health-bar" id="healthBar" data-dyn style="display:none"></div>
+      <div class="health-bar info" id="inboxBar" data-dyn style="display:none"></div>
       <div class="health-bar info" id="vanillaBar" style="display:none"><span class="hb-dot"></span><span class="hb-text">Playing without mods. They come back when you close the game.</span></div>
     <div class="drop-zone slim" onclick="ipcSend('/api/install_dialog')">
       <div class="drop-title">⬇ DRAG & DROP FILES ANYWHERE OR CLICK TO BROWSE (.ZIP / .7Z / .RAR / .PAK / .DLL / .EXE)</div>
@@ -2535,7 +2536,7 @@
     renderFomodDialog();
     {
       const key = [(appState.games[appState.selected_idx] || {}).appid, appState.is_running, appState.unity && appState.unity.loader].join('|');
-      if (key !== lastHealthApp) { lastHealthApp = key; refreshHealth(); loadCompat(); }
+      if (key !== lastHealthApp) { lastHealthApp = key; refreshHealth(); refreshInbox(true); loadCompat(); }
     }
     renderNexusUi();
     const undoBtn = document.getElementById('btnUndo');
@@ -4544,6 +4545,28 @@
 
   // ---- is the modded game doing what it should? (logs, CPU, Steam launch option) ----
   let healthSeq = 0, lastHealthApp = '';
+  // mod files that just landed in the Downloads folder, ready to be added with one press
+  let inboxSeq = 0, inboxAt = 0;
+  async function refreshInbox(force) {
+    const bar = document.getElementById('inboxBar');
+    const g = appState.games[appState.selected_idx];
+    if (!g || g.is_installed === false) { bar.style.display = 'none'; return; }
+    if (!force && Date.now() - inboxAt < 8000) return;
+    inboxAt = Date.now();
+    const my = ++inboxSeq;
+    let d;
+    try { d = await (await fetch('/api/inbox')).json(); } catch (e) { return; }
+    if (my !== inboxSeq) return;
+    const items = d.items || [];
+    if (!items.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    const line = i => `<div class="hb-line info"><span class="hb-dot"></span><span class="hb-text">${escapeHtml(i.clean + (i.version ? ' v' + i.version : ''))} <small style="color:var(--text-muted)">${fmtSize(i.size)} · ${escapeHtml(ago(Date.now() - i.age_s * 1000))}</small></span><button class="btn btn-play" onclick='inboxAdd(${JS([i.name])})'>${t('Add')}</button></div>`;
+    const names = items.map(i => i.name);
+    bar.innerHTML = `<div class="hb-line info"><span class="hb-dot"></span><span class="hb-text"><b>${tp(items.length, '{} new mod file in your Downloads folder', '{} new mod files in your Downloads folder')}</b></span>${items.length > 1 ? `<button class="btn btn-play" onclick='inboxAdd(${JS(names)})'>${t('Add all ({})', items.length)}</button>` : ''}<button class="btn" onclick='inboxHide(${JS(names)})'>${t('Not now')}</button></div>` + items.slice(0, 5).map(line).join('') + (items.length > 5 ? `<div class="hb-line info"><span class="hb-text">${t('…and {} more', items.length - 5)}</span></div>` : '');
+    bar.style.display = '';
+  }
+  function inboxAdd(names) { ipcSend('/api/inbox_add', { names }); showToast(t('Adding them…')); setTimeout(() => refreshInbox(true), 1500); }
+  function inboxHide(names) { ipcSend('/api/inbox_hide', { names }); setTimeout(() => refreshInbox(true), 400); }
+
   async function refreshHealth() {
     const g = appState.games[appState.selected_idx];
     const bar = document.getElementById('healthBar');
@@ -4567,6 +4590,8 @@
         errors: () => t('{} reported a problem: {}', name, a[1]),
         drift: () => tp(Number(a[0]), '{} deployed file was changed outside Gantry', '{} deployed files were changed outside Gantry'),
         needs: () => t('Missing mods these mods need: {}', a[0]),
+        duplicate_mod: () => t('The same mod is installed more than once: {}. Keep one of them.', a[0]),
+        needs_framework: () => t('Your mods need {} to work, and the game does not have it yet.', a.join(', ')),
         dirty: () => t('Changes are not deployed yet.'),
         needs_loader: () => t('These mods need a mod loader first (see the card below).'),
         pack_note: () => t('Tip for this game: {}', a[0]),
@@ -4607,7 +4632,7 @@
       } else ring.style.display = 'none';
     }
     const fixable = (d.issues || []).filter(i => ['deploy', 'redeploy', 'launch_option'].includes(i.fix));
-    const lines = (d.issues || []).map(i => `<div class="hb-line ${i.level}"><span class="hb-dot"></span><span class="hb-text">${escapeHtml(i.code === 'known' && i.kb ? kbText(i.kb.title) : text(i))}</span>${fix(i)}${switchBtn(i)}${known(i)}</div>`);
+    const lines = (d.issues || []).map(i => `<div class="hb-line ${i.level}"><span class="hb-dot"></span><span class="hb-text">${escapeHtml(i.code === 'known' && i.kb ? kbText(i.kb.title) : text(i))}</span>${(i.links || []).map(l => `<button class="btn" onclick='openWeb(${JS(l.url)})'>${escapeHtml(l.name)} ↗</button>`).join('')}${fix(i)}${switchBtn(i)}${known(i)}</div>`);
     if (!lines.length && d.loader) {
       const okMsg = {
         ok: () => d.count > 0 ? t('{} loaded {} mods without problems.', name, d.count) : t('{} is installed and started fine.', name),
@@ -4620,7 +4645,7 @@
     {
       const lib = modLibData();
       const onMods = lib && lib.mods ? lib.mods.filter(m => m.enabled).length : 0;
-      const bad = (d.issues || []).some(i => ['bad', 'warn'].includes(i.level) && !['dirty', 'drift', 'needs', 'needs_loader', 'anti_cheat', 'launch_option'].includes(i.code));
+      const bad = (d.issues || []).some(i => ['bad', 'warn'].includes(i.level) && !['dirty', 'drift', 'needs', 'needs_framework', 'duplicate_mod', 'needs_loader', 'anti_cheat', 'launch_option'].includes(i.code));
       const btns = [];
       if (fixable.length > 1 || (fixable.length === 1 && lines.length > 1)) btns.push(`<button class="btn btn-play" onclick='fixEverything(${JS(fixable.map(i => i.fix))})'>${t('Fix everything')}</button>`);
       if (bad && onMods >= 2) btns.push(`<button class="btn" title="${escapeHtml(t('Turns mods off and on in rounds until the one that breaks the game is found.'))}" onclick="openCrashDetective()">${t('Find the broken mod')}</button>`);
@@ -4651,7 +4676,7 @@
   function fixLaunchOption() {
     if (confirm(t('Gantry will close Steam, set the launch option for your account and open Steam again. Continue?'))) ipcSend('/api/steam_launch_apply', { close_steam: true });
   }
-  setInterval(() => { if (!document.hidden) refreshHealth(); }, 10000);
+  setInterval(() => { if (!document.hidden) { refreshHealth(); refreshInbox(); } }, 10000);
 
   function renderVanillaBar() {
     const g = appState.games[appState.selected_idx];
