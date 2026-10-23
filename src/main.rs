@@ -701,7 +701,7 @@ impl AppState {
             "mods": self.mods,
             "library": self.library,
             "vanilla": self.config.vanilla_sessions,
-            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.config.deck_mode || std::env::var_os("RIG_DECK").is_some(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
+            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.config.deck_mode || std::env::var_os("RIG_DECK").is_some(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
             "notes": self.notes.json(),
             "meta": self.meta_json(),
             "health": self.health,
@@ -1817,28 +1817,9 @@ fn backup_bundle(state: &SharedState) -> Value {
     json!({ "gantry_backup": 1, "created_ms": now_ms(), "version": env!("CARGO_PKG_VERSION"), "config": config, "custom_games": custom, "libraries": libs })
 }
 
-/// Put a backup back: settings and custom games (the current ones are kept first), then each
-/// game's mod list wherever its mods are still in the library.
-fn restore_bundle(state: &SharedState, v: &Value) -> Result<String, String> {
-    if v.get("gantry_backup").and_then(Value::as_u64) != Some(1) {
-        return Err("This file is not a Gantry backup.".into());
-    }
-    running_guard(state)?;
-    let cfg: RigConfigData = serde_json::from_value(v["config"].clone()).map_err(|_| "The settings in this backup are not readable.".to_string())?;
-    let stamp = now_ms();
-    {
-        let mut st = write_state(state);
-        let keep = st.cache_root().join("backups");
-        let _ = fs::create_dir_all(&keep);
-        let _ = fs::copy(&st.paths.config_file, keep.join(format!("rig_config-{stamp}.json")));
-        let _ = fs::copy(&st.paths.custom_games_file, keep.join(format!("custom_games-{stamp}.json")));
-        st.config = cfg;
-        st.save_config();
-        if let Ok(j) = serde_json::to_string_pretty(&v["custom_games"]) {
-            let _ = atomic_write(&st.paths.custom_games_file, j);
-        }
-    }
-    // mod lists first for the games already known, then again once a rescan has found the rest
+/// Each game's mod list from a bundle, wherever its mods are still in the library: for the games already known first,
+/// then again once a rescan has found the rest. `(mods put back, mods left out, games done)`.
+fn restore_libraries(state: &SharedState, v: &Value) -> (usize, usize, usize) {
     let (mut restored, mut left_out, mut games_done) = (0, 0, 0);
     let mut done: std::collections::HashSet<String> = Default::default();
     for round in 0..2 {
@@ -1863,8 +1844,154 @@ fn restore_bundle(state: &SharedState, v: &Value) -> Result<String, String> {
             rescan(state);
         }
     }
+    (restored, left_out, games_done)
+}
+
+/// Put a backup back: settings and custom games (the current ones are kept first), then each
+/// game's mod list wherever its mods are still in the library.
+fn restore_bundle(state: &SharedState, v: &Value) -> Result<String, String> {
+    if v.get("gantry_backup").and_then(Value::as_u64) != Some(1) {
+        return Err("This file is not a Gantry backup.".into());
+    }
+    running_guard(state)?;
+    let cfg: RigConfigData = serde_json::from_value(v["config"].clone()).map_err(|_| "The settings in this backup are not readable.".to_string())?;
+    let stamp = now_ms();
+    {
+        let mut st = write_state(state);
+        let keep = st.cache_root().join("backups");
+        let _ = fs::create_dir_all(&keep);
+        let _ = fs::copy(&st.paths.config_file, keep.join(format!("rig_config-{stamp}.json")));
+        let _ = fs::copy(&st.paths.custom_games_file, keep.join(format!("custom_games-{stamp}.json")));
+        st.config = cfg;
+        st.save_config();
+        if let Ok(j) = serde_json::to_string_pretty(&v["custom_games"]) {
+            let _ = atomic_write(&st.paths.custom_games_file, j);
+        }
+    }
+    let (restored, left_out, games_done) = restore_libraries(state, v);
     refresh_mods_shared(state);
     Ok(format!("Backup restored: settings, {} game(s), {} mod(s) back in their lists, {} left out because their files are gone.", games_done, restored, left_out))
+}
+
+// ───────────────────────────── sync through a folder ─────────────────────────────
+
+/// What travels between computers: taste and lists, never paths, trainers, launch options, play time or keys.
+const SYNCED_KEYS: &[&str] = &[
+    "profiles", "library_first", "hidden_games", "theme", "custom_theme", "accent_from_game", "accent", "calm_motion", "reduce_motion", "high_contrast",
+    "layout", "saved_mods", "show_adult", "compact", "favorites", "game_notes", "game_tags", "cover_appid", "nexus_domain", "thunder_community", "no_install_preview",
+];
+
+/// The folder inside the chosen one where the copies go.
+fn sync_dir(folder: &str) -> PathBuf {
+    Path::new(folder).join("Gantry-sync")
+}
+
+/// The portable part of the setup, ready to put in the sync folder.
+fn sync_bundle(state: &SharedState) -> Value {
+    let mut b = backup_bundle(state);
+    let all = b["config"].as_object().cloned().unwrap_or_default();
+    b["config"] = Value::Object(all.into_iter().filter(|(k, _)| SYNCED_KEYS.contains(&k.as_str())).collect());
+    b["custom_games"] = json!([]);
+    b
+}
+
+/// The same bundle with the moment it was made taken out, to see whether anything changed since the last copy.
+fn without_time(v: &Value) -> String {
+    let mut c = v.clone();
+    if let Some(o) = c.as_object_mut() {
+        o.remove("created_ms");
+    }
+    c.to_string()
+}
+
+/// A folder the person typed: it has to exist, be written as a full path and not be one of Gantry's own.
+fn sync_folder_ok(path: &str, own: &[PathBuf]) -> Result<String, String> {
+    let p = Path::new(path.trim());
+    if path.trim().is_empty() || !p.is_absolute() || p.components().count() < 3 {
+        return Err("Use the full path of a folder, for example /home/you/Sync.".into());
+    }
+    if !p.is_dir() {
+        return Err("That folder does not exist.".into());
+    }
+    let canon = fsutil::canonical(p).map_err(|_| "That folder cannot be read.".to_string())?;
+    if own.iter().any(|o| fsutil::canonical(o).map(|o| canon.starts_with(&o) || o.starts_with(&canon)).unwrap_or(false)) {
+        return Err("That folder is one of Gantry's own; choose another.".into());
+    }
+    Ok(canon.to_string_lossy().to_string())
+}
+
+/// Put a copy of the portable setup in the sync folder, unless the newest copy there is the same.
+fn sync_push(state: &SharedState) -> Result<String, String> {
+    let folder = read_state(state).config.sync_folder.clone();
+    if folder.is_empty() {
+        return Err("Choose a sync folder first.".into());
+    }
+    let dir = sync_dir(&folder);
+    let bundle = sync_bundle(state);
+    if let Some(newest) = autobackup::list(&dir).first() {
+        if autobackup::read(&dir, &newest.name).map(|old| without_time(&old) == without_time(&bundle)).unwrap_or(false) {
+            return Ok("unchanged".into());
+        }
+    }
+    autobackup::store(&dir, now_ms(), &bundle.to_string())
+}
+
+/// Bring in the newest copy from the sync folder: the portable settings and each game's mod list; what belongs to this
+/// computer stays. The settings it replaces are kept first.
+fn sync_pull(state: &SharedState) -> Result<String, String> {
+    let folder = read_state(state).config.sync_folder.clone();
+    if folder.is_empty() {
+        return Err("Choose a sync folder first.".into());
+    }
+    let dir = sync_dir(&folder);
+    let newest = autobackup::list(&dir).into_iter().next().ok_or("There is nothing in the sync folder yet.")?;
+    let v = autobackup::read(&dir, &newest.name)?;
+    if v.get("gantry_backup").and_then(Value::as_u64) != Some(1) {
+        return Err("This file is not a Gantry backup.".into());
+    }
+    running_guard(state)?;
+    {
+        let mut st = write_state(state);
+        let keep = st.cache_root().join("backups");
+        let _ = fs::create_dir_all(&keep);
+        let _ = fs::copy(&st.paths.config_file, keep.join(format!("rig_config-{}.json", now_ms())));
+        let mut cur = serde_json::to_value(&st.config).map_err(|e| e.to_string())?;
+        if let (Some(c), Some(theirs)) = (cur.as_object_mut(), v["config"].as_object()) {
+            for k in SYNCED_KEYS {
+                if let Some(x) = theirs.get(*k) {
+                    c.insert((*k).to_string(), x.clone());
+                }
+            }
+        }
+        st.config = serde_json::from_value(cur).map_err(|_| "The settings in the sync folder are not readable.".to_string())?;
+        st.save_config();
+        st.notifier.bump();
+    }
+    let (restored, left_out, games) = restore_libraries(state, &v);
+    refresh_mods_shared(state);
+    Ok(format!("Brought in the setup from the sync folder: {} game(s), {} mod(s) back in their lists, {} left out because their files are not here.", games, restored, left_out))
+}
+
+/// Keep the sync folder up to date: look every twenty minutes and copy when something changed.
+fn spawn_sync_push(state: Weak<RwLock<AppState>>) {
+    if cfg!(test) {
+        return;
+    }
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(90));
+        loop {
+            let Some(st) = state.upgrade() else { return };
+            if !read_state(&st).config.sync_folder.is_empty() {
+                match sync_push(&st) {
+                    Ok(n) if n != "unchanged" => log(&st, "INFO", "Your setup was copied to the sync folder."),
+                    Err(e) => log(&st, "WARN", e),
+                    _ => {}
+                }
+            }
+            drop(st);
+            thread::sleep(Duration::from_secs(20 * 60));
+        }
+    });
 }
 
 /// Recreate a shared setup: use what the library already has, fetch the Thunderstore packages it
@@ -3552,6 +3679,11 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             return respond_json(req, 200, body.to_string());
         }
         "/api/home_trending" => return respond_json(req, 200, trending_for_home(&state, query_param(&query, "refresh").as_deref() == Some("1")).to_string()),
+        "/api/sync_info" => {
+            let folder = read_state(&state).config.sync_folder.clone();
+            let copies = if folder.is_empty() { Vec::new() } else { autobackup::list(&sync_dir(&folder)) };
+            return respond_json(req, 200, json!({ "folder": folder, "newest_ms": copies.first().map(|e| e.at_ms), "count": copies.len() }).to_string());
+        }
         "/api/doctor_all" => return respond_json(req, 200, doctor_json(&state).to_string()),
         "/api/workshop" => {
             let (game, cache, base, http) = {
@@ -4406,6 +4538,43 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             if !appid.is_empty() && appid.bytes().all(|b| b.is_ascii_digit()) && !cfg!(test) {
                 xdg_open(format!("steam://install/{}", appid));
             }
+        }
+        "/api/sync_folder_set" => {
+            let path = body_str(body, "path");
+            let own: Vec<PathBuf> = {
+                let st = read_state(state);
+                vec![st.paths.config_file.parent().map(Path::to_path_buf).unwrap_or_default(), st.cache_root()]
+            };
+            if path.trim().is_empty() {
+                let mut st = write_state(state);
+                st.config.sync_folder = String::new();
+                st.save_config();
+                st.notifier.bump();
+            } else {
+                match sync_folder_ok(&path, &own) {
+                    Ok(p) => {
+                        let mut st = write_state(state);
+                        st.config.sync_folder = p;
+                        st.save_config();
+                        st.notifier.bump();
+                        drop(st);
+                        log(state, "OK", "The sync folder is set.");
+                    }
+                    Err(e) => log(state, "WARN", e),
+                }
+            }
+        }
+        "/api/sync_push" => match sync_push(state) {
+            Ok(n) if n == "unchanged" => log(state, "INFO", "The sync folder already has your current setup."),
+            Ok(_) => log(state, "OK", "Your setup was copied to the sync folder."),
+            Err(e) => log(state, "WARN", e),
+        },
+        "/api/sync_pull" => {
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || match sync_pull(&state_bg) {
+                Ok(m) => log(&state_bg, "OK", m),
+                Err(e) => log(&state_bg, "ERR", e),
+            });
         }
         "/api/saved_toggle" => {
             // set a mod aside (or take it back out) for the selected game; the list is kept to 200
@@ -8260,6 +8429,7 @@ fn main() {
     spawn_cover_lookup(Arc::downgrade(&state));
     spawn_self_update_check(Arc::downgrade(&state));
     spawn_auto_backup(Arc::downgrade(&state));
+    spawn_sync_push(Arc::downgrade(&state));
     if std::env::var_os("RIG_EXIT_AFTER_PLAY").is_some() {
         spawn_exit_after_play(Arc::downgrade(&state));
     }
@@ -11460,6 +11630,71 @@ mod tests {
         let t = Instant::now();
         lib.purge().unwrap();
         assert!(t.elapsed() < Duration::from_secs(20));
+    }
+
+    #[test]
+    fn the_setup_travels_through_a_sync_folder_without_the_parts_that_belong_to_one_computer() {
+        let h = harness("syncfolder");
+        let folder = h._dir.join("Sync");
+        fs::create_dir_all(&folder).unwrap();
+        let get = |path: &str| -> Value {
+            let (code, text) = http(&h, "GET", path, &[("X-Rig-Token", &h.token)], b"");
+            assert_eq!(code, 200);
+            serde_json::from_str(&text).unwrap()
+        };
+        // nothing chosen: nothing happens, and it says so
+        api(&h, "/api/sync_push", json!({}));
+        assert!(last_log(&h).contains("Choose a sync folder first"), "{}", last_log(&h));
+        // bad folders are refused
+        for bad in ["relative/path", "/nonexistent/folder/here", "/", "", "  "] {
+            api(&h, "/api/sync_folder_set", json!({ "path": bad }));
+            assert!(h.state.read().unwrap().config.sync_folder.is_empty(), "{bad:?}");
+        }
+        let own = h.state.read().unwrap().paths.config_file.parent().unwrap().to_path_buf();
+        fs::create_dir_all(&own).unwrap();
+        api(&h, "/api/sync_folder_set", json!({ "path": own.to_string_lossy() }));
+        assert!(h.state.read().unwrap().config.sync_folder.is_empty(), "not one of Gantry's own folders");
+        api(&h, "/api/sync_folder_set", json!({ "path": folder.to_string_lossy() }));
+        assert!(!h.state.read().unwrap().config.sync_folder.is_empty());
+        assert_eq!(api(&h, "/api/state", json!({}))["settings"]["sync_folder"].as_str().map(|f| f.ends_with("Sync")), Some(true));
+
+        // what travels: taste and lists. What stays: this computer's paths, trainers and play time.
+        {
+            let mut st = h.state.write().unwrap();
+            st.config.theme = "midnight".into();
+            st.config.game_notes.insert("42".into(), "my note".into());
+            st.config.extra_libraries = vec!["/mnt/only-here".into()];
+            st.config.playtime_s.insert("42".into(), 999);
+            st.config.trainers.insert("42".into(), "/home/me/trainer.exe".into());
+        }
+        api(&h, "/api/sync_push", json!({}));
+        let info = get("/api/sync_info");
+        assert_eq!(info["count"], 1, "{info}");
+        let dir = sync_dir(&h.state.read().unwrap().config.sync_folder.clone());
+        let name = autobackup::list(&dir)[0].name.clone();
+        let file = fs::read_to_string(dir.join(&name)).unwrap();
+        assert!(file.contains("midnight") && file.contains("my note"));
+        assert!(!file.contains("only-here") && !file.contains("trainer.exe") && !file.contains("999"), "no paths or play time in the shared copy");
+        // the same setup again is not copied again
+        api(&h, "/api/sync_push", json!({}));
+        assert_eq!(get("/api/sync_info")["count"], 1);
+        assert!(last_log(&h).contains("already has your current setup"), "{}", last_log(&h));
+
+        // another computer changed the look: bringing it in changes the look, and keeps what is this computer's
+        let other = file.replace("midnight", "forest");
+        fs::write(dir.join(autobackup::file_name(now_ms() + 5000)), other).unwrap();
+        api(&h, "/api/sync_pull", json!({}));
+        wait_until("the setup coming in", || h.state.read().unwrap().config.theme == "forest");
+        let st = h.state.read().unwrap();
+        assert_eq!(st.config.extra_libraries, vec!["/mnt/only-here".to_string()]);
+        assert_eq!(st.config.playtime_s.get("42"), Some(&999));
+        assert_eq!(st.config.trainers.get("42").map(String::as_str), Some("/home/me/trainer.exe"));
+        assert_eq!(st.config.game_notes.get("42").map(String::as_str), Some("my note"));
+        drop(st);
+        assert!(fs::read_dir(h.state.read().unwrap().cache_root().join("backups")).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("rig_config-")), "the old settings were kept first");
+        // switching it off
+        api(&h, "/api/sync_folder_set", json!({ "path": "" }));
+        assert!(h.state.read().unwrap().config.sync_folder.is_empty());
     }
 
     #[test]

@@ -3003,6 +3003,26 @@
       <div class="cp-row"><input type="password" class="input-field" id="vtKey" autocomplete="off" spellcheck="false" aria-label="${escapeHtml(t('Your VirusTotal key'))}" style="flex:1; min-width:0"><button class="btn" onclick="ipcSend('/api/vt_key_set', { key: document.getElementById('vtKey').value }); setTimeout(openSettings, 400)">${t('Save')}</button></div>
       <div><button class="btn" onclick="openWeb('https://www.virustotal.com/gui/my-apikey')">↗ ${t('Open the page for the key')}</button></div></div>`;
   }
+  function syncRow(st) {
+    const has = !!st.sync_folder;
+    return `<div class="cp-preset" style="flex-direction:column; align-items:stretch; gap:8px"><span><b>${t('Sync folder')}</b><code>${t('A folder that Syncthing, Dropbox or a USB stick keeps in step between your computers. Gantry puts your profiles, notes, favourites, saved mods and mod lists there (never paths, keys or play time).')}</code></span>
+      <div class="cp-row"><input type="text" class="input-field" id="syncPath" value="${escapeHtml(st.sync_folder || '')}" placeholder="${escapeHtml(t('Full path of a folder'))}" aria-label="${escapeHtml(t('Sync folder'))}" autocomplete="off" spellcheck="false" style="flex:1; min-width:0"><button class="btn" onclick="ipcSend('/api/sync_folder_set', { path: document.getElementById('syncPath').value }); setTimeout(openSettings, 500)">${t('Save')}</button></div>
+      ${has ? `<div class="cp-row"><button class="btn" onclick="ipcSend('/api/sync_push', {}); setTimeout(openSettings, 900)">${t('Send now')}</button><button class="btn" onclick="syncPull()">${t('Bring in')}</button><span id="syncInfo" style="color:var(--text-muted); font-size:12px"></span></div>` : ''}</div>`;
+  }
+  async function syncPull() {
+    if (!confirm(t('Bring in the setup from the sync folder? Your current settings are kept first.'))) return;
+    ipcSend('/api/sync_pull', {});
+    setTimeout(openSettings, 1500);
+  }
+  async function syncInfoFill() {
+    const el = document.getElementById('syncInfo');
+    if (!el) return;
+    try {
+      const d = await (await fetch('/api/sync_info')).json();
+      el.textContent = d.newest_ms ? t('In the folder: {} copies, newest {}', d.count, ago(d.newest_ms)) : t('Nothing in the folder yet.');
+    } catch (e) {}
+  }
+
   function openSettings() {
     const st = appState.settings || {};
     const row = (key, on, text, hint) => `<label class="cp-preset"><input type="checkbox" ${on ? 'checked' : ''} onchange="ipcSend('/api/settings', { ${key}: this.checked })"><span><b>${escapeHtml(text)}</b><code>${escapeHtml(hint)}</code></span></label>`;
@@ -3015,6 +3035,7 @@
       row('accent_from_game', st.accent_from_game, t('Accent follows the game'), t('The colour of buttons and highlights is taken from the cover art of the game you are looking at.')) +
       row('virustotal', st.virustotal, t('Check program files with VirusTotal'), t('Off by default. Only the SHA-256 fingerprint of a program file is sent to VirusTotal, never the file or its name. Needs your own free key.')) +
       (st.virustotal ? vtKeyRow(st) : '') +
+      syncRow(st) +
       row('auto_backup', st.auto_backup !== false, t('Back up Gantry every week'), t('Your settings and mod lists are copied once a week; the newest 8 are kept.')) +
       row('show_adult', st.show_adult, t('Show adult mods in the store'), t('Mods their authors marked as adult stay hidden unless you switch this on.')) +
       `<div class="cp-preset" style="flex-direction:column; align-items:stretch; gap:10px"><span><b>${t('Game page')}</b></span><div class="cp-row">${LAYOUT_PRESETS().map(([k, l, v]) => `<button class="btn" onclick='ipcSend("/api/settings", { layout: ${JS(v)} })'>${escapeHtml(l)}</button>`).join('')}</div>
@@ -3033,6 +3054,7 @@
       `<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/self_update_check', {}); showToast(t('Looking for a newer Gantry…'))">${t('Check for a newer Gantry')}</button><button class="btn" onclick="tourStep = 0; closeModals(); showTour()">${t('Show the tour again')}</button><button class="btn" onclick="closeModals(); openWelcome()">${t('Check my games')}</button><button class="btn" onclick="closeModals(); openKeys()">${t('Keyboard shortcuts')}</button></div>` +
       `<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'bug' })">${t('🐞 Report a problem')}</button><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'game' })">${t('🎮 Ask for a game')}</button><button class="btn" onclick="openWeb('https://github.com/pigeoonn/gantry')">${t('↗ Gantry on GitHub')}</button></div>`;
     document.getElementById('settingsModal').classList.add('open');
+    syncInfoFill();
   }
 
 

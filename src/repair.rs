@@ -179,6 +179,10 @@ pub struct RigConfigData {
     /// Mods set aside in the store with the heart, by game: the cards as the store showed them.
     #[serde(default)]
     pub saved_mods: HashMap<String, Vec<serde_json::Value>>,
+    /// A folder that something else keeps in step between computers (Syncthing, Dropbox, a USB stick): Gantry puts a copy
+    /// of the portable part of its setup there and can bring one in.
+    #[serde(default)]
+    pub sync_folder: String,
     /// The size of the window when it was last closed or resized (0 = the default size).
     #[serde(default)]
     pub window_w: u32,
