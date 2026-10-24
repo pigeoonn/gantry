@@ -25,6 +25,13 @@
   name says which game versions it is for ("v2.0-v2.5") is checked against the version the game's executable declares,
   with a warning when the game is newer or older. Several trainers are kept per game; *▾ 2 trainers kept* switches
   between them or removes one.
+- **Many mods at once.** Drop twenty archives, or *Add all* from the Downloads folder: they go in one after another
+  (not all at the same time), with one line in the Mods tab ("Installing mods: 5 of 12") and one summary at the end
+  that names the ones that failed and why. Questions (where a mod goes, installer choices) wait until the others are
+  in, unless you press *Answer now*.
+- **Gantry learns where mods go.** When you answer "where should this go?", the answer is kept for that game, and the
+  next mod that looks the same (the same kinds of files in the same folders) goes in without asking. Settings has
+  *Forget where mods go for this game*. Choosing another folder with an empty name now really means the game folder.
 - **Fixed:** a Cyberpunk mod zipped as only `red4ext/...` or `engine/...` lost that folder when the game did not have it
   yet, and landed in the wrong place.
 

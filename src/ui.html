@@ -1334,6 +1334,7 @@
       <div class="loader-card" id="loaderCard" data-dyn style="display:none"></div>
       <div class="pack-bar" id="packBar" data-dyn style="display:none"></div>
       <div class="health-bar" id="healthBar" data-dyn style="display:none"></div>
+      <div class="health-bar info" id="batchBar" data-dyn style="display:none"></div>
       <div class="health-bar info" id="nxQueueBar" data-dyn style="display:none"></div>
       <div class="health-bar info" id="inboxBar" data-dyn style="display:none"></div>
       <div class="health-bar info" id="vanillaBar" style="display:none"><span class="hb-dot"></span><span class="hb-text">Playing without mods. They come back when you close the game.</span></div>
@@ -3128,6 +3129,7 @@
       row('deck_mode', st.deck, t('Controller mode'), t('Bigger controls; a gamepad moves around and presses buttons (A, B, X, Y, LB, RB).')) +
       row('high_contrast', st.high_contrast, t('Stronger text and borders'), t('Easier to read on dim screens.')) +
       row('install_preview', st.install_preview, t('Ask before installing a mod whose place had to be guessed'), t('Gantry shows where the files would go and waits for your OK.')) +
+      (appState.place_rules ? `<div class="cp-row"><button class="btn" onclick="ipcSend('/api/place_rules_clear', {})">${escapeHtml(tp(appState.place_rules, 'Forget where mods go for this game ({} answer)', 'Forget where mods go for this game ({} answers)'))}</button></div>` : '') +
       `<div class="cp-note">${t('Gantry {}', appState.app_version || '')}${appState.new_version ? ' · ' + t('a newer version is available: {}', appState.new_version) : ''}</div>` +
       `<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/self_update_check', {}); showToast(t('Looking for a newer Gantry…'))">${t('Check for a newer Gantry')}</button><button class="btn" onclick="tourStep = 0; closeModals(); showTour()">${t('Show the tour again')}</button><button class="btn" onclick="closeModals(); openWelcome()">${t('Check my games')}</button><button class="btn" onclick="closeModals(); openKeys()">${t('Keyboard shortcuts')}</button></div>` +
       `<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'bug' })">${t('🐞 Report a problem')}</button><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'game' })">${t('🎮 Ask for a game')}</button><button class="btn" onclick="openWeb('https://github.com/pigeoonn/gantry')">${t('↗ Gantry on GitHub')}</button></div>`;
@@ -4722,6 +4724,34 @@
     bar.style.display = '';
   }
   // the free-account download queue: which page is open, how far it got, and a way out
+  // several mods added at once: one progress line, questions held until the end, one summary
+  let batchAnswerNow = false;
+  function batchHolds() {
+    const b = appState.batch;
+    return !!(b && !b.finished && b.total > 1 && !batchAnswerNow);
+  }
+  function renderBatch() {
+    const bar = document.getElementById('batchBar');
+    const b = appState.batch;
+    if (!b || b.total < 2) { bar.style.display = 'none'; bar.innerHTML = ''; batchAnswerNow = false; return; }
+    const asked = (appState.pending_install ? 1 + (appState.pending_install.more || 0) : 0) + (appState.pending_fomod ? appState.pending_fomod.queue || 1 : 0);
+    let h = `<div class="hb-line ${b.finished && b.failed.length ? 'warn' : b.finished ? 'ok' : 'info'}"><span class="hb-dot"></span><span class="hb-text">`;
+    if (!b.finished) {
+      h += `<b>${escapeHtml(t('Installing mods: {} of {}', b.done, b.total))}</b><span class="nq-bar" aria-hidden="true"><i style="width:${Math.round(100 * b.done / Math.max(1, b.total))}%"></i></span>`;
+      if (b.current) h += `<small style="display:block; color:var(--text-muted)">${escapeHtml(t('Now: {}', b.current))}</small>`;
+      if (asked) h += `<small style="display:block; color:var(--text-muted)">${escapeHtml(tp(asked, '{} question waits until the others are in.', '{} questions wait until the others are in.'))}</small>`;
+    } else {
+      h += `<b>${escapeHtml(t('Mods added: {} of {}.', b.added, b.total))}</b>`;
+      h += b.failed.map(([name, why]) => `<small style="display:block; color:var(--text-muted)">✕ ${escapeHtml(name)}: ${escapeHtml(tm(why))}</small>`).join('');
+      if (asked) h += `<small style="display:block; color:var(--text-muted)">${escapeHtml(tp(asked, '{} mod waits for your answer.', '{} mods wait for your answer.'))}</small>`;
+    }
+    h += `</span>`;
+    if (!b.finished && asked && !batchAnswerNow) h += `<button class="btn" onclick="batchAnswerNow = true; renderPlaceDialog(); renderFomodDialog(); renderBatch()">${t('Answer now')}</button>`;
+    if (b.finished) h += `<button class="btn" onclick="ipcSend('/api/batch_dismiss', {})">${t('Done')}</button>`;
+    bar.innerHTML = h + `</div>`;
+    bar.style.display = '';
+  }
+
   function renderNexusQueue() {
     const bar = document.getElementById('nxQueueBar');
     const nx = appState.nexus || {};
@@ -4890,12 +4920,13 @@
   function renderPlaceDialog() {
     const m = document.getElementById('placeModal');
     const p = appState.pending_install;
-    if (!p) { m.classList.remove('open'); return; }
+    if (!p || batchHolds()) { m.classList.remove('open'); return; }
     document.getElementById('placeTitle').textContent = t('Where should “{}” go?', p.name);
     const why = p.placed_by === 'readme' ? t('Its own instructions point to this folder.') : p.placed_by === 'pack' ? t('The support entry for this game says files of this kind go there.') : t('The game already has files with these names there.');
     document.getElementById('placeBody').innerHTML =
       `<div>${why}</div><div class="place-list">${p.folders.map(([dir, n]) => `<div><b>${escapeHtml(dir || t('(the game folder)'))}</b> <span>${tp(n, '{} file', '{} files')}</span></div>`).join('')}</div>` +
       (p.notes ? `<div style="color:var(--text-muted)">${t('Its readme is kept for you to read; it is not copied into the game.')}</div>` : '') +
+      `<div style="color:var(--text-muted)">${t('Gantry remembers your answer for the next mod that looks like this one.')}</div>` +
       (p.more ? `<div style="color:var(--text-muted)">${tp(p.more, '{} more mod is waiting for the same question.', '{} more mods are waiting for the same question.')}</div>` : '');
     m.classList.add('open');
   }
@@ -5584,7 +5615,7 @@
   function renderFomodDialog() {
     const m = document.getElementById('fomodModal');
     const p = appState.pending_fomod;
-    if (!p) { m.classList.remove('open'); fm = { name: '', view: null, page: 0, sel: {} }; return; }
+    if (!p || batchHolds()) { m.classList.remove('open'); fm = { name: '', view: null, page: 0, sel: {} }; return; }
     if (!m.classList.contains('open') || fm.name !== p.name) {
       fm = { name: p.name, view: null, page: 0, sel: {}, queue: p.queue };
       m.classList.add('open');
@@ -6042,6 +6073,7 @@
     else if (nx.check_error) pills.push(`<span class="ml-pill bad" title="${escapeHtml(tm(nx.check_error))}">${t('Update check failed')}</span>`);
     else if (nx.checked_ms) pills.push(`<span class="ml-pill" title="${new Date(nx.checked_ms).toLocaleString(LANG)}">${t('Checked {}', new Date(nx.checked_ms).toLocaleTimeString(LANG, { hour: '2-digit', minute: '2-digit' }))}</span>`);
     renderNexusQueue();
+    renderBatch();
     document.getElementById('mlCheck').disabled = !!nx.checking;
     document.getElementById('mlUpdateAll').style.display = (nx.updates || []).length + (appState.thunder_updates || []).length > 0 ? 'inline-flex' : 'none';
     document.getElementById('mlStatus').innerHTML = pills.join('');

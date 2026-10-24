@@ -184,6 +184,12 @@ pub struct AppState {
     pub setup_run: Option<SetupRun>,
     /// What came of the last trainer start (one trainer at a time).
     pub trainer_run: Option<TrainerRun>,
+    /// Mods waiting to be installed, one after another, and how the current batch is going.
+    install_jobs: VecDeque<InstallJob>,
+    install_worker: bool,
+    pub batch: Option<Batch>,
+    /// Counts every log line ever written (the log itself keeps only the newest).
+    pub log_seq: u64,
     /// Latest crash analysis (any game); the UI shows it for the game it belongs to.
     pub crash: Option<CrashReport>,
     /// Open "find the culprit" session, if any (one at a time).
@@ -638,6 +644,10 @@ impl AppState {
             setup_busy: Arc::new(AtomicBool::new(false)),
             setup_run: None,
             trainer_run: None,
+            install_jobs: VecDeque::new(),
+            install_worker: false,
+            batch: None,
+            log_seq: 0,
             crash: None,
             bisect: None,
             last_run: None,
@@ -681,6 +691,7 @@ impl AppState {
             level: level.to_string(),
             message: m,
         });
+        self.log_seq += 1;
         self.notifier.bump();
     }
 
@@ -776,7 +787,7 @@ impl AppState {
             })
             .unwrap_or_default();
 
-        json!({
+        let mut v = json!({
             "version": self.notifier.version.load(Ordering::SeqCst),
             "games": self.games,
             "hidden_games": self.hidden_games_json(),
@@ -805,21 +816,35 @@ impl AppState {
             "bisect": self.bisect_json(),
             "last_run": self.last_run,
             "undo": self.undo_json(),
-            "trainer_shelf": self.games.get(self.selected_idx).map(|g| {
-                let current = self.config.trainers.get(&g.appid).map(PathBuf::from);
-                trainer_shelf(self, &g.appid).iter().map(|p| {
-                    let name = trainer_display(&g.appid, p);
-                    let made_for = trainer::made_for(&name).map(|(a, b)| if a == b { trainer::version_text(&a) } else { format!("{}–{}", trainer::version_text(&a), trainer::version_text(&b)) });
-                    json!({ "id": p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(), "name": name, "made_for": made_for, "current": current.as_deref() == Some(p.as_path()) })
-                }).collect::<Vec<_>>()
-            }).unwrap_or_default(),
-            "trainer_run": self.trainer_run.as_ref().map(|r| json!({ "appid": r.appid, "state": r.state, "file": r.file, "alive": r.pid != 0 && procs::alive(r.pid), "secs": r.secs })),
             "nexus": self.nexus_json(),
             "steam_lib": self.steam_lib_json(),
             "last_played": self.last_played_json(),
             "modio": json!({ "configured": self.modio.key.is_some() }),
             "thunder_updates": self.thunder.updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null)).chain(self.github_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).chain(self.modio_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).collect::<Vec<_>>(),
-        })
+        });
+        v["trainer_shelf"] = self.trainer_shelf_json();
+        v["trainer_run"] = self.trainer_run_json();
+        v["batch"] = serde_json::to_value(&self.batch).unwrap_or(Value::Null);
+        v["place_rules"] = json!(self.games.get(self.selected_idx).and_then(|g| self.config.place_rules.get(&g.appid)).map(|r| r.len()).unwrap_or(0));
+        v
+    }
+
+    /// The trainers kept for the selected game.
+    fn trainer_shelf_json(&self) -> Value {
+        let Some(g) = self.games.get(self.selected_idx) else { return json!([]) };
+        let current = self.config.trainers.get(&g.appid).map(PathBuf::from);
+        trainer_shelf(self, &g.appid)
+            .iter()
+            .map(|p| {
+                let name = trainer_display(&g.appid, p);
+                let made_for = trainer::made_for(&name).map(|(a, b)| if a == b { trainer::version_text(&a) } else { format!("{}–{}", trainer::version_text(&a), trainer::version_text(&b)) });
+                json!({ "id": p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(), "name": name, "made_for": made_for, "current": current.as_deref() == Some(p.as_path()) })
+            })
+            .collect()
+    }
+
+    fn trainer_run_json(&self) -> Value {
+        self.trainer_run.as_ref().map(|r| json!({ "appid": r.appid, "state": r.state, "file": r.file, "alive": r.pid != 0 && procs::alive(r.pid), "secs": r.secs })).unwrap_or(Value::Null)
     }
 
     /// When each installed game was last played (ms): Steam's own record or Gantry's launch, the newer.
@@ -1694,6 +1719,103 @@ struct InstallOpts {
     fomod: Option<Value>,
     /// Install into this folder of the game (instead of guessing).
     target: Option<String>,
+}
+
+struct InstallJob {
+    path: PathBuf,
+    temp: bool,
+    opts: InstallOpts,
+}
+
+/// Several mods added at once (dropped together, "Add all" from Downloads): installed one after another, with one
+/// progress line and one summary. A single mod is a batch of one and shows nothing extra.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct Batch {
+    pub total: usize,
+    pub done: usize,
+    pub added: usize,
+    /// Name and the reason, for each one that could not be added.
+    pub failed: Vec<(String, String)>,
+    /// Waiting for an answer (where its files go, or its installer's choices).
+    pub waiting: usize,
+    pub current: String,
+    pub finished: bool,
+}
+
+/// Queues a file to be installed; the files are installed one at a time, in the order they came.
+fn queue_install(state: &SharedState, path: PathBuf, temp: bool, opts: InstallOpts) {
+    let start = {
+        let mut st = write_state(state);
+        if st.batch.as_ref().is_none_or(|b| b.finished) {
+            st.batch = Some(Batch::default());
+        }
+        if let Some(b) = st.batch.as_mut() {
+            b.total += 1;
+        }
+        st.install_jobs.push_back(InstallJob { path, temp, opts });
+        st.notifier.bump();
+        !std::mem::replace(&mut st.install_worker, true)
+    };
+    if start {
+        let state = Arc::clone(state);
+        thread::spawn(move || install_worker(&state));
+    }
+}
+
+fn questions_waiting(st: &AppState) -> usize {
+    st.pending_install.is_some() as usize + st.pending_queue.len() + st.pending_fomod.len()
+}
+
+fn install_worker(state: &SharedState) {
+    loop {
+        let (job, seq, asked) = {
+            let mut st = write_state(state);
+            let Some(job) = st.install_jobs.pop_front() else {
+                st.install_worker = false;
+                let summary = st.batch.as_mut().filter(|b| !b.finished).map(|b| {
+                    b.finished = true;
+                    b.current.clear();
+                    b.clone()
+                });
+                st.notifier.bump();
+                drop(st);
+                if let Some(b) = summary.filter(|b| b.total > 1) {
+                    let level = if b.failed.is_empty() { "OK" } else { "WARN" };
+                    log(state, level, format!("Mods added: {} of {}.", b.added, b.total));
+                    if b.waiting > 0 {
+                        log(state, "INFO", format!("Waiting for your answer: {}.", b.waiting));
+                    }
+                    for (name, why) in &b.failed {
+                        log(state, "WARN", format!("Not added: {} ({})", name, why));
+                    }
+                }
+                return;
+            };
+            let name = job.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            if let Some(b) = st.batch.as_mut() {
+                b.current = name;
+            }
+            st.notifier.bump();
+            let (seq, asked) = (st.log_seq, questions_waiting(&st));
+            (job, seq, asked)
+        };
+        let name = job.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        install_routed(job.path, job.temp, Arc::clone(state), job.opts);
+        let mut st = write_state(state);
+        // what happened to it: an error said while it was installing, a new question, or it went in
+        let new = (st.log_seq - seq).min(st.logs.len() as u64) as usize;
+        let err = st.logs.iter().rev().take(new).find(|l| l.level == "ERR").map(|l| l.message.clone());
+        let now_asked = questions_waiting(&st);
+        if let Some(b) = st.batch.as_mut() {
+            b.done += 1;
+            match err {
+                Some(why) => b.failed.push((name, why)),
+                None if now_asked > asked => b.waiting += 1,
+                None => b.added += 1,
+            }
+        }
+        st.notifier.bump();
+    }
 }
 
 fn install_routed(p: PathBuf, is_temp_drop: bool, state: SharedState, opts: InstallOpts) {
@@ -3576,6 +3698,20 @@ fn add_staged(state: &SharedState, g: &GameEntry, lib: deploy::Library, stage: P
     let by_hand = opts.nexus.is_none() && opts.thunder.is_none() && opts.replaces.is_none() && opts.name.is_none() && opts.target.is_none();
     if by_hand && !read_state(state).config.no_install_preview {
         if let Ok(pv) = lib.preview(&stage) {
+            // the user already said where a mod that looks like this one goes
+            let rule = (!pv.placed_by.is_empty() && !pv.shape.is_empty()).then(|| read_state(state).config.place_rules.get(&g.appid).and_then(|r| r.get(&pv.shape)).cloned()).flatten();
+            if let Some(rule) = rule {
+                let target = rule.strip_prefix("dir:").map(str::to_string);
+                let shown = match target.as_deref() {
+                    Some("") => ".".to_string(),
+                    Some(t) => t.to_string(),
+                    None if pv.target.is_empty() => ".".to_string(),
+                    None => pv.target.clone(),
+                };
+                log(state, "INFO", format!("'{}' goes where you put a mod like it before ({}).", name, shown));
+                finish_library_add(state, g, &lib, &stage, &name, fname, &version, opts, old, target.as_deref().or(opts.target.as_deref()));
+                return true;
+            }
             if !pv.placed_by.is_empty() {
                 log(state, "INFO", format!("'{}' is waiting for your OK on where its files go.", name));
                 let mut st = write_state(state);
@@ -3755,7 +3891,7 @@ fn finish_library_add(state: &SharedState, g: &GameEntry, lib: &deploy::Library,
 
 /// The user's answer to "is this the right place?": install there, install into a folder of their
 /// choosing, or drop the mod.
-fn install_confirm(state: &SharedState, accept: bool, target: &str) {
+fn install_confirm(state: &SharedState, accept: bool, target: Option<&str>) {
     let p = {
         let mut st = write_state(state);
         let Some(p) = st.pending_install.take() else { return };
@@ -3771,7 +3907,13 @@ fn install_confirm(state: &SharedState, accept: bool, target: &str) {
     let Some(g) = game_by_appid(state, &p.appid) else { return };
     let Some(lib) = library_of(&g) else { return };
     let opts = InstallOpts { game: Some(g.clone()), nexus: p.opts_nexus.clone(), ..Default::default() };
-    let target = Some(target.trim()).filter(|t| !t.is_empty());
+    // the answer holds for the next mod that looks the same
+    if !p.preview.shape.is_empty() {
+        let mut st = write_state(state);
+        let rule = target.map(|t| format!("dir:{t}")).unwrap_or_else(|| "guess".to_string());
+        st.config.place_rules.entry(p.appid.clone()).or_default().insert(p.preview.shape.clone(), rule);
+        st.save_config();
+    }
     finish_library_add(state, &g, &lib, &p.stage, &p.name, &p.fname, &p.version, &opts, None, target);
 }
 
@@ -4705,7 +4847,7 @@ fn handle_drop_upload(mut req: Request, query: &str, state: &SharedState) {
         Ok(n) if n > 0 => {
             let state_bg = Arc::clone(state);
             let to_lib = query_param(query, "lib").as_deref() == Some("1");
-            thread::spawn(move || install_routed(target, true, state_bg, InstallOpts { to_library: to_lib, ..Default::default() }));
+            queue_install(&state_bg, target, true, InstallOpts { to_library: to_lib, ..Default::default() });
             respond_state(req, state);
         }
         other => {
@@ -4958,6 +5100,22 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         "/api/modio_key_clear" => {
             clear_modio_key(state);
             log(state, "WARN", "mod.io API key removed from this computer.");
+        }
+        "/api/place_rules_clear" => {
+            let mut st = write_state(state);
+            if let Some(g) = st.games.get(st.selected_idx).cloned() {
+                if st.config.place_rules.remove(&g.appid).is_some() {
+                    st.save_config();
+                    st.log("OK", format!("Gantry forgot where you said mods for {} go; it asks again.", g.name));
+                }
+            }
+        }
+        "/api/batch_dismiss" => {
+            let mut st = write_state(state);
+            if st.batch.as_ref().is_some_and(|b| b.finished) {
+                st.batch = None;
+                st.notifier.bump();
+            }
         }
         "/api/inbox_add" | "/api/inbox_hide" => {
             let names: Vec<String> = body.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).take(40).collect()).unwrap_or_default();
@@ -5494,9 +5652,10 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/install_confirm" => {
             let accept = body.get("accept").and_then(Value::as_bool).unwrap_or(false);
-            let target = body_str(body, "target");
+            // a folder given (even "", the game folder itself) beats Gantry's guess
+            let target = body.get("target").and_then(Value::as_str).map(|t| t.trim().to_string());
             let state_bg = Arc::clone(state);
-            thread::spawn(move || install_confirm(&state_bg, accept, &target));
+            thread::spawn(move || install_confirm(&state_bg, accept, target.as_deref()));
         }
         "/api/disk_clean" => {
             let what = body_str(body, "what");
@@ -7480,7 +7639,7 @@ fn inbox_take(state: &SharedState, names: &[String], install: bool) {
         let Some((path, size, _)) = listed.iter().find(|(p, _, _)| p.file_name().map(|n| n.to_string_lossy() == want.as_str()).unwrap_or(false)).cloned() else { continue };
         keys.push(format!("{}|{}", want, size));
         if install {
-            install_routed(path, false, Arc::clone(state), InstallOpts { to_library: true, ..Default::default() });
+            queue_install(state, path, false, InstallOpts { to_library: true, ..Default::default() });
         }
     }
     inbox_mark(state, keys);
@@ -10754,6 +10913,70 @@ mod tests {
         wait_until("answered", || state()["pending_install"].is_null());
         assert_eq!(mods(), 1, "the one that was refused was not added");
         assert_eq!(fs::read_to_string(dir.join("VEHICLES/VEH_2_HI.BNDL")).unwrap(), "ORIGINAL");
+    }
+
+    #[test]
+    fn an_answer_about_where_a_mod_goes_is_remembered_for_the_next_one_like_it() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("placelearn");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("VEHICLES")).unwrap();
+        for n in ["VEH_1_HI.BNDL", "VEH_2_HI.BNDL", "VEH_3_HI.BNDL"] {
+            fs::write(dir.join("VEHICLES").join(n), "ORIGINAL").unwrap();
+        }
+        let state = || api(&h, "/api/state", json!({}));
+        let mods = || state()["library"]["mods"].as_array().map(|m| m.len()).unwrap_or(0);
+        let zip = |tag: &str, a: &str| {
+            let p = h._dir.join(&format!("{tag}-mod.zip"));
+            fs::write(&p, zip_of(&h, tag, &[(&format!("Replace/{a}"), "NEW")])).unwrap();
+            p
+        };
+        install_to_library_from_path(zip("a", "VEH_1_HI.BNDL"), false, Arc::clone(&h.state));
+        wait_until("the question", || !state()["pending_install"].is_null());
+        api(&h, "/api/install_confirm", json!({ "accept": true }));
+        wait_until("the first is in", || mods() == 1);
+        assert_eq!(state()["place_rules"], 1);
+        // the next one shaped the same goes in without a question
+        install_to_library_from_path(zip("b", "VEH_2_HI.BNDL"), false, Arc::clone(&h.state));
+        wait_until("the second is in by itself", || mods() == 2);
+        assert!(state()["pending_install"].is_null());
+        // a folder chosen by hand is remembered as that folder, and forgetting asks again
+        api(&h, "/api/place_rules_clear", json!({}));
+        assert_eq!(state()["place_rules"], 0);
+        install_to_library_from_path(zip("c", "VEH_3_HI.BNDL"), false, Arc::clone(&h.state));
+        wait_until("asked again", || !state()["pending_install"].is_null());
+        api(&h, "/api/install_confirm", json!({ "accept": true, "target": "Extra" }));
+        wait_until("the third is in", || mods() == 3);
+        let rules = h.state.read().unwrap().config.place_rules.values().flat_map(|r| r.values().cloned()).collect::<Vec<_>>();
+        assert_eq!(rules, vec!["dir:Extra".to_string()]);
+    }
+
+    #[test]
+    fn mods_added_together_go_in_one_after_another_with_one_summary() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("batch");
+        add_plain_game(&h);
+        let state = || api(&h, "/api/state", json!({}));
+        for i in 0..3 {
+            let zip = zip_of(&h, &format!("m{i}"), &[(&format!("Data/mod{i}.esp"), "X")]);
+            assert_eq!(http(&h, "POST", &format!("/api/drop_upload?name=Mod%20{i}.zip"), &[("X-Rig-Token", &h.token)], &zip).0, 200);
+        }
+        assert_eq!(http(&h, "POST", "/api/drop_upload?name=broken.zip", &[("X-Rig-Token", &h.token)], b"this is not a zip").0, 200);
+        wait_until("the batch is over", || state()["batch"]["finished"] == true);
+        let b = state()["batch"].clone();
+        assert_eq!((b["total"].as_u64(), b["done"].as_u64(), b["added"].as_u64()), (Some(4), Some(4), Some(3)), "{b}");
+        assert_eq!(b["failed"][0][0], "broken.zip", "{b}");
+        assert_eq!(state()["library"]["mods"].as_array().map(|m| m.len()), Some(3));
+        let said: String = h.state.read().unwrap().logs.iter().map(|l| l.message.clone()).collect::<Vec<_>>().join("\n");
+        assert!(said.contains("Mods added: 3 of 4."), "{said}");
+        api(&h, "/api/batch_dismiss", json!({}));
+        assert!(state()["batch"].is_null());
     }
 
     #[test]
@@ -14739,6 +14962,8 @@ mod tests {
         // saying no leaves everything as it was
         api(&h, "/api/lib_remove", json!({ "id": api(&h, "/api/state", json!({}))["library"]["mods"][0]["id"] }));
         wait_until("removed", || mods() == 0);
+        // the answer above is remembered for mods like it; forgotten, the same mod is asked about again
+        api(&h, "/api/place_rules_clear", json!({}));
         install_to_library_from_path(zip("b"), false, Arc::clone(&h.state));
         assert!(!pending().is_null());
         api(&h, "/api/install_confirm", json!({ "accept": false }));

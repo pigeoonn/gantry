@@ -133,6 +133,17 @@ finds something that would make the game start broken, a window lists it, each l
 
 When nothing is found the game starts right away. *Play anyway* skips the fixes.
 
+## Adding many mods at once
+
+Drop several archives on the window, or press *Add all* on the "new mod files in your Downloads folder" line. They are
+installed one after another; the Mods tab shows how far it is and, at the end, how many went in and which did not
+(with the reason). A mod whose place had to be guessed, or one with an installer that asks questions, waits until the
+others are in; *Answer now* shows its question straight away.
+
+When you answer "where should this go?", Gantry keeps the answer for that game. The next mod with the same make-up
+(the same kinds of files under the same game folders) is placed the same way without a question, and the log says so.
+*Settings → Forget where mods go for this game* drops those answers.
+
 ## Trainers
 
 Drop a trainer `.exe` on the window (or pick it with Browse) to attach it to the selected game. *Run Trainer* starts it

@@ -105,6 +105,10 @@ pub struct LaunchOpts {
 pub struct RigConfigData {
     #[serde(default)]
     pub trainers: HashMap<String, String>,
+    /// Where the user said mods go, per game: the look of a mod (`Preview::shape`) → "guess" (where Gantry guessed)
+    /// or "dir:<folder>".
+    #[serde(default)]
+    pub place_rules: HashMap<String, HashMap<String, String>>,
     /// Every trainer kept for a game (paths), the attached one among them.
     #[serde(default)]
     pub trainer_shelf: HashMap<String, Vec<String>>,

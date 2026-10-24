@@ -340,6 +340,9 @@ pub struct Preview {
     /// Game folder → how many files go there.
     pub folders: Vec<(String, usize)>,
     pub notes: usize,
+    /// What the mod looks like inside (its top folders and kinds of files), so an answer about where it goes can be
+    /// reused for the next mod that looks the same.
+    pub shape: String,
 }
 
 struct Planned {
@@ -1357,7 +1360,24 @@ impl Library {
             *folders.entry(dir).or_default() += 1;
         }
         let files = folders.values().sum();
-        Ok(Preview { placed_by: a.placed_by.to_string(), target: a.target, files, folders: folders.into_iter().collect(), notes: a.note_idx.len() })
+        let shape: BTreeSet<String> = a
+            .content_idx
+            .iter()
+            .filter_map(|&i| a.cleaned[i].as_deref())
+            .map(|rel| {
+                let low = rel.to_lowercase();
+                // a top folder the game has says where things go; any other is the mod's own name and says nothing
+                let top = match low.split_once('/') {
+                    Some((t, _)) if self.exists_ci(Path::new(""), t) => t.to_string(),
+                    Some(_) => "*".to_string(),
+                    None => String::new(),
+                };
+                let ext = low.rsplit_once('.').map(|(_, e)| e).filter(|e| !e.contains('/') && e.len() <= 8).unwrap_or("").to_string();
+                format!("{top}/*.{ext}")
+            })
+            .collect();
+        let shape = shape.into_iter().take(16).collect::<Vec<_>>().join(",");
+        Ok(Preview { placed_by: a.placed_by.to_string(), target: a.target, files, folders: folders.into_iter().collect(), notes: a.note_idx.len(), shape })
     }
 
     fn add_inner(&self, stage: &Path, name: &str, source: &str, nexus: Option<NexusRef>, version: &str, forced_target: Option<&str>) -> Result<LibMod, String> {
