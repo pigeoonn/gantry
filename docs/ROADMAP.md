@@ -20,7 +20,7 @@ release (6.0) when these are true. Testers: this is the list of what still needs
 - [ ] A Flatpak, if it can be done without giving up what a mod manager must do (see the FAQ).
 
 **Polish**
-- [x] Ten languages, with a test that fails when a sentence is missing.
+- [x] Sixteen languages, with a test that fails when a sentence is missing.
 - [x] Accessibility checks on every screen and theme.
 - [ ] Fresh screenshots of the newest screens in the README.
 - [ ] A short video of the main flow.
@@ -382,7 +382,7 @@ Each milestone is small enough to finish and test on its own; the bug-fixing rou
 
 ## M51: Four more languages
 - German, Portuguese (Brazil), Polish, Turkish: every phrase of the interface and of the messages; plural rules for Polish.
-- Done when: the translation test passes for all ten languages and the screen test visits every screen in each.
+- Done when: the translation test passes for all sixteen languages and the screen test visits every screen in each.
 
 ## M52: The first minute
 - A **What's new** panel after an update (read from the change log), shown once.

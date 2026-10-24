@@ -2,6 +2,9 @@
 
 ## Next
 
+- **Six more languages.** Ukrainian, Czech, Hungarian, Simplified Chinese, Japanese and Korean, every phrase
+  of the window and every message, with their own plural rules and fonts that show Chinese, Japanese and Korean
+  characters. The screen test now visits every screen in all sixteen languages.
 - **Everything by keyboard.** Games in the list can be reached with Tab, picked with Enter, walked with the arrow keys
   and started with Ctrl+Enter. The bell's list takes the keyboard when it opens and Esc closes it; closing a window
   puts the keyboard back where it was (on the mod in the store after its page, never nowhere). The command palette

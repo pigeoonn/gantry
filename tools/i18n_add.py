@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Add phrases to the interface languages (the ten of `src/i18n.rs`).
+"""Add phrases to the interface languages (the sixteen of `src/i18n.rs`).
 
     python3 tools/i18n_add.py rows.py
 
 `rows.py` defines ROWS, a list of (English, Romanian, Italian, French, Spanish, Russian); it may also define COLUMNS, the
 languages of the columns after the English one (for example ["de", "pt", "pl", "tr"]). In a translation `{}`
 placeholders are written `{1}`, `{2}` (by position). A plural phrase has the English "other" form as its key and a
-list of forms per language (Romanian and Russian have three, the others two). Existing phrases are replaced.
+list of forms per language (Romanian, Russian, Polish, Ukrainian and Czech have three, Chinese, Japanese and Korean
+one, the others two). Existing phrases are replaced.
 `cargo test` then says whether anything is still missing.
 """
 import json
@@ -14,7 +15,7 @@ import runpy
 import sys
 from pathlib import Path
 
-LANGS = ["ro", "it", "fr", "es", "ru", "de", "pt", "pl", "tr"]
+LANGS = ["ro", "it", "fr", "es", "ru", "de", "pt", "pl", "tr", "uk", "cs", "hu", "zh", "ja", "ko"]
 DEFAULT_COLUMNS = ["ro", "it", "fr", "es", "ru"]
 DIR = Path(__file__).resolve().parent.parent / "src" / "i18n"
 

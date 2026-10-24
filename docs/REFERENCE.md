@@ -61,7 +61,7 @@ ProtonRig before: the command is still `rig`, and Linux settings are still in `~
 - **Unreal Engine games:** one-click *Full Setup* for UE4SS (engine version detected, never guessed), Rig Doctor, Self-Heal, a Mod/PAK list with conflicts.
 - **Crash Detective:** finds the mod that crashes your game by switching mods off and on in rounds, and tells you when UE4SS is set for the wrong engine version.
 - **Safety first:** save backups before every launch and after every session, anti-cheat games are refused, Steam is never edited without asking, nothing is written non-atomically.
-- **Ten languages:** English, Română, Italiano, Français, Español, Русский, Deutsch, Português, Polski, Türkçe.
+- **Sixteen languages:** English, Română, Italiano, Français, Español, Русский, Deutsch, Português, Polski, Türkçe, Українська, Čeština, Magyar, 简体中文, 日本語, 한국어.
 
 ![Mod Library](img/mod-library.png)
 

@@ -60,7 +60,7 @@ The [tutorial](docs/TUTORIAL.md) walks through it with pictures.
 **Around your games**
 - Reads **Steam** (also: tells you when Steam is updating a game, lists Workshop items), **Hydra, Heroic and Lutris**.
 - *Why is it slow?*, play time and timeline, a controller mode for the Steam Deck.
-- **Ten languages**, dark and light themes, full keyboard use.
+- **Sixteen languages**, dark and light themes, full keyboard use.
 
 Everything in detail: **[docs/REFERENCE.md](docs/REFERENCE.md)**, or one page per feature in the [documentation](docs/README.md).
 

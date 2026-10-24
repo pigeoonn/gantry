@@ -29,7 +29,7 @@
   body {
     background-color: var(--bg-deep);
     color: var(--text-main);
-    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Noto Sans', 'PingFang SC', 'Hiragino Sans', 'Microsoft YaHei', 'Yu Gothic UI', 'Malgun Gothic', 'Noto Sans CJK SC', sans-serif;
     height: calc(100 * var(--vh));
     overflow: hidden;
     display: flex;
@@ -2056,7 +2056,7 @@
   // ---------- Translations ----------
   // English text is the key. The server inlines the dictionary of the chosen language (empty for
   // English), so the page never flashes untranslated. {} marks a value; translations use {1}, {2}...
-  const LANGS = [['en', 'English'], ['ro', 'Română'], ['it', 'Italiano'], ['fr', 'Français'], ['es', 'Español'], ['ru', 'Русский'], ['de', 'Deutsch'], ['pt', 'Português'], ['pl', 'Polski'], ['tr', 'Türkçe']];
+  const LANGS = [['en', 'English'], ['ro', 'Română'], ['it', 'Italiano'], ['fr', 'Français'], ['es', 'Español'], ['ru', 'Русский'], ['de', 'Deutsch'], ['pt', 'Português'], ['pl', 'Polski'], ['tr', 'Türkçe'], ['uk', 'Українська'], ['cs', 'Čeština'], ['hu', 'Magyar'], ['zh', '简体中文'], ['ja', '日本語'], ['ko', '한국어']];
   let LANG = '__RIG_LANG__';
   let langHold = 0; // right after a switch, a state update still carrying the old language must not undo it
   let DICT = __RIG_DICT__;
@@ -2070,10 +2070,12 @@
     const v = DICT[key];
     return typeof v === 'string' ? fmtN(v, args) : fmt(key, args);
   }
-  // Plural forms: the dictionary holds [one, other] (or [one, few, many] for ro/ru) under the plural key.
+  // Plural forms: the dictionary holds [one, other] ([one, few, many] for ro/ru/pl/uk/cs, one form for zh/ja/ko) under the plural key.
   function pluralIdx(n) {
     switch (LANG) {
-      case 'ru': { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 0 : (a >= 2 && a <= 4 && !(b >= 12 && b <= 14)) ? 1 : 2; }
+      case 'ru': case 'uk': { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 0 : (a >= 2 && a <= 4 && !(b >= 12 && b <= 14)) ? 1 : 2; }
+      case 'cs': return n === 1 ? 0 : (n >= 2 && n <= 4) ? 1 : 2;
+      case 'zh': case 'ja': case 'ko': return 0;
       case 'ro': return n === 1 ? 0 : (n === 0 || (n % 100 >= 2 && n % 100 <= 19)) ? 1 : 2;
       case 'fr': case 'pt': return n < 2 ? 0 : 1;
       case 'pl': return n === 1 ? 0 : (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14)) ? 1 : 2;

@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 pub const DEFAULT_LANG: &str = "en";
 
 /// `(code, name in its own language)`; the order is the order of the language menu.
-pub const LANGS: [(&str, &str); 10] = [
+pub const LANGS: [(&str, &str); 16] = [
     ("en", "English"),
     ("ro", "Română"),
     ("it", "Italiano"),
@@ -23,6 +23,12 @@ pub const LANGS: [(&str, &str); 10] = [
     ("pt", "Português"),
     ("pl", "Polski"),
     ("tr", "Türkçe"),
+    ("uk", "Українська"),
+    ("cs", "Čeština"),
+    ("hu", "Magyar"),
+    ("zh", "简体中文"),
+    ("ja", "日本語"),
+    ("ko", "한국어"),
 ];
 
 pub fn valid(code: &str) -> bool {
@@ -41,6 +47,12 @@ fn raw(code: &str) -> &'static str {
         "pt" => include_str!("i18n/pt.json"),
         "pl" => include_str!("i18n/pl.json"),
         "tr" => include_str!("i18n/tr.json"),
+        "uk" => include_str!("i18n/uk.json"),
+        "cs" => include_str!("i18n/cs.json"),
+        "hu" => include_str!("i18n/hu.json"),
+        "zh" => include_str!("i18n/zh.json"),
+        "ja" => include_str!("i18n/ja.json"),
+        "ko" => include_str!("i18n/ko.json"),
         _ => "{}",
     }
 }
@@ -456,7 +468,8 @@ mod tests {
         for (code, _) in LANGS.iter().filter(|(c, _)| *c != "en") {
             let d = load(code);
             let forms = match *code {
-                "ro" | "ru" | "pl" => 3,
+                "ro" | "ru" | "pl" | "uk" | "cs" => 3,
+                "zh" | "ja" | "ko" => 1,
                 _ => 2,
             };
             let mut same_as_english = 0;

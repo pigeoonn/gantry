@@ -176,7 +176,7 @@ try {
   // how long the page is busy without a break, per screen (tasks under 50 ms are not reported by the browser)
   await ev(`window.__lt = []; new PerformanceObserver(l => l.getEntries().forEach(e => window.__lt.push(e.duration))).observe({ type: 'longtask' }); true`);
   const busy = [];
-  for (const lang of ['en', 'ro', 'it', 'fr', 'es', 'ru', 'de', 'pt', 'pl', 'tr']) {
+  for (const lang of (await ev('LANGS.map(l => l[0])')) || ['en']) {
     await ev(`setLanguage('${lang}', false)`);
     await sleep(500);
     await ev(fake);
@@ -235,5 +235,5 @@ if (failures.length) {
   [...new Set(failures)].slice(0, Number(process.env.SMOKE_SHOW || 40)).forEach(f => console.error('  - ' + f));
   finish(1);
 }
-console.log('UI smoke test passed: 10 languages x all screens, no script errors, no unfilled placeholders.');
+console.log('UI smoke test passed: every language x all screens, no script errors, no unfilled placeholders.');
 finish(0);
