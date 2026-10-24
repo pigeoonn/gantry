@@ -8415,8 +8415,9 @@ fn collection_json(state: &SharedState, link: &str) -> Result<Value, String> {
         .map(|m| json!({ "mod_id": m.mod_id, "file_id": m.file_id, "name": m.name, "version": m.version, "size": m.size, "optional": m.optional, "installed": have.contains(&m.mod_id),
             "page_url": format!("https://www.nexusmods.com/{}/mods/{}?tab=files&file_id={}&nmm=1", if m.domain.is_empty() { &c.domain } else { &m.domain }, m.mod_id, m.file_id) }))
         .collect();
+    let free = selected_game(state).and_then(|g| fsutil::free_bytes(Path::new(&g.game_dir)));
     Ok(json!({ "name": c.name, "slug": c.slug, "domain": c.domain, "game_name": c.game_name, "revision": c.revision, "mods": mods, "premium": premium,
-        "other_game": game_domain.map(|d| d != c.domain).unwrap_or(false) }))
+        "other_game": game_domain.map(|d| d != c.domain).unwrap_or(false), "free_bytes": free }))
 }
 
 /// Premium: install every mod of a collection the library does not have yet, one after the other.
@@ -13092,6 +13093,7 @@ mod tests {
         assert_eq!(code, 200);
         let v: Value = serde_json::from_str(&text).unwrap();
         assert_eq!((v["name"].as_str(), v["revision"].as_u64(), v["other_game"].as_bool(), v["premium"].as_bool()), (Some("Cool Set"), Some(2), Some(false), Some(true)), "{v}");
+        assert!(v["free_bytes"].as_u64().is_some(), "the free space of the game's drive comes along: {v}");
         let inst: Vec<(u64, bool)> = v["mods"].as_array().unwrap().iter().map(|m| (m["mod_id"].as_u64().unwrap(), m["installed"].as_bool().unwrap())).collect();
         assert_eq!(inst, vec![(5, true), (7, false), (8, false)], "mod 5 is in the library already");
         assert!(v["mods"][1]["page_url"].as_str().unwrap().ends_with("/coolgame/mods/7?tab=files&file_id=71&nmm=1"));

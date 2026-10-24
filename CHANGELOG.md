@@ -43,6 +43,9 @@
 - **Search everywhere** now also covers mod.io and the game's core mods (from their GitHub releases), asks every site
   at the same time, and lists a mod that is on two sites once, with both named. The name opens the mod's page; Nexus
   results already in your library say so.
+- **A collection says what it takes before you start:** how many mods are missing, how much there is to download (with
+  and without the optional ones), how many website clicks a free account needs, and a warning when the game's drive
+  does not have room for it.
 - **What needs what:** a mod's *Needs* tab also lists the core mods its files ask for (with *Install*), *Get all
   missing* fetches everything it lacks at once, and *Needed by* shows the mods that stop working without it (from the
   core mods' files and from Thunderstore's dependency lists).

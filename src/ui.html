@@ -5766,6 +5766,17 @@
     }
     actions.push(`<button class="btn" onclick="openCollection(colLink)">⟳ ${t('Refresh')}</button>`);
     html += `<div class="mp-actions" style="margin-bottom:10px">${actions.join('')}</div>`;
+    if (!d.other_game && missing.length + optional.length) {
+      // what getting it takes, before anything starts: how much, how many clicks, and whether it fits
+      const size = list => list.reduce((n, m) => n + (m.size || 0), 0);
+      const want = missing.length ? missing : optional, bytes = size(want);
+      const parts = missing.length ? [tp(missing.length, '{} mod to get', '{} mods to get'), t('{} to download', fmtSize(bytes))] : [];
+      if (optional.length) parts.push(t('{} with the optional ones', fmtSize(size(missing) + size(optional))));
+      parts.push(d.premium ? t('no clicks: Gantry downloads them itself') : tp(want.length, '{} click on the website', '{} clicks on the website'));
+      html += `<div class="mp-by" style="margin-bottom:8px">${parts.map(escapeHtml).join(' · ')}</div>`;
+      // downloads are unpacked next to the game, so about twice the size is needed for a moment
+      if (d.free_bytes != null && d.free_bytes < bytes * 2) html += `<div class="mp-note">${t('Not enough free space: {} free on the game\'s drive, about {} needed.', fmtSize(d.free_bytes), fmtSize(bytes * 2))}</div>`;
+    }
     if (!d.premium && !d.other_game) html += `<div class="mp-note" style="background:rgba(255,255,255,0.06); color:var(--soft)">${t('Free accounts: Gantry opens each mod\'s page in turn. Press "Mod Manager Download" there; each mod is installed as it arrives and the next page opens. The Mods tab shows how far it got.')}</div>`;
     if (!missing.length && !optional.length) html += `<div class="lib-empty">${t('Everything in this collection is already in your library.')}</div>`;
     html += d.mods.map(m => `<div class="mp-req"><div class="mp-rn"><b>${escapeHtml(m.name)}</b> <small style="color:var(--text-muted)">v${escapeHtml(m.version)} · ${fmtSize(m.size)}</small></div>
