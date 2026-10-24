@@ -32,6 +32,10 @@
 - **Gantry learns where mods go.** When you answer "where should this go?", the answer is kept for that game, and the
   next mod that looks the same (the same kinds of files in the same folders) goes in without asking. Settings has
   *Forget where mods go for this game*. Choosing another folder with an empty name now really means the game folder.
+- **Each mod says what it needs.** A mod whose files need a core mod the game does not have (a Cyberpunk outfit that
+  needs ArchiveXL and TweakXL, a Skyrim plugin that needs SKSE) shows "⚠ Needs: ↗ ArchiveXL [Install ArchiveXL]" in the
+  mod list: the name opens its page, the button installs it from its official releases together with what it needs
+  itself (ArchiveXL brings RED4ext). Nexus requirements already showed there; their names now carry the same ↗.
 - **Fixed:** a Cyberpunk mod zipped as only `red4ext/...` or `engine/...` lost that folder when the game did not have it
   yet, and landed in the wrong place.
 

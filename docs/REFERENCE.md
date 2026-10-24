@@ -144,6 +144,16 @@ When you answer "where should this go?", Gantry keeps the answer for that game. 
 (the same kinds of files under the same game folders) is placed the same way without a question, and the log says so.
 *Settings → Forget where mods go for this game* drops those answers.
 
+## What a mod needs
+
+Under a mod's name in the Mods tab, *⚠ Needs* lists what it needs and is missing:
+
+- **Core mods**, found from the mod's own files (Cyberpunk 2077: RED4ext, Redscript, Cyber Engine Tweaks, ArchiveXL,
+  TweakXL; Skyrim SE: SKSE64; Fallout 4: F4SE). *↗ Name* opens its page; *Install Name* gets it from its official
+  releases, with the core mods it needs itself, and leaves the others for you to decide.
+- **Nexus requirements**, as the author listed them on the mod's page (needs your Nexus key). *↗ Name* opens that mod's
+  page; *Install them* / *Get them* fetches all of them (one page at a time on a free account).
+
 ## Trainers
 
 Drop a trainer `.exe` on the window (or pick it with Browse) to attach it to the selected game. *Run Trainer* starts it

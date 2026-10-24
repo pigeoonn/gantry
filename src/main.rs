@@ -1226,6 +1226,25 @@ fn trending_for_home(state: &SharedState, refresh: bool) -> Value {
 }
 
 /// Status the UI shows for the mod library; an empty library when the game has none yet.
+/// Per mod: the core mods its files need that the game does not have, with where to get each.
+fn core_needs_json(g: &GameEntry, lib: &deploy::Library) -> Value {
+    let dir = PathBuf::from(&g.game_dir);
+    let mods = lib.mods();
+    // most games need nothing: one look for all mods first
+    if frameworks::missing(&dir, &files_in_game(&mods)).is_empty() {
+        return json!({});
+    }
+    let out: serde_json::Map<String, Value> = mods
+        .iter()
+        .filter(|m| m.enabled)
+        .filter_map(|m| {
+            let fw = frameworks::missing(&dir, &files_in_game(std::slice::from_ref(m)));
+            (!fw.is_empty()).then(|| (m.id.clone(), json!(fw.iter().map(|x| json!({ "name": x.name, "url": x.page })).collect::<Vec<_>>())))
+        })
+        .collect();
+    Value::Object(out)
+}
+
 fn library_status(g: &GameEntry, first: bool) -> Value {
     match library_of(g) {
         Some(lib) => {
@@ -1240,6 +1259,7 @@ fn library_status(g: &GameEntry, first: bool) -> Value {
             // Steam syncs the copy it installed itself, not one that came from another launcher
             v["steam_cloud"] = json!(steamlib::manifest_for(Path::new(&g.game_dir), g.steam_id()).is_some() && steamlib::cloud_synced(&RigPaths::steam_roots(), g.steam_id()));
             v["plugins"] = json!(has_plugins(g));
+            v["core_needs"] = core_needs_json(g, &lib);
             v
         }
         None => Value::Null,
@@ -2868,8 +2888,7 @@ fn duplicate_issues(mods: &[deploy::LibMod]) -> Vec<Value> {
 
 /// Core mods (RED4ext, ArchiveXL, a script extender ...) that the enabled mods ask for and the game does not have.
 fn framework_issue(dir: &Path, mods: &[deploy::LibMod]) -> Option<Value> {
-    let enabled: Vec<String> = mods.iter().filter(|m| m.enabled).flat_map(|m| m.files.iter().map(|f| if m.target.is_empty() { f.clone() } else { format!("{}/{}", m.target, f) })).collect();
-    let fw = frameworks::missing(dir, &enabled);
+    let fw = frameworks::missing(dir, &files_in_game(mods));
     if fw.is_empty() {
         return None;
     }
@@ -2926,6 +2945,43 @@ fn preflight(state: &SharedState, g: &GameEntry) -> Vec<Value> {
 }
 
 /// Fix what the pre-flight found (as many of `fixes` as apply), then play. "vanilla" plays without mods instead.
+/// The files of these mods as they land in the game.
+fn files_in_game(mods: &[deploy::LibMod]) -> Vec<String> {
+    mods.iter().filter(|m| m.enabled).flat_map(|m| m.files.iter().map(|f| if m.target.is_empty() { f.clone() } else { format!("{}/{}", m.target, f) })).collect()
+}
+
+/// Installs the core mods the enabled mods need and the game lacks, or only `first` (and then what it needs itself).
+/// A core mod can need another (ArchiveXL lives in RED4ext's plugin folder), so it asks again after each round.
+fn install_missing_cores(state: &SharedState, g: &GameEntry, first: Option<&str>) {
+    let dir = PathBuf::from(&g.game_dir);
+    // what the mods need; with `only`, what the core mods installed here need
+    let wanted_by = |only: Option<&HashSet<&str>>| -> Vec<&'static str> {
+        let mods: Vec<deploy::LibMod> = library_of(g).map(|l| l.mods()).unwrap_or_default().into_iter().filter(|m| only.is_none_or(|o| o.iter().any(|c| m.name.to_lowercase().contains(&c.to_lowercase())))).collect();
+        frameworks::missing(&dir, &files_in_game(&mods)).iter().map(|m| m.name).collect()
+    };
+    let mut tried: HashSet<&str> = HashSet::new();
+    for round in 0..3 {
+        // with `first`, other core mods that were already missing are left for the user to decide
+        let wanted: Vec<&str> = match first {
+            Some(f) if round == 0 => wanted_by(None).into_iter().filter(|n| *n == f).collect(),
+            Some(_) => wanted_by(Some(&tried)),
+            None => wanted_by(None),
+        };
+        let wanted: Vec<&str> = wanted.into_iter().filter(|n| !tried.contains(n)).collect();
+        if wanted.is_empty() {
+            break;
+        }
+        for core in frameworks::cores(&dir).into_iter().filter(|c| wanted.contains(&c.name)) {
+            tried.insert(core.name);
+            match install_core(state, g, &core) {
+                Ok(v) => log(state, "OK", format!("Installed {} {}.", core.name, v)),
+                Err(e) => log(state, "WARN", e),
+            }
+        }
+    }
+    refresh_mods_shared(state);
+}
+
 fn fix_and_play(state: &SharedState, fixes: &[String]) {
     let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
         return log(state, "WARN", "Select an installed game first.");
@@ -2934,24 +2990,7 @@ fn fix_and_play(state: &SharedState, fixes: &[String]) {
         return play_without_mods(state);
     }
     if fixes.iter().any(|f| f == "setup") {
-        let dir = PathBuf::from(&g.game_dir);
-        // a core mod can need another (ArchiveXL lives in RED4ext's plugin folder): ask again after each round
-        let mut tried: HashSet<&str> = HashSet::new();
-        for _ in 0..3 {
-            let mods = library_of(&g).map(|l| l.mods()).unwrap_or_default();
-            let enabled: Vec<String> = mods.iter().filter(|m| m.enabled).flat_map(|m| m.files.iter().map(|f| if m.target.is_empty() { f.clone() } else { format!("{}/{}", m.target, f) })).collect();
-            let wanted: Vec<&str> = frameworks::missing(&dir, &enabled).iter().map(|m| m.name).filter(|n| !tried.contains(n)).collect();
-            if wanted.is_empty() {
-                break;
-            }
-            for core in frameworks::cores(&dir).into_iter().filter(|c| wanted.contains(&c.name)) {
-                tried.insert(core.name);
-                match install_core(state, &g, &core) {
-                    Ok(v) => log(state, "OK", format!("Installed {} {}.", core.name, v)),
-                    Err(e) => log(state, "WARN", e),
-                }
-            }
-        }
+        install_missing_cores(state, &g, None);
         if let Some((kind, false)) = loader_wanted(state, &g) {
             loader_exclusive(state, &g, |st| {
                 install_loader_inner(st, &g, kind, false);
@@ -5107,6 +5146,17 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 if st.config.place_rules.remove(&g.appid).is_some() {
                     st.save_config();
                     st.log("OK", format!("Gantry forgot where you said mods for {} go; it asks again.", g.name));
+                }
+            }
+        }
+        "/api/core_install" => {
+            let name = body_str(body, "name");
+            if let Some(g) = selected_game(state).filter(|g| g.is_installed) {
+                if frameworks::cores(Path::new(&g.game_dir)).iter().any(|c| c.name == name) {
+                    let state_bg = Arc::clone(state);
+                    thread::spawn(move || install_missing_cores(&state_bg, &g, Some(&name)));
+                } else {
+                    log(state, "WARN", "Gantry does not know that core mod for this game.");
                 }
             }
         }
@@ -11150,6 +11200,55 @@ mod tests {
     }
 
     #[test]
+    fn a_mod_shows_the_core_mods_it_needs_and_one_click_gets_one_with_what_it_needs_itself() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("coreneeds");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("bin/x64")).unwrap();
+        fs::write(dir.join("bin/x64/Cyberpunk2077.exe"), b"MZ").unwrap();
+        let z = |name: &str, files: &[(&str, &str)]| zip_of(&h, name, files);
+        let (base, _) = github::fake::start_many(vec![
+            ("wopss/RED4ext", "v1.30.0", vec![("red4ext-1.30.0.zip", z("r4", &[("red4ext/RED4ext.dll", "r")]))]),
+            ("psiberx/cp2077-archive-xl", "v1.27.5", vec![("ArchiveXL-1.27.5.zip", z("ax", &[("red4ext/plugins/ArchiveXL/ArchiveXL.dll", "a")]))]),
+            ("psiberx/cp2077-tweak-xl", "v1.11.5", vec![("TweakXL-1.11.5.zip", z("tx", &[("red4ext/plugins/TweakXL/TweakXL.dll", "t")]))]),
+        ]);
+        {
+            let mut st = h.state.write().unwrap();
+            st.github_api = base.clone();
+            st.github_allow = Some(format!("{base}/dl/"));
+        }
+        // a clothing mod that needs ArchiveXL and TweakXL, and a plain one that needs nothing
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        for (n, files) in [("Neon Jacket", vec!["archive/pc/mod/jacket.archive", "archive/pc/mod/jacket.archive.xl", "r6/tweaks/jacket.yaml"]), ("Plain Archive", vec!["archive/pc/mod/plain.archive"])] {
+            let s = h._dir.join(&format!("stage-{n}"));
+            for f in files {
+                fs::create_dir_all(s.join(f).parent().unwrap()).unwrap();
+                fs::write(s.join(f), "x").unwrap();
+            }
+            lib.add_with(&s, n, &format!("{n}.zip"), None, "1").unwrap();
+        }
+        refresh_mods_shared(&h.state);
+        let needs = || api(&h, "/api/state", json!({}))["library"]["core_needs"].clone();
+        let jacket = lib.mods().iter().find(|m| m.name == "Neon Jacket").unwrap().id.clone();
+        let names = |v: &Value| v.as_array().map(|a| a.iter().map(|x| x["name"].as_str().unwrap().to_string()).collect::<Vec<_>>()).unwrap_or_default();
+        let n = needs();
+        assert_eq!(names(&n[&jacket]), vec!["ArchiveXL", "TweakXL"], "{n}");
+        assert!(n[&jacket][0]["url"].as_str().unwrap().starts_with("https://www.nexusmods.com/"));
+        assert_eq!(n.as_object().unwrap().len(), 1, "the plain mod needs nothing: {n}");
+        // one click on ArchiveXL brings RED4ext along (ArchiveXL needs it), and leaves TweakXL for the user to decide
+        api(&h, "/api/core_install", json!({ "name": "ArchiveXL" }));
+        wait_until("ArchiveXL and RED4ext are in", || dir.join("red4ext/plugins/ArchiveXL/ArchiveXL.dll").is_file() && dir.join("red4ext/RED4ext.dll").is_file());
+        wait_until("the list follows", || names(&needs()[&jacket]) == vec!["TweakXL"]);
+        assert!(!dir.join("red4ext/plugins/TweakXL").exists());
+        api(&h, "/api/core_install", json!({ "name": "Not A Core" }));
+        assert!(last_log(&h).contains("does not know that core mod"));
+    }
+
+    #[test]
     fn the_same_mod_installed_twice_is_pointed_out() {
         let h = harness("dupes");
         add_plain_game(&h);
@@ -14197,7 +14296,8 @@ mod tests {
         // a file from somewhere else is refused
         let before = hits.lock().unwrap().len();
         api(&h, "/api/github_install", json!({ "repo": "owner/repo", "url": "http://127.0.0.1:1/dl/evil.zip" }));
-        wait_until("refused", || last_log(&h).contains("Refusing a download"));
+        // the first install may still log a line after the refusal, so any line counts, not only the last
+        wait_until("refused", || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("Refusing a download")));
         assert_eq!(hits.lock().unwrap().len(), before);
     }
 
