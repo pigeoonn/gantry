@@ -4362,6 +4362,14 @@ fn handle_drop_upload(mut req: Request, query: &str, state: &SharedState) {
     let drop_dir = cache_root.join("drops").join(fsutil::unique_token());
     let target = drop_dir.join(&safe_name);
 
+    // a file that cannot fit is refused before any of it is written
+    if let (Some(len), Some(free)) = (req.body_length(), fsutil::free_bytes(&cache_root)) {
+        if (len as u64).saturating_add(256 << 20) > free {
+            let msg = format!("Not enough free space for {}: it needs about {} and only {} is free there. Free some space and try again.", safe_name, fsutil::size_text((len as u64).saturating_add(256 << 20)), fsutil::size_text(free));
+            log(state, "ERR", msg.clone());
+            return respond_json(req, 413, json!({ "error": msg }).to_string());
+        }
+    }
     // Stream the body straight to disk; large mods are never buffered in memory.
     let saved = fs::create_dir_all(&drop_dir)
         .and_then(|_| File::create(&target))
@@ -9829,7 +9837,9 @@ mod tests {
         assert!(ensure_room(&small, &d.join("")).is_ok());
         // a file of 64 TB (sparse: it takes no room) cannot be unpacked anywhere
         let huge = d.join("huge.zip");
-        fs::File::create(&huge).unwrap().set_len(1 << 46).unwrap();
+        if fs::File::create(&huge).and_then(|f| f.set_len(1 << 46)).is_err() {
+            return; // a file system without sparse files cannot show this
+        }
         let e = ensure_room(&huge, &d.join("")).unwrap_err();
         assert!(e.starts_with("Not enough free space for huge.zip") && !e.contains("TB") && e.contains("GB"), "{e}");
         assert!(fsutil::free_bytes(&d.join("")).unwrap_or(0) > 0);
