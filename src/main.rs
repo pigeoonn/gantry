@@ -8216,37 +8216,93 @@ fn find_everywhere(state: &SharedState, q: &str) -> Value {
     }
     let lower = q.to_lowercase();
     let mut notes: Vec<String> = Vec::new();
-    let mine: Vec<Value> = library_of(&g)
-        .map(|l| l.mods().into_iter().filter(|m| m.name.to_lowercase().contains(&lower)).map(|m| json!({ "source": "library", "id": m.id, "name": m.name, "summary": m.source, "version": m.version, "author": "", "popularity": 0, "picture": "", "installed": true })).collect())
-        .unwrap_or_default();
-    let nexus_hits: Vec<Value> = match nexus_domain_for(state, &g).and_then(|d| nexus_client(state).and_then(|c| c.search(&d, q, 20))) {
-        Ok(v) => v.into_iter().map(|m| json!({ "source": "nexus", "id": m.mod_id.to_string(), "name": m.name, "summary": m.summary, "version": m.version, "author": m.author, "popularity": m.endorsements, "picture": m.picture, "installed": false })).collect(),
+    let mods = library_of(&g).map(|l| l.mods()).unwrap_or_default();
+    let mine: Vec<Value> = mods
+        .iter()
+        .filter(|m| m.name.to_lowercase().contains(&lower))
+        .map(|m| json!({ "source": "library", "id": m.id, "name": m.name, "summary": m.source, "version": m.version, "author": "", "popularity": 0, "picture": "", "installed": true }))
+        .collect();
+    let have_nexus: HashSet<u64> = mods.iter().filter_map(|m| m.nexus.as_ref().map(|n| n.mod_id)).collect();
+    let have_ts: HashSet<String> = mods.iter().filter_map(|m| m.thunderstore.as_ref().map(|t| t.full_name().to_lowercase())).collect();
+    let have_modio: HashSet<u64> = mods.iter().filter_map(|m| m.modio.as_ref().map(|r| r.mod_id)).collect();
+    let has_modio_key = read_state(state).modio.key.is_some();
+    // the three sites are asked at the same time
+    let (nexus_r, thunder_r, modio_r) = thread::scope(|sc| {
+        let nx = sc.spawn(|| nexus_domain_for(state, &g).and_then(|d| nexus_client(state).and_then(|c| c.search(&d, q, 20))));
+        let ts = sc.spawn(|| thunder_community_for(state, &g).and_then(|c| thunder_listing(state, &c)).map(|all| thunderstore::search(&all, q, 20).into_iter().cloned().collect::<Vec<_>>()));
+        let mio = sc.spawn(|| -> Result<Vec<modio::Card>, String> {
+            if !has_modio_key {
+                return Ok(Vec::new());
+            }
+            let id = modio_game_for(state, &g)?;
+            modio_client(state)?.mods(id, &modio::Query { text: q.to_string(), sort: "downloads".into(), offset: 0, limit: 20 }).map(|(l, _)| l)
+        });
+        fn gone<T>() -> Result<T, String> {
+            Err("Gantry could not finish this search.".to_string())
+        }
+        (nx.join().unwrap_or_else(|_| gone()), ts.join().unwrap_or_else(|_| gone()), mio.join().unwrap_or_else(|_| gone()))
+    });
+    let nexus_hits: Vec<Value> = match nexus_r {
+        Ok(v) => v.into_iter().map(|m| json!({ "source": "nexus", "id": m.mod_id.to_string(), "name": m.name, "summary": m.summary, "version": m.version, "author": m.author, "popularity": m.endorsements, "picture": m.picture, "installed": have_nexus.contains(&m.mod_id) })).collect(),
         Err(e) => {
             notes.push(format!("Nexus Mods: {}", e));
             Vec::new()
         }
     };
-    let installed_ts: HashSet<String> = library_of(&g).map(|l| l.mods().iter().filter_map(|m| m.thunderstore.as_ref().map(|t| t.full_name().to_lowercase())).collect()).unwrap_or_default();
-    let thunder_hits: Vec<Value> = match thunder_community_for(state, &g).and_then(|c| thunder_listing(state, &c)) {
-        Ok(all) => thunderstore::search(&all, q, 20)
+    let thunder_hits: Vec<Value> = match thunder_r {
+        Ok(all) => all
             .into_iter()
-            .map(|l| json!({ "source": "thunderstore", "id": l.full_name, "name": l.name.replace('_', " "), "summary": l.description, "version": l.version, "author": l.owner, "popularity": l.downloads, "picture": l.icon, "installed": installed_ts.contains(&l.full_name.to_lowercase()) }))
+            .map(|l| json!({ "source": "thunderstore", "id": l.full_name, "name": l.name.replace('_', " "), "summary": l.description, "version": l.version, "author": l.owner, "popularity": l.downloads, "picture": l.icon, "installed": have_ts.contains(&l.full_name.to_lowercase()) }))
             .collect(),
         Err(e) => {
             notes.push(format!("Thunderstore: {}", e));
             Vec::new()
         }
     };
-    // the library first, then the two sites taking turns so neither buries the other
+    let modio_hits: Vec<Value> = match modio_r {
+        Ok(list) => list
+            .into_iter()
+            .filter(|c| !c.adult)
+            .map(|c| json!({ "source": "modio", "id": c.id.to_string(), "name": c.name, "summary": c.summary, "version": c.version, "author": c.author, "popularity": c.downloads, "picture": richtext::image_url(&c.picture).unwrap_or_default(), "installed": have_modio.contains(&c.id) }))
+            .collect(),
+        // most games are not on mod.io at all; that is not worth a note
+        Err(e) if e.contains("has no game called") => Vec::new(),
+        Err(e) => {
+            notes.push(format!("mod.io: {}", e));
+            Vec::new()
+        }
+    };
+    // the game's core mods come from their makers' GitHub releases
+    let cores: Vec<Value> = frameworks::cores(Path::new(&g.game_dir))
+        .into_iter()
+        .filter(|c| c.name.to_lowercase().contains(&lower))
+        .map(|c| json!({ "source": "github", "id": c.name, "name": c.name, "summary": c.repo, "version": "", "author": c.repo.split('/').next().unwrap_or(""), "popularity": 0, "picture": "", "installed": c.installed, "page_url": c.page }))
+        .collect();
+    // the library first, then the core mods, then the sites taking turns so none buries the others
     let mut results = mine;
-    let (mut a, mut b) = (nexus_hits.into_iter(), thunder_hits.into_iter());
+    results.extend(cores);
+    let mut sites = [nexus_hits.into_iter(), thunder_hits.into_iter(), modio_hits.into_iter()];
+    let norm = |v: &Value| v["name"].as_str().unwrap_or("").to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
     loop {
-        let (x, y) = (a.next(), b.next());
-        if x.is_none() && y.is_none() {
+        let round: Vec<Value> = sites.iter_mut().filter_map(|it| it.next()).collect();
+        if round.is_empty() {
             break;
         }
-        results.extend(x);
-        results.extend(y);
+        for r in round {
+            // the same mod on two sites is shown once, with the other site named
+            let key = norm(&r);
+            if let Some(first) = results.iter_mut().find(|x| x["source"] != "library" && x["source"] != r["source"] && !key.is_empty() && norm(x) == key) {
+                let also = first.as_object_mut().map(|o| o.entry("also").or_insert_with(|| json!([])));
+                if let Some(Value::Array(a)) = also {
+                    a.push(json!({ "source": r["source"], "id": r["id"], "installed": r["installed"] }));
+                }
+                if r["installed"] == true {
+                    first["installed"] = json!(true);
+                }
+                continue;
+            }
+            results.push(r);
+        }
     }
     json!({ "results": results, "notes": notes })
 }

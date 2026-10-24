@@ -407,6 +407,7 @@
 "Games: {} · Installed: {} · Unreal: {}": "Jogos: {1} · Instalados: {2} · Unreal: {3}",
 "Gantry backup": "Backup do Gantry",
 "Gantry copies this game's save files automatically before every launch (only when they changed) and keeps the newest ones. Restoring never deletes anything and first backs up what is there now.": "O Gantry copia os saves deste jogo automaticamente antes de cada inicialização (só quando mudaram) e guarda os mais novos. Restaurar nunca apaga nada e antes faz backup do que existe agora.",
+"Gantry could not finish this search.": "O Gantry não conseguiu concluir esta busca.",
 "Gantry could not tell which Nexus Mods game {} is.": "O Gantry não conseguiu descobrir qual jogo do Nexus Mods é {1}.",
 "Gantry could not tell which Thunderstore community {} belongs to.": "O Gantry não conseguiu descobrir a qual comunidade do Thunderstore {1} pertence.",
 "Gantry does not know that core mod for this game.": "O Gantry não conhece esse mod base para este jogo.",

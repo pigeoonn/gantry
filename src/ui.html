@@ -5208,8 +5208,10 @@
     try { d = await (await fetch('/api/find_all?q=' + encodeURIComponent(q))).json(); } catch (e) { d = { error: 'Could not reach Nexus Mods.' }; }
     if (my !== tsSeq) return;
     if (d.error) { list.innerHTML = `<div class="lib-empty">${escapeHtml(tm(d.error))}</div>`; return; }
-    const src = { library: t('Library'), nexus: 'Nexus Mods', thunderstore: 'Thunderstore' };
+    const src = { library: t('Library'), nexus: 'Nexus Mods', thunderstore: 'Thunderstore', modio: 'mod.io', github: 'GitHub' };
     const act = r => r.installed ? `<span class="ml-pill good">${t('In your library')}</span>`
+      : r.source === 'github' ? `<button class="btn btn-play" style="padding:5px 12px" onclick='ipcSend("/api/core_install", { name: ${JS(r.id)} }); showToast(t("Installing…"))'>${t('Install')}</button>`
+      : r.source === 'modio' ? `<button class="btn btn-play" style="padding:5px 12px" onclick='ipcSend("/api/modio_install", { id: Number(${JS(r.id)}) }); showToast(t("Getting it from mod.io…"))'>${t('Install')}</button>`
       : r.source === 'nexus' ? `<button class="btn btn-play" style="padding:5px 12px" onclick='ipcSend("/api/nexus_get", { mod_id: ${Number(r.id)} }); showToast(t("Getting it from Nexus Mods…"))'>${t('Install')}</button>`
       : `<button class="btn btn-play" style="padding:5px 12px" onclick='ipcSend("/api/thunder_install", { input: ${JS(r.id)} }); showToast(t("Installing…"))'>${t('Install')}</button>`;
     list.innerHTML = (d.notes || []).map(n => `<div class="mp-note">${escapeHtml(tm(n))}</div>`).join('') + (d.results || []).map(r => `
@@ -5219,7 +5221,7 @@
           <div class="ts-name">${escapeHtml(r.name)} <small>${r.author ? escapeHtml(r.author) + ' · ' : ''}v${escapeHtml(r.version || '?')}</small></div>
           <div class="ts-desc">${escapeHtml(r.summary || '')}</div>
         </div>
-        <div class="ts-meta"><span class="ml-pill">${escapeHtml(src[r.source] || r.source)}</span></div>
+        <div class="ts-meta">${[r.source].concat((r.also || []).map(a => a.source)).map(x => `<span class="ml-pill">${escapeHtml(src[x] || x)}</span>`).join(' ')}</div>
         ${act(r)}
       </div>`).join('') || `<div class="lib-empty">${t('Nothing found.')}</div>`;
   }
