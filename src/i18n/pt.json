@@ -1292,7 +1292,7 @@
 "Tweaks (when a game will not start or freezes)": "Ajustes (quando um jogo não inicia ou congela)",
 "Two mods define the same script code: {}. The game may refuse to load their scripts.": "Dois mods definem o mesmo código de script: {1}. O jogo pode se recusar a carregar os scripts deles.",
 "Two mods that define the same script code usually stop the game's scripts from loading. Keep one of them on.": "Dois mods que definem o mesmo código de script costumam impedir que os scripts do jogo carreguem. Deixe só um ligado.",
-"Type a name to search Nexus Mods, Thunderstore and your library at once.": "Digite um nome para buscar no Nexus Mods, no Thunderstore e na sua biblioteca de uma vez.",
+"Type a name to search your library, Nexus Mods, Thunderstore, mod.io and the game's core mods at once.": "Digite um nome para buscar ao mesmo tempo na sua biblioteca, no Nexus Mods, Thunderstore, mod.io e nos mods base do jogo.",
 "Type at least two letters to search.": "Digite pelo menos duas letras para buscar.",
 "UE4SS archive contained no files.": "O arquivo do UE4SS não continha arquivos.",
 "UE4SS is configured for Unreal Engine {} but the game reports {}.": "O UE4SS está configurado para Unreal Engine {1}, mas o jogo informa {2}.",

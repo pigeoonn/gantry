@@ -1292,7 +1292,7 @@
 "Tweaks (when a game will not start or freezes)": "Ayarlar (oyun başlamıyor veya donuyorsa)",
 "Two mods define the same script code: {}. The game may refuse to load their scripts.": "İki mod aynı betik kodunu tanımlıyor: {1}. Oyun betiklerini yüklemeyi reddedebilir.",
 "Two mods that define the same script code usually stop the game's scripts from loading. Keep one of them on.": "Aynı betik kodunu tanımlayan iki mod genelde oyunun betiklerinin yüklenmesini engeller. Yalnızca birini açık bırak.",
-"Type a name to search Nexus Mods, Thunderstore and your library at once.": "Nexus Mods'ta, Thunderstore'da ve kitaplığında aynı anda aramak için bir ad yaz.",
+"Type a name to search your library, Nexus Mods, Thunderstore, mod.io and the game's core mods at once.": "Kütüphanende, Nexus Mods, Thunderstore, mod.io ve oyunun temel modlarında aynı anda aramak için bir ad yaz.",
 "Type at least two letters to search.": "Aramak için en az iki harf yaz.",
 "UE4SS archive contained no files.": "UE4SS arşivinde dosya yoktu.",
 "UE4SS is configured for Unreal Engine {} but the game reports {}.": "UE4SS, Unreal Engine {1} için ayarlı ama oyun {2} bildiriyor.",

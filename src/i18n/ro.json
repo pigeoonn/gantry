@@ -1292,7 +1292,7 @@
 "Tweaks (when a game will not start or freezes)": "Ajustări (când un joc nu pornește sau se blochează)",
 "Two mods define the same script code: {}. The game may refuse to load their scripts.": "Două moduri definesc același cod de script: {1}. Jocul poate refuza să le încarce scripturile.",
 "Two mods that define the same script code usually stop the game's scripts from loading. Keep one of them on.": "Două moduri care definesc același cod de script de obicei opresc încărcarea scripturilor jocului. Lasă pornit doar unul.",
-"Type a name to search Nexus Mods, Thunderstore and your library at once.": "Scrie un nume ca să cauți deodată în Nexus Mods, Thunderstore și biblioteca ta.",
+"Type a name to search your library, Nexus Mods, Thunderstore, mod.io and the game's core mods at once.": "Scrie un nume ca să cauți deodată în biblioteca ta, pe Nexus Mods, Thunderstore, mod.io și printre modurile de bază ale jocului.",
 "Type at least two letters to search.": "Scrie cel puțin două litere pentru a căuta.",
 "UE4SS archive contained no files.": "Arhiva UE4SS nu conținea fișiere.",
 "UE4SS is configured for Unreal Engine {} but the game reports {}.": "UE4SS este configurat pentru Unreal Engine {1}, dar jocul raportează {2}.",

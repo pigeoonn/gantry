@@ -13112,6 +13112,12 @@ mod tests {
         let (_, text) = http(&h, "GET", "/api/nexus_browse?list=trending&q=cool", &[("X-Rig-Token", &h.token)], b"");
         let nb: Value = serde_json::from_str(&text).unwrap();
         assert_eq!(nb["mods"][0]["name"], "Cool Cars", "{nb}");
+        // the same mod on two sites is listed once, naming the other site
+        *f.search_json.lock().unwrap() = r#"[{"modId":"9","name":"Cool-Mod","summary":"","version":"1","author":"Own","endorsements":1,"adultContent":false}]"#.into();
+        let v = get("cool mod");
+        let hits: Vec<&Value> = v["results"].as_array().unwrap().iter().filter(|r| r["name"].as_str().unwrap().to_lowercase().replace(['-', ' '], "") == "coolmod").collect();
+        assert_eq!(hits.len(), 1, "{v}");
+        assert_eq!(hits[0]["also"].as_array().map(|a| a.len()), Some(1), "{v}");
         // a site that cannot answer is named, the others still answer
         h.state.write().unwrap().nexus.key = None;
         let v2 = get("cool");

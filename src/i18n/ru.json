@@ -1292,7 +1292,7 @@
 "Tweaks (when a game will not start or freezes)": "Настройки (если игра не запускается или зависает)",
 "Two mods define the same script code: {}. The game may refuse to load their scripts.": "Два мода определяют один и тот же код скрипта: {1}. Игра может отказаться загружать их скрипты.",
 "Two mods that define the same script code usually stop the game's scripts from loading. Keep one of them on.": "Два мода с одинаковым кодом скрипта обычно не дают скриптам игры загрузиться. Оставьте включённым один.",
-"Type a name to search Nexus Mods, Thunderstore and your library at once.": "Введите название, чтобы искать сразу в Nexus Mods, Thunderstore и вашей библиотеке.",
+"Type a name to search your library, Nexus Mods, Thunderstore, mod.io and the game's core mods at once.": "Введите название, чтобы искать сразу в библиотеке, на Nexus Mods, Thunderstore, mod.io и среди базовых модов игры.",
 "Type at least two letters to search.": "Введите хотя бы две буквы для поиска.",
 "UE4SS archive contained no files.": "В архиве UE4SS нет файлов.",
 "UE4SS is configured for Unreal Engine {} but the game reports {}.": "UE4SS настроен на Unreal Engine {1}, но игра сообщает {2}.",

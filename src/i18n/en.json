@@ -1292,7 +1292,7 @@
 "Tweaks (when a game will not start or freezes)",
 "Two mods define the same script code: {}. The game may refuse to load their scripts.",
 "Two mods that define the same script code usually stop the game's scripts from loading. Keep one of them on.",
-"Type a name to search Nexus Mods, Thunderstore and your library at once.",
+"Type a name to search your library, Nexus Mods, Thunderstore, mod.io and the game's core mods at once.",
 "Type at least two letters to search.",
 "UE4SS archive contained no files.",
 "UE4SS is configured for Unreal Engine {} but the game reports {}.",
