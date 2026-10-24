@@ -43,6 +43,10 @@
 - **Search everywhere** now also covers mod.io and the game's core mods (from their GitHub releases), asks every site
   at the same time, and lists a mod that is on two sites once, with both named. The name opens the mod's page; Nexus
   results already in your library say so.
+- **Starter packs for eight more games,** each mod checked by hand on its site: Cyberpunk 2077, Skyrim Special Edition,
+  Fallout 4, Lethal Company, Valheim, R.E.P.O., Content Warning and PEAK. They leave out what Gantry already installs
+  itself (loaders, script extenders, Cyberpunk's core mods) and say when a mod needs one of those or must be on every
+  player's game.
 - **A collection says what it takes before you start:** how many mods are missing, how much there is to download (with
   and without the optional ones), how many website clicks a free account needs, and a warning when the game's drive
   does not have room for it.

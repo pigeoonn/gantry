@@ -40,6 +40,43 @@
       "thunderstore": "lethal-company",
       "saves": [
         "{appdata_locallow}/ZeekerssRBLX/Lethal Company"
+      ],
+      "starter": [
+        {
+          "source": "thunderstore",
+          "id": "notnotnotswipez-MoreCompany",
+          "why": "Lobbies for more than four players (everyone needs it)."
+        },
+        {
+          "source": "thunderstore",
+          "id": "FlipMods-ReservedFlashlightSlot",
+          "why": "A slot of its own for the flashlight."
+        },
+        {
+          "source": "thunderstore",
+          "id": "FlipMods-ReservedWalkieSlot",
+          "why": "A slot of its own for the walkie-talkie."
+        },
+        {
+          "source": "thunderstore",
+          "id": "x753-More_Suits",
+          "why": "More suits on the rack."
+        },
+        {
+          "source": "thunderstore",
+          "id": "FlipMods-TooManyEmotes",
+          "why": "Over 300 emotes with an emote wheel."
+        },
+        {
+          "source": "thunderstore",
+          "id": "malco-Lategame_Upgrades",
+          "why": "Upgrades to buy at the terminal for long runs."
+        },
+        {
+          "source": "thunderstore",
+          "id": "AinaVT-LethalConfig",
+          "why": "Change mod settings from a menu in the game."
+        }
       ]
     },
     {
@@ -49,6 +86,38 @@
       "thunderstore": "valheim",
       "saves": [
         "{appdata_locallow}/IronGate/Valheim"
+      ],
+      "starter": [
+        {
+          "source": "thunderstore",
+          "id": "Advize-PlantEverything",
+          "why": "Plant berry bushes, thistle and more with the cultivator."
+        },
+        {
+          "source": "thunderstore",
+          "id": "RandyKnapp-EquipmentAndQuickSlots",
+          "why": "Equipped items get their own slots, plus quick slots."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Goldenrevolver-Quick_Stack_Store_Sort_Trash_Restock",
+          "why": "Quick stacking, sorting and restocking from chests."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Advize-PlantEasily",
+          "why": "Plant crops in neat, evenly spaced rows."
+        },
+        {
+          "source": "thunderstore",
+          "id": "MSchmoecker-MultiUserChest",
+          "why": "Several players can use the same chest at once."
+        },
+        {
+          "source": "thunderstore",
+          "id": "RandyKnapp-EpicLoot",
+          "why": "Magic items, loot drops and enchanting."
+        }
       ]
     },
     {
@@ -58,6 +127,33 @@
       "thunderstore": "content-warning",
       "saves": [
         "{appdata_locallow}/Landfall Games/Content Warning"
+      ],
+      "starter": [
+        {
+          "source": "thunderstore",
+          "id": "MaxWasUnavailable-Virality",
+          "why": "Lobbies for more than four players (everyone needs it)."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Clementinise-DeathStatus",
+          "why": "See at a glance who is alive."
+        },
+        {
+          "source": "thunderstore",
+          "id": "hyydsz-Boombox",
+          "why": "A boombox to play music."
+        },
+        {
+          "source": "thunderstore",
+          "id": "GamingFrame-More_Comments",
+          "why": "More and better viewer comments."
+        },
+        {
+          "source": "thunderstore",
+          "id": "RamuneNeptune-MakeMeRagdoll",
+          "why": "Ragdoll on purpose with a key."
+        }
       ]
     },
     {
@@ -67,6 +163,33 @@
       "thunderstore": "repo",
       "saves": [
         "{appdata_locallow}/semiwork/Repo/saves"
+      ],
+      "starter": [
+        {
+          "source": "thunderstore",
+          "id": "nickklmao-REPOConfig",
+          "why": "Change mod settings from a menu in the game."
+        },
+        {
+          "source": "thunderstore",
+          "id": "BULLETBOT-MoreUpgrades",
+          "why": "More upgrade items to buy."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Zehs-ExtractionPointConfirmButton",
+          "why": "A confirm button at extraction points."
+        },
+        {
+          "source": "thunderstore",
+          "id": "flipf17-DeadTTS",
+          "why": "Hear what dead players type."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Cronchy-DeathHeadHopper",
+          "why": "Hop around as a head after dying."
+        }
       ]
     },
     {
@@ -551,6 +674,38 @@
       "nexus": "skyrimspecialedition",
       "saves": [
         "{documents}/My Games/Skyrim Special Edition/Saves"
+      ],
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "266",
+          "why": "Fixes thousands of bugs in the game."
+        },
+        {
+          "source": "nexus",
+          "id": "12604",
+          "why": "A much better inventory and a menu for mod settings (needs SKSE64)."
+        },
+        {
+          "source": "nexus",
+          "id": "32444",
+          "why": "Needed by most SKSE64 plugins."
+        },
+        {
+          "source": "nexus",
+          "id": "272",
+          "why": "Start as anyone, anywhere, instead of the cart ride."
+        },
+        {
+          "source": "nexus",
+          "id": "659",
+          "why": "Better-looking architecture, furniture and objects."
+        },
+        {
+          "source": "nexus",
+          "id": "1137",
+          "why": "A rework of every perk tree."
+        }
       ]
     },
     {
@@ -567,6 +722,33 @@
       "nexus": "fallout4",
       "saves": [
         "{documents}/My Games/Fallout4/Saves"
+      ],
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "4598",
+          "why": "Fixes thousands of bugs in the game."
+        },
+        {
+          "source": "nexus",
+          "id": "47327",
+          "why": "Needed by most F4SE plugins."
+        },
+        {
+          "source": "nexus",
+          "id": "47359",
+          "why": "Fixes crashes and writes a crash log (needs F4SE)."
+        },
+        {
+          "source": "nexus",
+          "id": "21497",
+          "why": "A menu for mod settings (needs F4SE)."
+        },
+        {
+          "source": "nexus",
+          "id": "1235",
+          "why": "Shows the full lines in dialogue instead of one word."
+        }
       ]
     },
     {
@@ -607,6 +789,33 @@
       "nexus": "cyberpunk2077",
       "saves": [
         "{saved_games}/CD Projekt Red/Cyberpunk 2077"
+      ],
+      "starter": [
+        {
+          "source": "nexus",
+          "id": "3518",
+          "why": "A Mods page in the game's settings, used by many mods."
+        },
+        {
+          "source": "nexus",
+          "id": "4885",
+          "why": "Settings menus for mods inside the game."
+        },
+        {
+          "source": "nexus",
+          "id": "2987",
+          "why": "In-game shops that sell clothes and weapons from mods."
+        },
+        {
+          "source": "nexus",
+          "id": "6945",
+          "why": "A wardrobe with outfit slots."
+        },
+        {
+          "source": "nexus",
+          "id": "3858",
+          "why": "Bodies fall and react more naturally."
+        }
       ]
     },
     {
@@ -686,7 +895,34 @@
       "appid": "3527290",
       "name": "PEAK",
       "loader": "bepinex5",
-      "thunderstore": "peak"
+      "thunderstore": "peak",
+      "starter": [
+        {
+          "source": "thunderstore",
+          "id": "glarmer-PEAK_Unlimited",
+          "why": "Play with more than four friends (the host needs it)."
+        },
+        {
+          "source": "thunderstore",
+          "id": "nickklmao-EasyBackpack",
+          "why": "Open your backpack without dropping it."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Roose-Piggyback",
+          "why": "Carry a friend on your back."
+        },
+        {
+          "source": "thunderstore",
+          "id": "Steven-Everest",
+          "why": "See where other players died on the mountain."
+        },
+        {
+          "source": "thunderstore",
+          "id": "TeddyBRB-Too_Many_Hats",
+          "why": "Lots of new hats."
+        }
+      ]
     },
     {
       "appid": "3405340",
