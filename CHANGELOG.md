@@ -43,6 +43,10 @@
 - **Search everywhere** now also covers mod.io and the game's core mods (from their GitHub releases), asks every site
   at the same time, and lists a mod that is on two sites once, with both named. The name opens the mod's page; Nexus
   results already in your library say so.
+- **A game update is noticed before you play:** Gantry remembers the build of each game's executable your mods last
+  worked with. When it changes and some of your mods run code in the game (plugins, script mods), the check before
+  playing and the health card say so and name them, with *Check for updates* and *They work*. A minute of play without
+  a crash accepts the new build.
 - **Starter packs for eight more games,** each mod checked by hand on its site: Cyberpunk 2077, Skyrim Special Edition,
   Fallout 4, Lethal Company, Valheim, R.E.P.O., Content Warning and PEAK. They leave out what Gantry already installs
   itself (loaders, script extenders, Cyberpunk's core mods) and say when a mod needs one of those or must be on every

@@ -2866,6 +2866,7 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
         out.push(issue("needs", "warn", "", vec![needs.join(", ")]));
     }
     out.extend(duplicate_issues(&mods));
+    out.extend(game_update_issue(state, g, &mods));
     out.extend(framework_issue(&dir, &mods));
     if let Some(l) = &lib {
         out.extend(clash_issues(&dir, l));
@@ -2929,6 +2930,57 @@ fn clash_issues(dir: &Path, lib: &deploy::Library) -> Vec<Value> {
     out
 }
 
+/// The build of the game's executable: its declared version (may be empty), size and date, joined by `|`.
+fn game_build(g: &GameEntry) -> Option<String> {
+    let exe = game_exe_file(g)?;
+    let meta = fs::metadata(&exe).ok()?;
+    let secs = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
+    Some(format!("{}|{}|{}", game_version(g).map(|v| trainer::version_text(&v)).unwrap_or_default(), meta.len(), secs))
+}
+
+/// Mods that run code inside the game (plugins, script mods), the ones a game patch tends to break.
+fn hooks_into_game(m: &deploy::LibMod) -> bool {
+    m.files.iter().any(|f| {
+        let f = f.to_lowercase();
+        [".dll", ".asi", ".reds", ".lua"].iter().any(|e| f.ends_with(e)) || f.contains("ue4ss/mods/")
+    })
+}
+
+/// A warning when the game's executable changed since the mods last worked and some of them hook into it. The first
+/// build Gantry sees, and a change with no such mod on, are taken as they are.
+fn game_update_issue(state: &SharedState, g: &GameEntry, mods: &[deploy::LibMod]) -> Option<Value> {
+    let now = game_build(g)?;
+    let before = read_state(state).config.game_builds.get(&g.appid).cloned();
+    let risky: Vec<&str> = mods.iter().filter(|m| m.enabled && hooks_into_game(m)).map(|m| m.name.as_str()).collect();
+    match before {
+        Some(b) if b == now => None,
+        Some(b) if !risky.is_empty() => {
+            let ver = |x: &str| x.split('|').next().unwrap_or("").to_string();
+            let (old, new) = (ver(&b), ver(&now));
+            let span = if !old.is_empty() && !new.is_empty() && old != new { [old.as_str(), new.as_str()].join(" → ") } else { String::new() };
+            let mut names = risky.iter().take(4).map(|n| n.to_string()).collect::<Vec<_>>().join(", ");
+            if risky.len() > 4 {
+                names.push_str(&format!(" (+{})", risky.len() - 4));
+            }
+            Some(issue("game_updated", "warn", "updates", vec![span, names]))
+        }
+        _ => {
+            accept_game_build(state, g);
+            None
+        }
+    }
+}
+
+/// The current build of the game is the one its mods work with.
+fn accept_game_build(state: &SharedState, g: &GameEntry) {
+    let Some(now) = game_build(g) else { return };
+    let mut st = write_state(state);
+    if st.config.game_builds.get(&g.appid) != Some(&now) {
+        st.config.game_builds.insert(g.appid.clone(), now);
+        st.save_config();
+    }
+}
+
 /// Less free space than this on the game's drive is worth a word before playing (saves, shader caches, logs).
 const LOW_DISK: u64 = 1 << 30;
 
@@ -2965,6 +3017,7 @@ fn preflight(state: &SharedState, g: &GameEntry) -> Vec<Value> {
         }
     }
     out.extend(duplicate_issues(&mods));
+    out.extend(game_update_issue(state, g, &mods));
     if let Some(free) = fsutil::free_bytes(&dir).filter(|f| *f < LOW_DISK) {
         out.push(issue("low_disk", "warn", "", vec![fsutil::size_text(free)]));
     }
@@ -5208,6 +5261,12 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 }
             }
         }
+        "/api/game_update_ok" => {
+            if let Some(g) = selected_game(state) {
+                accept_game_build(state, &g);
+                write_state(state).notifier.bump();
+            }
+        }
         "/api/batch_dismiss" => {
             let mut st = write_state(state);
             if st.batch.as_ref().is_some_and(|b| b.finished) {
@@ -7375,6 +7434,10 @@ fn finish_run(state: &SharedState, run: Run) {
         }
         st.bisect.as_ref().map(|b| b.appid == run.game.appid).unwrap_or(false)
     };
+    // a minute of play without a crash: the mods work with this build of the game
+    if !crashed && ended.saturating_sub(run.started_ms) >= 60_000 {
+        accept_game_build(state, &run.game);
+    }
     if crashed {
         log(state, "WARN", format!("{} crashed. {} (open Crash Detective)", run.game.name, headline));
         add_note(state, "crash", format!("{} crashed. {} (open Crash Detective)", run.game.name, headline), &run.game.appid);
@@ -11474,6 +11537,40 @@ mod tests {
         let by: Vec<(&str, &str)> = red["needed_by"].as_array().unwrap().iter().map(|x| (x["name"].as_str().unwrap(), x["via"].as_str().unwrap())).collect();
         assert_eq!(by, vec![("Cool Plugin", "RED4ext")], "the plain mod does not stand on it");
         assert!(page("Plain")["requirements"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_game_update_is_noticed_before_play_when_mods_run_code_in_it() {
+        let h = harness("gameupd");
+        let dir = add_plain_game(&h);
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        let stage = h._dir.join("stage-plugin");
+        fs::create_dir_all(&stage).unwrap();
+        fs::write(stage.join("Hook.dll"), b"x").unwrap();
+        lib.add_with(&stage, "Hook Plugin", "hook.zip", None, "1").unwrap();
+        refresh_mods_shared(&h.state);
+        let codes = |h: &Harness| -> Vec<String> { preflight(&h.state, &g).iter().chain(game_issues(&h.state, &g, false).0.iter()).filter_map(|i| i["code"].as_str().map(str::to_string)).collect() };
+        // the first build seen is taken as it is
+        assert!(!codes(&h).contains(&"game_updated".to_string()));
+        assert!(h.state.read().unwrap().config.game_builds.contains_key(&g.appid));
+        // the game changes: both checks say so, with the mod that runs code in it
+        fs::write(dir.join("plain.exe"), b"MZ patched").unwrap();
+        let pre = preflight(&h.state, &g);
+        let i = pre.iter().find(|i| i["code"] == "game_updated").expect("noticed before play");
+        assert_eq!(i["args"][1], "Hook Plugin");
+        assert_eq!(codes(&h).iter().filter(|c| *c == "game_updated").count(), 2);
+        // "they work" accepts the new build
+        api(&h, "/api/game_update_ok", json!({}));
+        assert!(!codes(&h).contains(&"game_updated".to_string()));
+        // a change while no mod runs code in the game is taken quietly
+        api(&h, "/api/lib_toggle", json!({ "id": lib.mods()[0].id, "enabled": false }));
+        wait_until("the mod is off", || !lib.mods()[0].enabled);
+        fs::write(dir.join("plain.exe"), b"MZ patched again").unwrap();
+        assert!(!codes(&h).contains(&"game_updated".to_string()));
+        api(&h, "/api/lib_toggle", json!({ "id": lib.mods()[0].id, "enabled": true }));
+        wait_until("the mod is on", || lib.mods()[0].enabled);
+        assert!(!codes(&h).contains(&"game_updated".to_string()), "that build was accepted");
     }
 
     #[test]

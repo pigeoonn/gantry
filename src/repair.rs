@@ -109,6 +109,9 @@ pub struct RigConfigData {
     /// or "dir:<folder>".
     #[serde(default)]
     pub place_rules: HashMap<String, HashMap<String, String>>,
+    /// The build of each game's executable the mods last worked with (version, size and date), to notice a game update.
+    #[serde(default)]
+    pub game_builds: HashMap<String, String>,
     /// Every trainer kept for a game (paths), the attached one among them.
     #[serde(default)]
     pub trainer_shelf: HashMap<String, Vec<String>>,

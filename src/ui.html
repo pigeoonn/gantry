@@ -3990,10 +3990,11 @@
       needs_loader: () => t('These mods need a mod loader first (see the card below).'),
       duplicate_mod: () => t('The same mod is installed more than once: {}. Keep one of them.', a(p)[0]),
       low_disk: () => t('Only {} free on the game\'s drive. The game may fail to save.', a(p)[0]),
+      game_updated: () => a(p)[0] ? t('The game was updated ({}) since your mods last worked. Mods that run code in the game often break after a patch: {}. Check them for updates first.', a(p)[0], a(p)[1]) : t('The game was updated since your mods last worked. Mods that run code in the game often break after a patch: {}. Check them for updates first.', a(p)[1]),
     }[p.code] || (() => p.code))();
     const fixText = { steam: t('closes Steam, sets the launch option and starts Steam again'), setup: t('installs what is missing from its official releases'), vanilla: t('plays without mods this time') };
     const blocked = problems.some(p => p.code === 'steam_updating');
-    const fixes = [...new Set(problems.map(p => p.fix).filter(Boolean))];
+    const fixes = [...new Set(problems.map(p => p.fix).filter(f => fixText[f]))];
     const onlyVanilla = fixes.length === 1 && fixes[0] === 'vanilla';
     const lines = problems.map(p => `<div class="hb-line ${p.level}"><span class="hb-dot"></span><span class="hb-text">${escapeHtml(text(p))}${p.fix && fixText[p.fix] ? `<small style="display:block; color:var(--text-muted)">${escapeHtml(t('Fix: {}', fixText[p.fix]))}</small>` : ''}</span></div>`).join('');
     let btns = '';
@@ -4825,6 +4826,7 @@
         drift: () => tp(Number(a[0]), '{} deployed file was changed outside Gantry', '{} deployed files were changed outside Gantry'),
         needs: () => t('Missing mods these mods need: {}', a[0]),
         duplicate_mod: () => t('The same mod is installed more than once: {}. Keep one of them.', a[0]),
+        game_updated: () => a[0] ? t('The game was updated ({}) since your mods last worked. Mods that run code in the game often break after a patch: {}. Check them for updates first.', a[0], a[1]) : t('The game was updated since your mods last worked. Mods that run code in the game often break after a patch: {}. Check them for updates first.', a[1]),
         archive_clash: () => t('Mods change the same game files inside their archives: {}. Only one of each pair takes effect.', a.join('; ')),
         script_clash: () => t('Two mods define the same script code: {}. The game may refuse to load their scripts.', a.join('; ')),
         needs_framework: () => t('Your mods need {} to work, and the game does not have it yet.', a.join(', ')),
@@ -4840,6 +4842,7 @@
       redeploy: `<button class="btn" onclick="ipcSend('/api/lib_deploy', {})">${t('▶ Deploy')}</button>`,
       deploy: `<button class="btn" onclick="ipcSend('/api/lib_deploy', {})">${t('▶ Deploy')}</button>`,
       conflicts: `<button class="btn" onclick="openLibConflicts()">${t('Show them')}</button>`,
+      updates: `<button class="btn" onclick="checkNexusUpdates()">${t('Check for updates')}</button><button class="btn" onclick="ipcSend('/api/game_update_ok', {})">${t('They work')}</button>`,
     }[i.fix] || '');
     const switchBtn = (i) => {
       if (!['frozen', 'incomplete', 'errors', 'not_loaded'].includes(i.code) || !d.loader) return '';
@@ -4882,7 +4885,7 @@
     {
       const lib = modLibData();
       const onMods = lib && lib.mods ? lib.mods.filter(m => m.enabled).length : 0;
-      const bad = (d.issues || []).some(i => ['bad', 'warn'].includes(i.level) && !['dirty', 'drift', 'needs', 'needs_framework', 'duplicate_mod', 'needs_loader', 'anti_cheat', 'launch_option'].includes(i.code));
+      const bad = (d.issues || []).some(i => ['bad', 'warn'].includes(i.level) && !['dirty', 'drift', 'needs', 'needs_framework', 'duplicate_mod', 'needs_loader', 'anti_cheat', 'launch_option', 'game_updated'].includes(i.code));
       const btns = [];
       if (fixable.length > 1 || (fixable.length === 1 && lines.length > 1)) btns.push(`<button class="btn btn-play" onclick='fixEverything(${JS(fixable.map(i => i.fix))})'>${t('Fix everything')}</button>`);
       if (bad && onMods >= 2) btns.push(`<button class="btn" title="${escapeHtml(t('Turns mods off and on in rounds until the one that breaks the game is found.'))}" onclick="openCrashDetective()">${t('Find the broken mod')}</button>`);
