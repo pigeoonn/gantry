@@ -3385,8 +3385,11 @@ fn install_loader(state: &SharedState, kind: &str) {
 
 /// A second click while a loader is being installed or switched must not start a second one
 /// (that put the same loader into one library twice).
+/// Libraries (by folder) whose mod loader is being installed or swapped right now.
+static LOADER_BUSY: std::sync::LazyLock<Mutex<HashSet<String>>> = std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
+
 fn loader_exclusive(state: &SharedState, g: &GameEntry, f: impl FnOnce(&SharedState)) {
-    static BUSY: std::sync::LazyLock<Mutex<HashSet<String>>> = std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
+    use LOADER_BUSY as BUSY;
     // one at a time per library (the library's folder tells libraries apart, game ids can repeat)
     let Some(appid) = library_of(g).map(|l| l.root().to_string_lossy().to_string()) else { return };
     if !BUSY.lock().unwrap_or_else(|e| e.into_inner()).insert(appid.clone()) {
@@ -14577,6 +14580,9 @@ mod tests {
         h.state.write().unwrap().loader_sources = melon.src.clone();
         api(&h, "/api/loader_install", json!({ "kind": "melonloader" }));
         wait_until("MelonLoader is in", || dir.join("version.dll").is_file() && dir.join("MelonLoader/net6/MelonLoader.dll").is_file());
+        // the files are in a moment before the install is done with the library; a switch before that is refused
+        let key = library_of(&selected_game(&h.state).unwrap()).unwrap().root().to_string_lossy().to_string();
+        wait_until("the install is over", || !LOADER_BUSY.lock().unwrap().contains(&key));
         // the first run generates files of its own and the user's mod folder appears
         fs::create_dir_all(dir.join("MelonLoader/Dependencies")).unwrap();
         fs::write(dir.join("MelonLoader/Dependencies/generated.dll"), "G").unwrap();
