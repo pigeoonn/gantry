@@ -111,6 +111,13 @@ first shows what it will do, with what is already there ticked off, and asks onc
   when it is open), and everything is checked again. The window ticks each step off; a step that fails says why and the
   others still run. Safe to re-run.
 
+## Free Nexus accounts: the download queue
+Nexus lets free accounts download only through its website, so Gantry never clicks for you. When you ask for several
+mods (a mod's requirements, a collection), it opens the first mod's download page and waits. Press *Mod Manager
+Download* there (or *Manual download*: the saved file is picked up from your Downloads folder), and Gantry installs it
+and opens the next page. The Mods tab shows how far it got ("3 of 7 done"), the mod it waits for, what comes next, and
+*Open the page again*, *Skip* and *Stop*. A page waits for 30 minutes; after that it is dropped.
+
 ## Before you play
 Every Play button (the big one, double-click, the command palette, the controller's X) first runs a quick check. When it
 finds something that would make the game start broken, a window lists it, each line with what the fix does:

@@ -383,6 +383,9 @@ pub struct NexusState {
     pub wants: Vec<Want>,
     /// Mods still to be opened, one at a time, as each download arrives.
     pub queue: std::collections::VecDeque<Want>,
+    /// How many the current run of the queue has had and got through, for "3 of 7".
+    pub queue_total: usize,
+    pub queue_done: usize,
 }
 
 /// A mod the user asked for on Nexus Mods with a free account (the website must start its download).
@@ -393,6 +396,8 @@ pub struct Want {
     pub mod_id: u64,
     pub name: String,
     pub asked_ms: u64,
+    /// The file to open the page at (0: the mod's main file).
+    pub file_id: u64,
 }
 
 /// How long Gantry keeps waiting for the click on the website.
@@ -415,6 +420,8 @@ impl Default for NexusState {
             expect: None,
             wants: Vec::new(),
             queue: std::collections::VecDeque::new(),
+            queue_total: 0,
+            queue_done: 0,
         }
     }
 }
@@ -854,6 +861,7 @@ impl AppState {
             "waiting_for": self.nexus.expect.as_ref().map(|(t, _)| json!({ "appid": t.appid, "lib_id": t.lib_id, "name": t.name }))
                 .or_else(|| self.nexus.wants.first().map(|w| json!({ "appid": w.appid, "lib_id": "", "name": w.name }))),
             "queued": self.nexus.queue.len(),
+            "queue": (self.nexus.queue_total > 0).then(|| json!({ "total": self.nexus.queue_total, "done": self.nexus.queue_done, "next": self.nexus.queue.iter().take(5).map(|w| w.name.clone()).collect::<Vec<_>>() })),
         })
     }
 
@@ -2913,7 +2921,7 @@ fn nexus_get_mod(state: &SharedState, mod_id: u64, name: &str) {
         {
             let mut st = write_state(state);
             st.nexus.wants.retain(|w| !(w.game == domain && w.mod_id == mod_id));
-            st.nexus.wants.insert(0, Want { appid: g.appid.clone(), game: domain.clone(), mod_id, name: name.clone(), asked_ms: now_ms() });
+            st.nexus.wants.insert(0, Want { appid: g.appid.clone(), game: domain.clone(), mod_id, name: name.clone(), asked_ms: now_ms(), file_id: 0 });
             st.notifier.bump();
         }
         open_nexus_files_page(state, &domain, mod_id);
@@ -2941,9 +2949,10 @@ fn nexus_install_needs(state: &SharedState, appid: &str, lib_id: &str) {
                 if st.nexus.queue.iter().chain(st.nexus.wants.iter()).any(|w| w.game == game && w.mod_id == mod_id) {
                     continue;
                 }
-                st.nexus.queue.push_back(Want { appid: appid.to_string(), game, mod_id, name: r.name.clone(), asked_ms: 0 });
+                st.nexus.queue.push_back(Want { appid: appid.to_string(), game, mod_id, name: r.name.clone(), asked_ms: 0, file_id: 0 });
                 queued += 1;
             }
+            queue_counted(&mut st, queued);
         }
         if queued == 0 {
             return log(state, "WARN", "Nothing to open: what is missing has no Nexus page, or is already being waited for.");
@@ -4876,6 +4885,11 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             Ok(m) => log(state, "INFO", m),
             Err(e) => log(state, "WARN", e),
         },
+        "/api/nexus_queue" => {
+            let action = body_str(body, "action");
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || nexus_queue_action(&state_bg, &action));
+        }
         "/api/nxm_confirm" => {
             let accept = body.get("accept").and_then(|v| v.as_bool()).unwrap_or(false);
             let state_bg = Arc::clone(state);
@@ -7855,9 +7869,7 @@ fn collection_json(state: &SharedState, link: &str) -> Result<Value, String> {
 fn collection_install(state: &SharedState, link: &str, optional: bool) {
     let run = || -> Result<(), String> {
         let g = selected_game(state).filter(|g| g.is_installed).ok_or("Select an installed game first.")?;
-        if !read_state(state).nexus.user.as_ref().map(|u| u.premium).unwrap_or(false) {
-            return Err("Installing a whole collection needs Nexus Premium. Free accounts open each mod's page and press \"Mod Manager Download\".".into());
-        }
+        let premium = read_state(state).nexus.user.as_ref().map(|u| u.premium).unwrap_or(false);
         let v = collection_json(state, link)?;
         let domain = v["domain"].as_str().unwrap_or("").to_string();
         if v["other_game"].as_bool().unwrap_or(false) {
@@ -7869,6 +7881,23 @@ fn collection_install(state: &SharedState, link: &str, optional: bool) {
             return Ok(());
         }
         let total = todo.len();
+        if !premium {
+            // a free account downloads through the website: each mod's page opens in turn, and each download is installed as it arrives
+            let mut st = write_state(state);
+            let mut queued = 0;
+            for (mod_id, file_id, name) in todo {
+                if st.nexus.queue.iter().chain(st.nexus.wants.iter()).any(|w| w.game == domain && w.mod_id == mod_id) {
+                    continue;
+                }
+                st.nexus.queue.push_back(Want { appid: g.appid.clone(), game: domain.clone(), mod_id, name, asked_ms: 0, file_id });
+                queued += 1;
+            }
+            queue_counted(&mut st, queued);
+            drop(st);
+            log(state, "INFO", format!("Collection “{}”: {} mods queued. Press Mod Manager Download on each page that opens; Gantry installs each one.", v["name"].as_str().unwrap_or(""), queued));
+            nexus_queue_next(state);
+            return Ok(());
+        }
         for (i, (mod_id, file_id, name)) in todo.into_iter().enumerate() {
             log(state, "INFO", format!("Collection: {}/{} {}", i + 1, total, name));
             nexus_fetch_and_install(state, &g, &nexus::NxmLink { game: domain.clone(), mod_id, file_id, key: None, expires: None }, None);
@@ -7953,6 +7982,7 @@ fn nxm_request(state: &SharedState, url: &str) -> Result<String, String> {
         let asked = st.nexus.wants.iter().position(|w| w.game == link.game && w.mod_id == link.mod_id).map(|i| st.nexus.wants.remove(i));
         if let Some(w) = &asked {
             st.nexus.pending_for = Some(UpdateTarget { appid: w.appid.clone(), lib_id: String::new(), name: w.name.clone() });
+            queue_one_done(&mut st);
         }
         st.nexus.pending = Some(link);
         st.notifier.bump();
@@ -7999,6 +8029,130 @@ fn nxm_confirm(state: &SharedState, accept: bool) {
     nexus_queue_next(state);
 }
 
+/// `n` more mods joined the queue (a new run starts the count again).
+fn queue_counted(st: &mut AppState, n: usize) {
+    if st.nexus.queue_total > 0 && st.nexus.queue_done >= st.nexus.queue_total {
+        st.nexus.queue_total = 0;
+        st.nexus.queue_done = 0;
+    }
+    if st.nexus.queue_total == 0 {
+        st.nexus.queue_done = 0;
+        // a page that is already open counts too
+        st.nexus.queue_total = st.nexus.wants.len();
+    }
+    st.nexus.queue_total += n;
+    st.notifier.bump();
+}
+
+/// One mod of the queue is done (installed, or skipped). The count ends with the queue.
+fn queue_one_done(st: &mut AppState) {
+    if st.nexus.queue_total > 0 {
+        st.nexus.queue_done = (st.nexus.queue_done + 1).min(st.nexus.queue_total);
+    }
+    if st.nexus.queue.is_empty() && st.nexus.wants.is_empty() {
+        st.nexus.queue_total = 0;
+        st.nexus.queue_done = 0;
+    }
+    st.notifier.bump();
+}
+
+/// The queue panel's buttons: "skip" the mod being waited for, "reopen" its page, or "stop" the whole queue.
+fn nexus_queue_action(state: &SharedState, action: &str) {
+    match action {
+        "skip" => {
+            let skipped = {
+                let mut st = write_state(state);
+                let w = (!st.nexus.wants.is_empty()).then(|| st.nexus.wants.remove(0));
+                if w.is_some() {
+                    queue_one_done(&mut st);
+                }
+                w
+            };
+            if let Some(w) = skipped {
+                log(state, "INFO", format!("Skipped {}.", w.name));
+            }
+            nexus_queue_next(state);
+        }
+        "reopen" => {
+            let w = read_state(state).nexus.wants.first().cloned();
+            if let Some(w) = w {
+                write_state(state).nexus.wants[0].asked_ms = now_ms();
+                if w.file_id != 0 {
+                    open_page(nexus::NexusRef { game: w.game.clone(), mod_id: w.mod_id, file_id: w.file_id }.files_page(w.file_id));
+                } else {
+                    open_nexus_files_page(state, &w.game, w.mod_id);
+                }
+            }
+        }
+        "stop" => {
+            let n = {
+                let mut st = write_state(state);
+                let n = st.nexus.queue.len() + st.nexus.wants.len();
+                st.nexus.queue.clear();
+                st.nexus.wants.clear();
+                st.nexus.queue_total = 0;
+                st.nexus.queue_done = 0;
+                st.notifier.bump();
+                n
+            };
+            if n > 0 {
+                log(state, "INFO", format!("Stopped waiting for {} Nexus download(s).", n));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A file saved with the website's "Manual download" (or by a browser that does not hand links over) is matched to a
+/// mod Gantry is waiting for by the Nexus id in its name, and installed as if the link had come. Gives how many.
+fn match_downloads_to_wants(state: &SharedState) -> usize {
+    let wants: Vec<Want> = {
+        let mut st = write_state(state);
+        let now = now_ms();
+        st.nexus.wants.retain(|w| now.saturating_sub(w.asked_ms) < WANT_FOR_MS);
+        st.nexus.wants.clone()
+    };
+    if wants.is_empty() {
+        return 0;
+    }
+    let dir = read_state(state).downloads_dir.clone().unwrap_or_else(downloads_folder);
+    let handled = inbox_handled(state);
+    let now = std::time::SystemTime::now();
+    let mut n = 0;
+    for (path, size, age) in inbox_scan(&dir, &handled, now) {
+        let name = path.file_name().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
+        let Some(dn) = nexus::parse_download_name(&name) else { continue };
+        // only a file that arrived after the page was opened (with a minute to spare for clocks)
+        let arrived_ms = now_ms().saturating_sub(age * 1000);
+        let Some(w) = wants.iter().find(|w| w.mod_id == dn.mod_id && arrived_ms + 60_000 >= w.asked_ms) else { continue };
+        let Some(g) = game_by_appid(state, &w.appid) else { continue };
+        let file_id = if w.file_id != 0 { w.file_id } else { nexus_client(state).ok().and_then(|c| c.mod_files(&w.game, w.mod_id).ok()).and_then(|mf| mf.find_download(&dn).map(|f| f.file_id)).unwrap_or(0) };
+        inbox_mark(state, [format!("{}|{}", name, size)]);
+        {
+            let mut st = write_state(state);
+            st.nexus.wants.retain(|x| !(x.game == w.game && x.mod_id == w.mod_id));
+            queue_one_done(&mut st);
+        }
+        log(state, "INFO", format!("{} arrived in your Downloads folder; installing it.", name));
+        let nexus = (file_id != 0).then(|| nexus::NexusRef { game: w.game.clone(), mod_id: w.mod_id, file_id });
+        install_routed(path, false, Arc::clone(state), InstallOpts { game: Some(g), to_library: true, nexus, ..Default::default() });
+        n += 1;
+        nexus_queue_next(state);
+    }
+    n
+}
+
+/// While Gantry waits for Nexus downloads, look in the Downloads folder every few seconds.
+fn spawn_want_watcher(state: Weak<RwLock<AppState>>) {
+    thread::spawn(move || loop {
+        thread::sleep(if cfg!(test) { Duration::from_millis(200) } else { Duration::from_secs(3) });
+        let Some(st) = state.upgrade() else { return };
+        if !read_state(&st).nexus.wants.is_empty() {
+            match_downloads_to_wants(&st);
+        }
+    });
+}
+
 /// Opens the Nexus page of the next mod in the queue, when nothing else is being waited for.
 fn nexus_queue_next(state: &SharedState) {
     let (w, more) = {
@@ -8014,10 +8168,21 @@ fn nexus_queue_next(state: &SharedState) {
         st.notifier.bump();
         (w, st.nexus.queue.len())
     };
-    open_nexus_files_page(state, &w.game, w.mod_id);
+    if w.file_id != 0 {
+        open_page(nexus::NexusRef { game: w.game.clone(), mod_id: w.mod_id, file_id: w.file_id }.files_page(w.file_id));
+    } else {
+        open_nexus_files_page(state, &w.game, w.mod_id);
+    }
     log(state, "INFO", format!("Opened the Nexus page of {}. Press its Mod Manager Download button; Gantry installs it by itself.", w.name));
     if more > 0 {
         log(state, "INFO", format!("{} more are waiting for it; each page opens when the one before is done.", more));
+    }
+}
+
+/// Open a website page in the browser (never from tests).
+fn open_page(url: String) {
+    if !cfg!(test) {
+        xdg_open(url);
     }
 }
 
@@ -9782,6 +9947,7 @@ fn main() {
     spawn_health_monitor(Arc::downgrade(&state));
     spawn_cover_lookup(Arc::downgrade(&state));
     spawn_self_update_check(Arc::downgrade(&state));
+    spawn_want_watcher(Arc::downgrade(&state));
     spawn_auto_backup(Arc::downgrade(&state));
     spawn_sync_push(Arc::downgrade(&state));
     if std::env::var_os("RIG_EXIT_AFTER_PLAY").is_some() {
@@ -12998,6 +13164,53 @@ mod tests {
         api(&h, "/api/nxm", json!({ "url": "nxm://coolgame/mods/7/files/12?key=K2&expires=1999999999" }));
         wait_until("both installed", || lib.mods().len() == before + 2);
         assert!(nexus_state(&h)["waiting_for"].is_null());
+        assert!(nexus_state(&h)["queue"].is_null(), "the count ends with the queue");
+    }
+
+    #[test]
+    fn the_free_queue_counts_skips_stops_and_takes_manual_downloads_too() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let (h, _f, _dir, id) = nexus_update_setup("nxqueue", false);
+        let g = h.state.read().unwrap().games.last().unwrap().clone();
+        let lib = library_of(&g).unwrap();
+        let before = lib.mods().len();
+        let downloads = h._dir.join("Downloads");
+        fs::create_dir_all(&downloads).unwrap();
+        h.state.write().unwrap().downloads_dir = Some(downloads.clone());
+        let req = |n: &str, m: u64| MissingReq { name: n.into(), page_url: format!("https://www.nexusmods.com/coolgame/mods/{m}"), notes: String::new() };
+        h.state.write().unwrap().nexus.needs = vec![NeedRow { appid: g.appid.clone(), lib_id: id.clone(), name: "Cool Pack".into(), missing: vec![req("Frame One", 6), req("Frame Two", 7), req("Frame Three", 8)] }];
+        api(&h, "/api/nexus_install_needs", json!({ "appid": g.appid, "lib_id": id }));
+        wait_until("first page", || nexus_state(&h)["waiting_for"]["name"] == "Frame One");
+        let q = nexus_state(&h)["queue"].clone();
+        assert_eq!((q["done"].as_u64(), q["total"].as_u64()), (Some(0), Some(3)), "{q}");
+        assert_eq!(q["next"], json!(["Frame Two", "Frame Three"]));
+        // the website's "Manual download" saved the file instead of handing the link over: it is picked up from Downloads
+        let file = downloads.join("Frame One 6 1.0 2026-08-01T03-15Z q7jg7fflx.zip");
+        fs::write(&file, zip_of(&h, "f1", &[("Data/frame1.esp", "F")])).unwrap();
+        // a file that is still being written is left alone
+        assert_eq!(match_downloads_to_wants(&h.state), 0);
+        fs::File::options().write(true).open(&file).unwrap().set_modified(std::time::SystemTime::now() - Duration::from_secs(20)).unwrap();
+        // and an old download of something else is never taken
+        let other = downloads.join("Other Thing 99 1.0 2026-08-01T03-15Z zzzzzzzzz.zip");
+        fs::write(&other, zip_of(&h, "o", &[("Data/o.esp", "O")])).unwrap();
+        fs::File::options().write(true).open(&other).unwrap().set_modified(std::time::SystemTime::now() - Duration::from_secs(20)).unwrap();
+        assert_eq!(match_downloads_to_wants(&h.state), 1);
+        wait_until("installed from Downloads", || lib.mods().len() == before + 1);
+        assert!(file.is_file(), "the file in Downloads is left where it is");
+        wait_until("the next page is awaited", || nexus_state(&h)["waiting_for"]["name"] == "Frame Two");
+        assert_eq!(nexus_state(&h)["queue"]["done"], 1);
+        assert_eq!(match_downloads_to_wants(&h.state), 0, "the same file is not installed twice");
+        // skip one, then stop the rest
+        api(&h, "/api/nexus_queue", json!({ "action": "skip" }));
+        wait_until("skipped to the third", || nexus_state(&h)["waiting_for"]["name"] == "Frame Three");
+        assert_eq!(nexus_state(&h)["queue"]["done"], 2);
+        api(&h, "/api/nexus_queue", json!({ "action": "stop" }));
+        wait_until("stopped", || nexus_state(&h)["waiting_for"].is_null() && nexus_state(&h)["queue"].is_null());
+        assert_eq!(lib.mods().len(), before + 1);
+        assert!(other.is_file());
     }
 
     #[test]

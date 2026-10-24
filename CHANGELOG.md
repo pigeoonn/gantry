@@ -14,6 +14,11 @@
   If something is found, one window lists it with **Fix and play** (installs what is missing, closes Steam to set the
   launch option, or plays without mods for anti-cheat games), *Play anyway* and *Cancel*. Nothing found: the game just
   starts, as before. Core mods that need other core mods (ArchiveXL needs RED4ext) bring them along.
+- **Free Nexus accounts get a real download queue.** "Get them" for a mod's requirements and now also for a whole
+  Nexus collection (before: Premium only) opens one page at a time and installs each download as it arrives. A panel
+  in the Mods tab shows "3 of 7 done", which mod it waits for and what comes next, with *Open the page again*, *Skip*
+  and *Stop*. Files saved with the website's *Manual download* button are picked up from the Downloads folder and
+  installed too, so no link handler is needed.
 - **Fixed:** a Cyberpunk mod zipped as only `red4ext/...` or `engine/...` lost that folder when the game did not have it
   yet, and landed in the wrong place.
 

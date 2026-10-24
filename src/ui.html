@@ -959,6 +959,8 @@
   .wl-row .wl-name small { display: block; font-weight: 500; color: var(--text-muted); font-size: 11px; }
   .wl-chip { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-2); white-space: nowrap; }
   .wl-chip.ready { color: var(--acc-fg, var(--acc)); background: var(--acc-soft); border-color: transparent; }
+  .nq-bar { display: block; height: 4px; border-radius: 4px; background: var(--line-2); margin: 6px 0 4px; overflow: hidden; }
+  .nq-bar i { display: block; height: 100%; background: var(--acc); transition: width .3s; }
   .su-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
   .su-step { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; padding: 8px 10px; border-radius: 10px; background: var(--glass-2, rgba(255,255,255,.04)); }
   .su-step .su-ico { font-weight: 800; text-align: center; }
@@ -1326,6 +1328,7 @@
       <div class="loader-card" id="loaderCard" data-dyn style="display:none"></div>
       <div class="pack-bar" id="packBar" data-dyn style="display:none"></div>
       <div class="health-bar" id="healthBar" data-dyn style="display:none"></div>
+      <div class="health-bar info" id="nxQueueBar" data-dyn style="display:none"></div>
       <div class="health-bar info" id="inboxBar" data-dyn style="display:none"></div>
       <div class="health-bar info" id="vanillaBar" style="display:none"><span class="hb-dot"></span><span class="hb-text">Playing without mods. They come back when you close the game.</span></div>
     <div class="drop-zone slim" onclick="ipcSend('/api/install_dialog')">
@@ -4688,6 +4691,23 @@
     bar.innerHTML = `<div class="hb-line info"><span class="hb-dot"></span><span class="hb-text"><b>${tp(items.length, '{} new mod file in your Downloads folder', '{} new mod files in your Downloads folder')}</b></span>${items.length > 1 ? `<button class="btn btn-play" onclick='inboxAdd(${JS(names)})'>${t('Add all ({})', items.length)}</button>` : ''}<button class="btn" onclick='inboxHide(${JS(names)})'>${t('Not now')}</button></div>` + items.slice(0, 5).map(line).join('') + (items.length > 5 ? `<div class="hb-line info"><span class="hb-text">${t('…and {} more', items.length - 5)}</span></div>` : '');
     bar.style.display = '';
   }
+  // the free-account download queue: which page is open, how far it got, and a way out
+  function renderNexusQueue() {
+    const bar = document.getElementById('nxQueueBar');
+    const nx = appState.nexus || {};
+    const w = nx.waiting_for, q = nx.queue;
+    if (!w && !q) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    const isUpdate = w && w.lib_id;
+    let h = `<div class="hb-line warn"><span class="hb-dot"></span><span class="hb-text">`;
+    if (q) h += `<b>${escapeHtml(t('Nexus downloads: {} of {} done', q.done, q.total))}</b><span class="nq-bar" aria-hidden="true"><i style="width:${Math.round(100 * q.done / Math.max(1, q.total))}%"></i></span>`;
+    if (w) h += `<span style="display:block">${escapeHtml(t('Waiting for the Nexus download of “{}”', w.name))}</span><small style="display:block; color:var(--text-muted)">${escapeHtml(t('Press “Mod Manager Download” (or “Manual download”) on the page that opened. Gantry installs it as soon as it arrives.'))}</small>`;
+    if (q && q.next && q.next.length) h += `<small style="display:block; color:var(--text-muted)">${escapeHtml(t('Next: {}', q.next.join(', ')))}</small>`;
+    h += `</span>`;
+    if (w && !isUpdate) h += `<button class="btn" onclick="ipcSend('/api/nexus_queue', { action: 'reopen' })">${t('Open the page again')}</button><button class="btn" onclick="ipcSend('/api/nexus_queue', { action: 'skip' })">${t('Skip')}</button>`;
+    if (!isUpdate) h += `<button class="btn" onclick="ipcSend('/api/nexus_queue', { action: 'stop' })">${t('Stop')}</button>`;
+    bar.innerHTML = h + `</div>`;
+    bar.style.display = '';
+  }
   function inboxAdd(names) { ipcSend('/api/inbox_add', { names }); showToast(t('Adding them…')); setTimeout(() => refreshInbox(true), 1500); }
   function inboxHide(names) { ipcSend('/api/inbox_hide', { names }); setTimeout(() => refreshInbox(true), 400); }
 
@@ -5611,13 +5631,13 @@
         actions.push(`<button class="btn btn-play" onclick='colInstall(false)'>${tp(missing.length, 'Install the {} missing mod', 'Install the {} missing mods')}</button>`);
         if (optional.length) actions.push(`<button class="btn" onclick='colInstall(true)'>${t('Install them with the optional ones ({})', missing.length + optional.length)}</button>`);
       } else {
-        const next = (missing[0] || optional[0]);
-        actions.push(`<button class="btn btn-play" onclick='openWeb(${JS(next.page_url)})'>↗ ${t('Open the next missing mod')}</button>`);
+        actions.push(`<button class="btn btn-play" onclick='colInstall(false)'>${tp(missing.length, 'Get the {} missing mod, one page at a time', 'Get the {} missing mods, one page at a time')}</button>`);
+        if (optional.length) actions.push(`<button class="btn" onclick='colInstall(true)'>${t('With the optional ones ({})', missing.length + optional.length)}</button>`);
       }
     }
     actions.push(`<button class="btn" onclick="openCollection(colLink)">⟳ ${t('Refresh')}</button>`);
     html += `<div class="mp-actions" style="margin-bottom:10px">${actions.join('')}</div>`;
-    if (!d.premium && !d.other_game) html += `<div class="mp-note" style="background:rgba(255,255,255,0.06); color:var(--soft)">${t('Free accounts: open each mod\'s page and press "Mod Manager Download". Gantry takes over from there; press Refresh to see what is done.')}</div>`;
+    if (!d.premium && !d.other_game) html += `<div class="mp-note" style="background:rgba(255,255,255,0.06); color:var(--soft)">${t('Free accounts: Gantry opens each mod\'s page in turn. Press "Mod Manager Download" there; each mod is installed as it arrives and the next page opens. The Mods tab shows how far it got.')}</div>`;
     if (!missing.length && !optional.length) html += `<div class="lib-empty">${t('Everything in this collection is already in your library.')}</div>`;
     html += d.mods.map(m => `<div class="mp-req"><div class="mp-rn"><b>${escapeHtml(m.name)}</b> <small style="color:var(--text-muted)">v${escapeHtml(m.version)} · ${fmtSize(m.size)}</small></div>
       ${m.optional ? `<span class="ml-pill">${t('optional')}</span>` : ''}
@@ -5964,7 +5984,7 @@
     if (nx.checking) pills.push(`<span class="ml-pill">${t('Checking Nexus…')}</span>`);
     else if (nx.check_error) pills.push(`<span class="ml-pill bad" title="${escapeHtml(tm(nx.check_error))}">${t('Update check failed')}</span>`);
     else if (nx.checked_ms) pills.push(`<span class="ml-pill" title="${new Date(nx.checked_ms).toLocaleString(LANG)}">${t('Checked {}', new Date(nx.checked_ms).toLocaleTimeString(LANG, { hour: '2-digit', minute: '2-digit' }))}</span>`);
-    if (nx.waiting_for) pills.push(`<span class="ml-pill warn">${t('Waiting for the Nexus download of “{}”', escapeHtml(nx.waiting_for.name))}</span>`);
+    renderNexusQueue();
     document.getElementById('mlCheck').disabled = !!nx.checking;
     document.getElementById('mlUpdateAll').style.display = (nx.updates || []).length + (appState.thunder_updates || []).length > 0 ? 'inline-flex' : 'none';
     document.getElementById('mlStatus').innerHTML = pills.join('');
