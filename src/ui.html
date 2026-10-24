@@ -917,6 +917,7 @@
   html.hc { --glass-border: rgb(var(--w) / 0.45); --text-muted: #cbd5e1; }
   html.hc .btn, html.hc .ml-pill, html.hc .subtab { border: 1px solid rgb(var(--w) / 0.55); }
   :focus-visible { outline: 2px solid #34d399; outline-offset: 2px; }
+  main:focus-visible { outline: none; }
 
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-thumb { background: rgb(var(--w) / 0.16); border-radius: 3px; }
@@ -2276,7 +2277,11 @@
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { if (document.getElementById('paletteBack').classList.contains('open')) closePalette(); else closeTopModal(); }
+    if (e.key === 'Escape') {
+      if (document.getElementById('paletteBack').classList.contains('open')) closePalette();
+      else if (document.getElementById('notesPanel').classList.contains('open') && !document.querySelector('.modal-backdrop.open')) toggleNotes();
+      else closeTopModal();
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
       e.preventDefault();
       document.getElementById('searchInput').focus();
@@ -2652,6 +2657,7 @@
     const c = document.createElement('div');
     c.className = `game-card ${idx === appState.selected_idx ? 'selected' : ''}`;
     c.setAttribute('data-idx', idx);
+    gameKeys(c, g, idx);
     c.onclick = () => ipcSend('/api/select', { index: idx });
     c.ondblclick = () => playChecked();
     c.oncontextmenu = e => openCtx(e, idx);
@@ -2668,6 +2674,25 @@
     return c;
   }
 
+  // a game in the list is reached with Tab; Enter or Space picks it, the arrow keys go to the next one, Ctrl+Enter plays it
+  function gameKeys(el, g, idx) {
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', g.name);
+    el.setAttribute('aria-pressed', idx === appState.selected_idx ? 'true' : 'false');
+    el.onkeydown = e => {
+      if (e.target !== el) return;
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); ipcSend('/api/select', { index: idx }); playChecked(); return; }
+      if (['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) {
+        const all = [...el.parentElement.querySelectorAll('.game-item, .game-card')];
+        const i = all.indexOf(el);
+        const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
+        const next = e.key === 'Home' ? all[0] : e.key === 'End' ? all[all.length - 1] : all[i + step];
+        if (next) { e.preventDefault(); next.focus(); next.scrollIntoView({ block: 'nearest' }); }
+      }
+    };
+  }
+
   function renderGames(forceRebuild) {
     const q = document.getElementById('searchInput').value.toLowerCase();
     const meta = appState.meta || {};
@@ -2678,6 +2703,7 @@
       list.querySelectorAll('.game-item, .game-card').forEach(el => {
         const idx = parseInt(el.getAttribute('data-idx'));
         el.classList.toggle('selected', idx === appState.selected_idx);
+        el.setAttribute('aria-pressed', idx === appState.selected_idx ? 'true' : 'false');
       });
       return;
     }
@@ -2713,6 +2739,7 @@
       const div = document.createElement('div');
       div.className = `game-item ${idx === appState.selected_idx ? 'selected' : ''}`;
       div.setAttribute('data-idx', idx);
+      gameKeys(div, g, idx);
       div.onclick = () => ipcSend('/api/select', { index: idx });
       div.ondblclick = () => playChecked();
       div.oncontextmenu = e => openCtx(e, idx);
@@ -3632,7 +3659,15 @@
           if (win) { win.tabIndex = -1; setTimeout(() => win.focus({ preventScroll: true }), 30); }
         } else if (!open && was) {
           const i = a11yReturn.findIndex(r => r[0] === m.target);
-          if (i >= 0) { const [, back] = a11yReturn.splice(i, 1)[0]; if (back && document.contains(back) && back.focus && !document.querySelector('.modal-backdrop.open')) back.focus({ preventScroll: true }); }
+          // back to where the keyboard was before this window opened, when that is on what is now on top
+          if (i >= 0) {
+            const [, back] = a11yReturn.splice(i, 1)[0];
+            const top = a11yTop();
+            if (back && document.contains(back) && back.focus && back.getClientRects().length && (!top || top.contains(back))) back.focus({ preventScroll: true });
+            else if (top) { const w = top.querySelector('.modal-window'); if (w) w.focus({ preventScroll: true }); }
+            // what opened it is gone (a menu, the palette): the main part of the window, not nowhere
+            else setTimeout(() => { const a = document.activeElement; if (!a11yTop() && (!a || a === document.body || !a.getClientRects().length)) { const mn = document.querySelector('main'); mn.tabIndex = -1; mn.focus({ preventScroll: true }); } }, 60);
+          }
         }
       }
     }
@@ -3675,6 +3710,9 @@
     const panel = document.getElementById('notesPanel');
     panel.classList.toggle('open');
     renderNotes();
+    // the keyboard follows: into the list when it opens, back to the bell when it closes
+    if (panel.classList.contains('open')) { const first = panel.querySelector('.np-item, button'); if (first) first.focus({ preventScroll: true }); }
+    else if (panel.contains(document.activeElement)) document.getElementById('notesBtn').focus({ preventScroll: true });
   }
   document.addEventListener('click', e => {
     const panel = document.getElementById('notesPanel');
@@ -3834,7 +3872,7 @@
   }
 
   function openKeys() {
-    const rows = [['Ctrl+K', t('Search games and every action')], ['Ctrl+F', t('Search the game list')], ['Ctrl+L', t('Open the overview of all games')], ['Ctrl+R', t('Rescan the library')], ['?', t('Show this list')], ['Esc', t('Close the open window')]];
+    const rows = [['Ctrl+K', t('Search games and every action')], ['Ctrl+F', t('Search the game list')], ['Ctrl+L', t('Open the overview of all games')], ['Ctrl+R', t('Rescan the library')], ['Tab', t('Go to the next button or field (Shift+Tab: back)')], ['↑ ↓', t('Move through the game list')], ['Enter', t('Pick the game or press the button')], ['Ctrl+Enter', t('Play the game that has the keyboard')], ['?', t('Show this list')], ['Esc', t('Close the open window')]];
     document.getElementById('keysBody').innerHTML = rows.map(([k, d]) => `<div class="disk-row"><kbd>${escapeHtml(k)}</kbd><b>${escapeHtml(d)}</b></div>`).join('');
     document.getElementById('keysModal').classList.add('open');
   }
@@ -4596,6 +4634,7 @@
       [t('○ Play without mods'), () => ipcSend('/api/play_vanilla', {}), !!g],
       [t('🚀 Make this game moddable'), fullSetup, !!g],
       [t('👋 Check my games'), openWelcome, true],
+      [t('🔍 Find mods'), () => openFind('store'), !!g],
       [t('⬇ Downloads'), openDownloads, true],
       [t('⏳ Checks and scans'), openDownloads, true],
       [t('📊 Play time and timeline'), () => setTab('activity'), true],
@@ -6325,7 +6364,7 @@
     if (!chipTests[mlChip]) mlChip = 'all';
     const chipDefs = [['all', t('All')], ['updates', t('Updates')], ['needs', t('Needs something')], ['conflicts', t('Conflicts')], ['off', t('Off')], ['core', t('Core')]].concat(groups.map(gr => ['g:' + gr, gr]));
     const chipHtml = chipDefs.map(([k, label]) => ({ k, label, n: lib.mods.filter(chipTests[k]).length })).filter(c => c.k === 'all' || c.k === mlChip || c.n > 0)
-      .map(c => `<button class="ml-chip ${c.k === mlChip ? 'on' : ''}" onclick='setMlChip(${JS(c.k)})'>${escapeHtml(c.label)}<small>${c.n}</small></button>`).join('');
+      .map(c => `<button class="ml-chip ${c.k === mlChip ? 'on' : ''}" onclick='setMlChip(${JS(c.k)})'>${escapeHtml(c.label)} <small>${c.n}</small></button>`).join('');
     // a group shown by itself can be switched on or off as a whole
     const groupView = mlChip === 'core' || mlChip.startsWith('g:');
     const groupBtns = groupView ? `<button class="ml-chip" onclick="mlGroupSet(true)">${t('Turn the group on')}</button><button class="ml-chip" onclick="mlGroupSet(false)">${t('Turn the group off')}</button>` : '';
@@ -6351,7 +6390,7 @@
       return `
       <div class="ml-row ${m.enabled ? '' : 'off'} ${mlSel.has(m.id) ? 'sel' : ''} ${seen && !seen.has(m.id) ? 'fresh' : ''}" data-i="${i}" ondragover="mlDragOver(event, ${i})" ondrop="mlDrop(event, ${i})">
         <span class="ml-grip" draggable="true" ondragstart="mlDragStart(event, ${JS(m.id)})" ondragend="mlDragEnd()" title="${escapeHtml(t('Drag to change the load order'))}">⠿</span>
-        <span class="ml-n ${mlSel.has(m.id) ? 'on' : ''}" onclick='mlSelect(event, ${JS(m.id)})' title="${escapeHtml(t('Select (Shift: a range)'))}">${mlSel.has(m.id) ? '✓' : i + 1}</span>
+        <span class="ml-n ${mlSel.has(m.id) ? 'on' : ''}" onclick='mlSelect(event, ${JS(m.id)})' title="${escapeHtml(t('Select (Shift: a range)'))}" aria-label="${escapeHtml(t('Select {}', m.name))}" aria-pressed="${mlSel.has(m.id)}">${mlSel.has(m.id) ? '✓' : i + 1}</span>
         <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange='ipcSend("/api/lib_toggle", { id: ${JS(m.id)}, enabled: this.checked })' title="${t('Enable / disable')}">
         <div class="ml-main">
           <div class="ml-name">${dot ? `<span class="ml-dot ${dot[0]}" title="${escapeHtml(dot[1])}"></span>` : ''}<span class="ml-src ${src[0]}" title="${escapeHtml(src[1])}">${src[0] === 'hand' ? '✋' : src[0] === 'nx' ? 'N' : src[0] === 'ts' ? 'TS' : src[0] === 'mio' ? 'io' : 'GH'}</span>${escapeHtml(m.name)}${m.group ? `<span class="ml-group">${escapeHtml(m.group)}</span>` : ''} ${m.version ? `<small style="color:var(--text-muted)">v${escapeHtml(m.version)}</small>` : ''}${(m.programs || []).length ? ` <span title="${escapeHtml(t('Contains programs: {}', m.programs.slice(0, 3).join(', ')))}">⚠</span>` : ''}${m.update_rule === 'never' ? ` <span title="${escapeHtml(t('You chose to keep this version: it is never updated.'))}">🔒</span>` : m.update_rule === 'auto' ? ` <span title="${escapeHtml(t('Updates itself when the game is closed.'))}">⟳</span>` : ''} ${m.conflicts ? '<span class="ml-pill warn" style="margin-left:4px">⚔</span>' : ''}</div>

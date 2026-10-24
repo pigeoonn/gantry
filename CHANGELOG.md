@@ -2,6 +2,11 @@
 
 ## Next
 
+- **Everything by keyboard.** Games in the list can be reached with Tab, picked with Enter, walked with the arrow keys
+  and started with Ctrl+Enter. The bell's list takes the keyboard when it opens and Esc closes it; closing a window
+  puts the keyboard back where it was (on the mod in the store after its page, never nowhere). The command palette
+  has *Find mods*. The screen test now plays a game, installs a mod and follows a crash report with keys alone,
+  checking that every stop has a name a screen reader can say and shows that it has focus.
 - **Speed and reliability.** A damaged settings file, mod list or journal is now recovered from the copy made before
   its last change (or, for settings, the newest weekly backup) instead of quietly becoming empty; the damaged file is kept
   and the bell says what happened. Big libraries stay quick: with 800 mods, showing them all takes about a third of the

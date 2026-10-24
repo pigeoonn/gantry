@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AUDIT_JS } from './a11y.mjs';
+import { keyboardJourneys } from './keyboard.mjs';
 
 const [rigBin, browserBin, shotsDir] = process.argv.slice(2);
 // two functions of the same name in the page: the later one silently replaces the earlier (this once broke the activity log)
@@ -142,6 +143,9 @@ try {
     }
     await ev(`appState.settings.theme = 'dark'; appState.settings.custom_theme = null; applyLook(appState.settings)`);
   }
+  // play, install a mod and fix a crash with the keyboard alone (see tests/keyboard.mjs)
+  for (const p of await keyboardJourneys({ send, ev, sleep, fake })) failures.push('[keyboard] ' + p);
+  if (process.env.SMOKE_KEYS_ONLY) throw new Error('stopped after the keyboard journeys: ' + failures.length + ' problems');
   // hostile and awkward names (markup, quotes, template syntax, very long, right-to-left, emoji) in every list must stay text
   {
     const nasty = ['<img src=x onerror=window.__pwn=1>', `'"><svg onload=window.__pwn=1>`, '${window.__pwn=1}', '`+window.__pwn+`', '</script><script>window.__pwn=1</script>', 'A'.repeat(300), '😀 emoji ✓ 日本語', '\u202e rtl text', `O'Brien "quoted" & <b>bold</b>`];
