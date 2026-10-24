@@ -1,13 +1,13 @@
 PackageIdentifier: pigeoonn.Gantry
-PackageVersion: 5.3.0
+PackageVersion: 5.4.0
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
-  - RelativeFilePath: gantry-v5.3.0-windows-x86_64\rig.exe
+  - RelativeFilePath: gantry-v5.4.0-windows-x86_64\rig.exe
     PortableCommandAlias: rig
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/pigeoonn/gantry/releases/download/v5.3.0/gantry-v5.3.0-windows-x86_64.zip
-    InstallerSha256: 5D0F12698FB7FC23E5263AA115217617365F9F0DBA76FE84BA0A23C07192D675
+    InstallerUrl: https://github.com/pigeoonn/gantry/releases/download/v5.4.0/gantry-v5.4.0-windows-x86_64.zip
+    InstallerSha256: 39EA5E6364471C49610A6B87438139DFC3B9122F7C56E81AD3D5499363113F24
 ManifestType: installer
 ManifestVersion: 1.6.0

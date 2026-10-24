@@ -1,8 +1,8 @@
 # After a release: replace the version and the SHA-256 (from the .sha256 file next to the release's macOS archive),
 # then put this file in a tap (homebrew-gantry/Casks/gantry.rb) or submit it to homebrew-cask.
 cask "gantry" do
-  version "5.3.0"
-  sha256 "b9292e96447267a5625f63c1cb7b9a4e7673572cf5f48a3a5882a17ccd090077"
+  version "5.4.0"
+  sha256 "329a00105a070e12d3ab0f05039c7deadc1c7df57f4794b92919998c9ff1fbd7"
 
   url "https://github.com/pigeoonn/gantry/releases/download/v#{version}/gantry-v#{version}-macos-arm64.tar.gz"
   name "Gantry"
