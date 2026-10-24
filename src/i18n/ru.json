@@ -1405,6 +1405,7 @@
 "Where the space goes": "Куда уходит место",
 "Which one is it?": "Какой из них?",
 "Which profile do the saves you have now belong to? ({}) Leave it empty if none yet.": "К какому профилю относятся текущие сохранения? ({1}) Оставьте пустым, если пока ни к какому.",
+"While {} runs, its log shows a known problem: {}": "Пока {1} запущена, в её журнале появилась известная проблема: {2}",
 "Who overwrites whom": "Кто кого перезаписывает",
 "Why is it slow?": "Почему тормозит?",
 "Win64 directory not found.": "Каталог Win64 не найден.",

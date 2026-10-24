@@ -1405,6 +1405,7 @@
 "Where the space goes": "Unde se duce spațiul",
 "Which one is it?": "Care dintre ele este?",
 "Which profile do the saves you have now belong to? ({}) Leave it empty if none yet.": "Cărui profil îi aparțin salvările pe care le ai acum? ({1}) Lasă gol dacă încă niciunul.",
+"While {} runs, its log shows a known problem: {}": "În timp ce {1} rulează, jurnalul lui arată o problemă cunoscută: {2}",
 "Who overwrites whom": "Cine peste cine scrie",
 "Why is it slow?": "De ce merge greu?",
 "Win64 directory not found.": "Directorul Win64 nu a fost găsit.",

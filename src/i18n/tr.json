@@ -1405,6 +1405,7 @@
 "Where the space goes": "Alan nereye gidiyor",
 "Which one is it?": "Hangisi?",
 "Which profile do the saves you have now belong to? ({}) Leave it empty if none yet.": "Şu an sahip olduğun kayıtlar hangi profile ait? ({1}) Henüz hiçbirine değilse boş bırak.",
+"While {} runs, its log shows a known problem: {}": "{1} çalışırken günlüğünde bilinen bir sorun göründü: {2}",
 "Who overwrites whom": "Kim kimi ezer",
 "Why is it slow?": "Neden yavaş?",
 "Win64 directory not found.": "Win64 dizini bulunamadı.",

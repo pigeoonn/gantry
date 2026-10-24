@@ -2788,6 +2788,19 @@ fn level_rank(l: &str) -> u8 {
 
 /// What is wrong with a game's mods right now, worst first. `deep` also measures the running
 /// game's CPU (about a second), which only the open game page needs.
+/// Known problems the game's logs name right now (the list in data/errors.json, plus the user's own).
+fn kb_findings(state: &SharedState, g: &GameEntry) -> Vec<kb::Finding> {
+    let prefixes: Vec<PathBuf> = [g.pfx.clone(), format!("{}/pfx", g.compatdata)].into_iter().filter(|p| !p.is_empty() && p != "/pfx").map(PathBuf::from).collect();
+    let ue_log = ModManager::read_ue4ss_log_tail(g, 400);
+    let proton_log = home_dir().join(format!("steam-{}.log", if g.steam_appid.is_empty() { &g.appid } else { &g.steam_appid }));
+    let logs = kb::collect_logs(Path::new(&g.game_dir), &prefixes, &ue_log, Some(proton_log.as_path()).filter(|p| p.is_file()));
+    if logs.is_empty() {
+        return Vec::new();
+    }
+    let user = read_state(state).paths.config_file.with_file_name("errors.json");
+    kb::scan(&kb::patterns(Some(&user)), &logs)
+}
+
 fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, Value) {
     let dir = PathBuf::from(&g.game_dir);
     let unity = loaders::detect(&dir);
@@ -2839,23 +2852,13 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
     if let Some(note) = recipes::find(&read_state(state).recipes, &g.appid, g.recipe_steam_id()).map(|r| r.notes.trim().to_string()).filter(|n| !n.is_empty()) {
         out.push(issue("pack_note", "info", "", vec![note]));
     }
-    // known problems named in the logs (the list in data/errors.json, plus the user's own)
-    {
-        let prefixes: Vec<PathBuf> = [g.pfx.clone(), format!("{}/pfx", g.compatdata)].into_iter().filter(|p| !p.is_empty() && p != "/pfx").map(PathBuf::from).collect();
-        let ue_log = ModManager::read_ue4ss_log_tail(g, 400);
-        let proton_log = home_dir().join(format!("steam-{}.log", if g.steam_appid.is_empty() { &g.appid } else { &g.steam_appid }));
-        let logs = kb::collect_logs(&dir, &prefixes, &ue_log, Some(proton_log.as_path()).filter(|p| p.is_file()));
-        if !logs.is_empty() {
-            let user = read_state(state).paths.config_file.with_file_name("errors.json");
-            for f in kb::scan(&kb::patterns(Some(&user)), &logs) {
-                let level = match f.level.as_str() {
-                    "bad" => "bad",
-                    "info" => "info",
-                    _ => "warn",
-                };
-                out.push(json!({ "code": "known", "level": level, "fix": "", "args": [], "kb": f }));
-            }
-        }
+    for f in kb_findings(state, g) {
+        let level = match f.level.as_str() {
+            "bad" => "bad",
+            "info" => "info",
+            _ => "warn",
+        };
+        out.push(json!({ "code": "known", "level": level, "fix": "", "args": [], "kb": f }));
     }
     let drift = status["drift"]["count"].as_u64().unwrap_or(0);
     if drift > 0 {
@@ -7343,7 +7346,9 @@ fn spawn_process_monitor(state: Weak<RwLock<AppState>>) {
             match run.as_mut() {
                 None => {
                     if let (true, Some(g)) = (now, game) {
-                        run = Some(Run { game: g, started_ms: now_ms(), perf: perf::Tracker::default() });
+                        // what the logs already said before this session is old news
+                        let seen = kb_findings(&st_arc, &g).into_iter().map(|f| (f.id, f.evidence)).collect();
+                        run = Some(Run { game: g, started_ms: now_ms(), perf: perf::Tracker::default(), seen, next_scan_ms: now_ms() + LIVE_SCAN_MS });
                         run_misses = 0;
                     }
                 }
@@ -7353,6 +7358,9 @@ fn spawn_process_monitor(state: Weak<RwLock<AppState>>) {
                         r.perf.add(now_ms(), rss_kb, ticks);
                     }
                     let alive = !pids.is_empty() || owned;
+                    if alive {
+                        live_log_watch(&st_arc, r);
+                    }
                     run_misses = if alive { 0 } else { run_misses + 1 };
                     if run_misses >= 3 {
                         if let Some(done) = run.take() {
@@ -7375,6 +7383,35 @@ struct Run {
     game: GameEntry,
     started_ms: u64,
     perf: perf::Tracker,
+    /// Known problems already in the logs (as `id`, line), so only new ones are told during play.
+    seen: Vec<(String, String)>,
+    next_scan_ms: u64,
+}
+
+/// How often the logs of a running game are read for known problems.
+const LIVE_SCAN_MS: u64 = if cfg!(test) { 0 } else { 15_000 };
+
+/// Read the running game's logs and tell about a known problem that was not there before, while the game is still on.
+fn live_log_watch(state: &SharedState, r: &mut Run) {
+    let now = now_ms();
+    if now < r.next_scan_ms {
+        return;
+    }
+    r.next_scan_ms = now + LIVE_SCAN_MS;
+    let lang = read_state(state).config.language.clone();
+    for f in kb_findings(state, &r.game) {
+        let key = (f.id.clone(), f.evidence.clone());
+        if r.seen.contains(&key) {
+            continue;
+        }
+        r.seen.push(key);
+        if f.level == "info" {
+            continue;
+        }
+        let title = f.title.get(&lang).or_else(|| f.title.get("en")).and_then(Value::as_str).or(f.title.as_str()).unwrap_or(&f.id).to_string();
+        log(state, "WARN", format!("{}: {} ({})", r.game.name, title, f.evidence));
+        add_note(state, "known", format!("While {} runs, its log shows a known problem: {}", r.game.name, title), &r.game.appid);
+    }
 }
 
 /// Frame statistics from the MangoHud log written during a session, if there is one.
@@ -12768,13 +12805,13 @@ mod tests {
         let started = now_ms().saturating_sub(125_000);
 
         // a clean run: nothing is said
-        finish_run(&h.state, Run { game: g.clone(), started_ms: started, perf: Default::default() });
+        finish_run(&h.state, Run { game: g.clone(), started_ms: started, perf: Default::default(), seen: Vec::new(), next_scan_ms: 0 });
         assert!(api(&h, "/api/state", json!({}))["crash"].is_null());
         assert!(!read_state(&h.state).notes.json().to_string().contains("rollback"));
 
         // a crash: the update is named, with the folder to go back to
         fs::write(bin.join("crash.dmp"), b"x").unwrap();
-        finish_run(&h.state, Run { game: g.clone(), started_ms: started, perf: Default::default() });
+        finish_run(&h.state, Run { game: g.clone(), started_ms: started, perf: Default::default(), seen: Vec::new(), next_scan_ms: 0 });
         let c = api(&h, "/api/state", json!({}))["crash"].clone();
         assert_eq!(c["crashed"], true);
         assert_eq!((c["recent_updates"][0]["name"].as_str(), c["recent_updates"][0]["version"].as_str(), c["recent_updates"][0]["old_version"].as_str()), (Some("Cool"), Some("2.0"), Some("1.0")), "{c}");
@@ -12784,6 +12821,30 @@ mod tests {
         api(&h, "/api/lib_rollback", json!({ "id": id, "dir": dir }));
         wait_until("rolled back", || lib.mods()[0].version == "1.0");
         fs::remove_file(bin.join("crash.dmp")).unwrap();
+    }
+
+    #[test]
+    fn a_known_problem_written_to_a_log_during_play_is_told_once_and_old_ones_are_not() {
+        let h = harness("livelog");
+        let g = selected_game(&h.state).unwrap();
+        let log_file = PathBuf::from(&g.game_dir).join("BepInEx/LogOutput.log");
+        fs::create_dir_all(log_file.parent().unwrap()).unwrap();
+        fs::write(&log_file, "[Error  :   BepInEx] Could not load [Old 1.0] because it has missing dependencies: Lib\n").unwrap();
+        let seen = kb_findings(&h.state, &g).into_iter().map(|f| (f.id, f.evidence)).collect();
+        let mut run = Run { game: g.clone(), started_ms: now_ms(), perf: Default::default(), seen, next_scan_ms: 0 };
+        let known = || read_state(&h.state).notes.json()["items"].as_array().unwrap().iter().filter(|n| n["kind"] == "known").map(|n| n["text"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+        live_log_watch(&h.state, &mut run);
+        assert!(known().is_empty(), "what the log said before the game started is not news");
+        fs::write(&log_file, "[Error  :   BepInEx] Could not load [Old 1.0] because it has missing dependencies: Lib\nNo space left on device\n").unwrap();
+        live_log_watch(&h.state, &mut run);
+        live_log_watch(&h.state, &mut run);
+        assert_eq!(known(), vec![format!("While {} runs, its log shows a known problem: The disk is full", g.name)]);
+        // the user's language is used for the problem's name
+        write_state(&h.state).config.language = "ro".into();
+        fs::write(&log_file, "System.DllNotFoundException: native.dll\n").unwrap();
+        live_log_watch(&h.state, &mut run);
+        assert_eq!(known().len(), 2);
+        assert!(!known()[0].contains("A mod needs a library file"), "{:?}", known());
     }
 
     #[test]
@@ -14623,7 +14684,7 @@ mod tests {
         assert!(api(&h, "/api/state", json!({}))["meta"].get(&id).is_none(), "empty notes and tags are removed");
         // time played is added when a run ends
         let g = selected_game(&h.state).unwrap();
-        finish_run(&h.state, Run { game: g.clone(), started_ms: now_ms().saturating_sub(125_000), perf: Default::default() });
+        finish_run(&h.state, Run { game: g.clone(), started_ms: now_ms().saturating_sub(125_000), perf: Default::default(), seen: Vec::new(), next_scan_ms: 0 });
         let secs = api(&h, "/api/state", json!({}))["meta"][&g.appid]["playtime_s"].as_u64().unwrap();
         assert!((120..=130).contains(&secs), "{secs}");
         // unknown games are ignored

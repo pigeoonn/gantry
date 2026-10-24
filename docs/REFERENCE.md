@@ -320,6 +320,7 @@ After a crash the report card shows the most likely cause and up to three things
 problem from the game doctor, a mod Crash Detective caught before that is on again, rolling back a mod you just
 updated, the game's own update, switching off the top suspect, and *Find the culprit*. Mods it finds are remembered
 per game. After a second crash in a row Crash Detective opens by itself.
+While the game runs, its logs are read every 15 seconds and a new known problem arrives as a notification.
 
 ## Layout
 `src/main.rs` HTTP server, state, actions · `crash.rs` + `bisect.rs` Crash Detective · `pak.rs` PAK index + conflicts · `saves.rs` Save Guard · `ue4ss.rs` UE4SS release lookup · `nexus.rs` Nexus Mods · `engine.rs` library/engine scan · `repair.rs` mods, doctor,

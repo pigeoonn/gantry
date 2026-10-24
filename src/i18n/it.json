@@ -1405,6 +1405,7 @@
 "Where the space goes": "Dove va lo spazio",
 "Which one is it?": "Qual è?",
 "Which profile do the saves you have now belong to? ({}) Leave it empty if none yet.": "A quale profilo appartengono i salvataggi che hai ora? ({1}) Lascia vuoto se ancora a nessuno.",
+"While {} runs, its log shows a known problem: {}": "Mentre {1} è in esecuzione, il suo log mostra un problema noto: {2}",
 "Who overwrites whom": "Chi sovrascrive chi",
 "Why is it slow?": "Perché è lento?",
 "Win64 directory not found.": "Cartella Win64 non trovata.",

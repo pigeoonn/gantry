@@ -3635,7 +3635,7 @@
   a11yEnhance(document.body);
 
   // ---------- Notification centre ----------
-  const NOTE_ICON = { rollback: '↶', virustotal: '🛡', crash: '💥', updates: '⬆', download: '⬇', gameupdate: '🔄', pack: '📦', waiting: '🌐' };
+  const NOTE_ICON = { rollback: '↶', virustotal: '🛡', crash: '💥', updates: '⬆', download: '⬇', gameupdate: '🔄', pack: '📦', waiting: '🌐', known: '⚠' };
   let notesSeen = null;
   function renderNotes() {
     const n = (appState.notes || { unread: 0, items: [] });
@@ -3667,6 +3667,7 @@
     if (appid && idx >= 0 && idx !== appState.selected_idx) await ipcPost('/api/select', { index: idx });
     if (kind === 'crash') openCrashDetective();
     else if (kind === 'download') openDownloads();
+    else if (kind === 'known') focusHealth();
     else { setTab('mods'); if (kind === 'updates') showToast(t('Open Mod Library and press Update all.')); }
   }
 

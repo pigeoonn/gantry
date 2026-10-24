@@ -2,6 +2,9 @@
 
 ## Next
 
+- **Live log watch:** while a game runs, Gantry reads its logs every 15 seconds. A known problem that shows up
+  during play (a missing library, a full disk, a mod that fails to load) arrives as a notification right away,
+  in your language; problems already in the logs before the game started are not repeated.
 - **Crash Detective report card:** after a crash it shows what happened, the most likely cause and up to three
   things to try, each with its button (switch the mod off, roll back the update, find the culprit). It remembers
   the mods it caught and warns when one of them is on again, counts crashes in a row, and opens by itself after

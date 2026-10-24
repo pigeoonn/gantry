@@ -1405,6 +1405,7 @@
 "Where the space goes",
 "Which one is it?",
 "Which profile do the saves you have now belong to? ({}) Leave it empty if none yet.",
+"While {} runs, its log shows a known problem: {}",
 "Who overwrites whom",
 "Why is it slow?",
 "Win64 directory not found.",
