@@ -23,9 +23,12 @@ pub struct Pattern {
     pub logs: Vec<String>,
     /// A line matches when it contains any of these (letter case does not matter) ...
     pub contains: Vec<String>,
-    /// ... and, when this is not empty, also any of these.
+    /// ... and, when this is not empty, also any of these ...
     #[serde(default)]
     pub also: Vec<String>,
+    /// ... but none of these (a more exact pattern tells about those lines).
+    #[serde(default)]
+    pub unless: Vec<String>,
     #[serde(default = "warn")]
     pub level: String,
     pub title: Value,
@@ -33,6 +36,9 @@ pub struct Pattern {
     pub cause: Value,
     #[serde(default)]
     pub fix: Value,
+    /// A line the tool really writes (taken from its source or a real log), checked by the tests.
+    #[serde(default)]
+    pub example: String,
 }
 
 fn warn() -> String {
@@ -91,10 +97,11 @@ pub fn scan(patterns: &[Pattern], logs: &[(String, Vec<String>)]) -> Vec<Finding
     for p in patterns {
         let needles: Vec<String> = p.contains.iter().map(|c| c.to_lowercase()).collect();
         let also: Vec<String> = p.also.iter().map(|c| c.to_lowercase()).collect();
+        let unless: Vec<String> = p.unless.iter().map(|c| c.to_lowercase()).collect();
         let hit = logs.iter().filter(|(label, _)| p.logs.is_empty() || p.logs.iter().any(|l| l == label)).find_map(|(label, lines)| {
             lines.iter().rev().find(|line| {
                 let l = line.to_lowercase();
-                needles.iter().any(|n| l.contains(n)) && (also.is_empty() || also.iter().any(|a| l.contains(a)))
+                needles.iter().any(|n| l.contains(n)) && (also.is_empty() || also.iter().any(|a| l.contains(a))) && !unless.iter().any(|u| l.contains(u))
             }).map(|line| (label.clone(), line.trim().chars().take(200).collect::<String>()))
         });
         if let Some((source, evidence)) = hit {
@@ -127,8 +134,34 @@ pub fn newest_log_in(dir: &Path) -> Option<PathBuf> {
         .map(|(_, p)| p)
 }
 
-/// The logs a game and its loaders write, as `(label, last lines)`.
-pub fn collect_logs(game_dir: &Path, prefixes: &[PathBuf], ue4ss_log: &str, proton_log: Option<&Path>) -> Vec<(String, Vec<String>)> {
+/// The "Documents" folders a game may write to: inside each Wine prefix, or the user's own on Windows and macOS.
+fn documents(prefixes: &[PathBuf], home: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = prefix_users(prefixes).into_iter().map(|u| u.join("Documents")).collect();
+    if crate::platform::IS_WINDOWS || crate::platform::IS_MAC {
+        out.push(home.join("Documents"));
+    }
+    out
+}
+
+/// Where games keep their settings and logs (`%APPDATA%`, or `~/.config` for native Linux and macOS games).
+fn app_data(prefixes: &[PathBuf], home: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = prefix_users(prefixes).into_iter().map(|u| u.join("AppData/Roaming")).collect();
+    out.push(if crate::platform::IS_WINDOWS { home.join("AppData/Roaming") } else { home.join(".config") });
+    out
+}
+
+fn prefix_users(prefixes: &[PathBuf]) -> Vec<PathBuf> {
+    prefixes
+        .iter()
+        .flat_map(|p| fs::read_dir(p.join("drive_c/users")).into_iter().flatten().flatten())
+        .filter(|u| u.file_name() != "Public")
+        .map(|u| u.path())
+        .collect()
+}
+
+/// The logs a game and its loaders write, as `(label, last lines)`. The script extenders' and SMAPI's logs are read
+/// only for a game that has them installed.
+pub fn collect_logs(game_dir: &Path, prefixes: &[PathBuf], ue4ss_log: &str, proton_log: Option<&Path>, engine_log: Option<&Path>, home: &Path) -> Vec<(String, Vec<String>)> {
     let mut out = Vec::new();
     let mut add = |label: &str, lines: Option<Vec<String>>| {
         if let Some(l) = lines.filter(|l| !l.is_empty()) {
@@ -140,6 +173,29 @@ pub fn collect_logs(game_dir: &Path, prefixes: &[PathBuf], ue4ss_log: &str, prot
     add("red4ext", newest_log_in(&game_dir.join("red4ext/logs")).and_then(|p| tail(&p, 800)));
     add("redscript", tail(&game_dir.join("r6/logs/redscript_rCURRENT.log"), 800));
     add("cet", tail(&game_dir.join("bin/x64/plugins/cyber_engine_tweaks/cyber_engine_tweaks.log"), 800));
+    add("tweakxl", newest_log_in(&game_dir.join("red4ext/plugins/TweakXL")).and_then(|p| tail(&p, 800)));
+    add("archivexl", newest_log_in(&game_dir.join("red4ext/plugins/ArchiveXL")).and_then(|p| tail(&p, 800)));
+    if let Some(p) = engine_log {
+        add("unreal", tail(p, 800));
+    }
+    let extenders = [("skse64_loader.exe", "skse", &["Skyrim Special Edition", "Skyrim Special Edition GOG", "Skyrim Special Edition EPIC"][..], "SKSE", ["skse64_loader.log", "skse64.log"]), ("f4se_loader.exe", "f4se", &["Fallout4"][..], "F4SE", ["f4se_loader.log", "f4se.log"])];
+    for (loader, label, folders, sub, files) in extenders {
+        if !game_dir.join(loader).is_file() {
+            continue;
+        }
+        for d in documents(prefixes, home) {
+            for f in folders {
+                for file in files {
+                    add(label, tail(&d.join("My Games").join(f).join(sub).join(file), 800));
+                }
+            }
+        }
+    }
+    if ["StardewModdingAPI.dll", "StardewModdingAPI.exe", "StardewModdingAPI"].iter().any(|f| game_dir.join(f).is_file()) {
+        for d in app_data(prefixes, home) {
+            add("smapi", tail(&d.join("StardewValley/ErrorLogs/SMAPI-latest.txt"), 1500));
+        }
+    }
     for p in prefixes {
         if let Some(log) = crate::logdoctor::newest_player_log(p) {
             add("player", tail(&log, 800));
@@ -168,7 +224,7 @@ mod tests {
     #[test]
     fn the_built_in_list_is_valid_and_every_entry_can_match_its_own_example() {
         let all = patterns(None);
-        assert!(all.len() >= 34, "{}", all.len());
+        assert!(all.len() >= 120, "{}", all.len());
         let mut ids: Vec<&str> = all.iter().map(|p| p.id.as_str()).collect();
         ids.sort();
         ids.dedup();
@@ -186,8 +242,50 @@ mod tests {
             // a line built from the first needle (and the first 'also') is found in a log it is meant for
             let line = format!("{} {}", p.contains[0], p.also.first().cloned().unwrap_or_default());
             let label = p.logs.first().cloned().unwrap_or_else(|| "player".into());
-            let found = scan(std::slice::from_ref(p), &[(label, vec![line])]);
+            let found = scan(std::slice::from_ref(p), &[(label.clone(), vec![line])]);
             assert_eq!(found.len(), 1, "{}", p.id);
+            // and so is the line the tool really writes, taken from its source code or a real log
+            assert!(!p.example.trim().is_empty(), "{} has no example line", p.id);
+            let hits: Vec<String> = scan(&all, &[(label, vec![p.example.clone()])]).into_iter().map(|f| f.id).collect();
+            assert!(hits.contains(&p.id), "{}: its example matched {:?}", p.id, hits);
+        }
+    }
+
+    #[test]
+    fn a_broad_pattern_steps_aside_for_a_more_exact_one() {
+        let all = patterns(None);
+        let ids = |line: &str| scan(&all, &[log("proton", &[line])]).into_iter().map(|f| f.id).collect::<Vec<_>>();
+        assert_eq!(ids("0024:err:module:import_dll Library MSVCP140.dll (which is needed by L\"Z:\\\\game.exe\") not found"), vec!["vcrun_missing"]);
+        assert_eq!(ids("0024:err:module:import_dll Library steam_api64.dll (which is needed by L\"Z:\\\\game.exe\") not found"), vec!["proton_dll_missing"]);
+    }
+
+    #[test]
+    fn the_script_extender_and_smapi_logs_are_read_only_for_a_game_that_has_them() {
+        let d = TempDir::new("kb_xse");
+        let pfx = d.join("pfx");
+        let docs = pfx.join("drive_c/users/steamuser/Documents/My Games/Skyrim Special Edition/SKSE");
+        fs::create_dir_all(&docs).unwrap();
+        fs::write(docs.join("skse64.log"), "plugin a.dll (00000001 A 00000001) disabled, address library needs to be updated (handle 0)\n").unwrap();
+        let roaming = pfx.join("drive_c/users/steamuser/AppData/Roaming/StardewValley/ErrorLogs");
+        fs::create_dir_all(&roaming).unwrap();
+        fs::write(roaming.join("SMAPI-latest.txt"), "[18:02:11 ERROR SMAPI]       - A 1.0 because it requires mods which aren't installed (B).\n").unwrap();
+        let game = d.join("game");
+        fs::create_dir_all(game.join("red4ext/plugins/TweakXL")).unwrap();
+        fs::write(game.join("red4ext/plugins/TweakXL/TweakXL.log"), "[error] X: Cannot clone Y, the record doesn't exist.\n").unwrap();
+        let engine = d.join("Game.log");
+        fs::write(&engine, "LogStreaming: Error: Couldn't find file for package /Game/Mods/A requested by async loading code.\n").unwrap();
+        let labels = |logs: &[(String, Vec<String>)]| logs.iter().map(|l| l.0.clone()).collect::<Vec<_>>();
+        let prefixes = vec![pfx.clone()];
+        // no script extender and no SMAPI in this game folder: their logs are none of its business
+        let plain = collect_logs(&game, &prefixes, "", None, Some(&engine), &d.join("home"));
+        assert_eq!(labels(&plain), vec!["tweakxl", "unreal"]);
+        fs::write(game.join("skse64_loader.exe"), "").unwrap();
+        fs::write(game.join("StardewModdingAPI.dll"), "").unwrap();
+        let logs = collect_logs(&game, &prefixes, "", None, Some(&engine), &d.join("home"));
+        assert_eq!(labels(&logs), vec!["tweakxl", "unreal", "skse", "smapi"]);
+        let found: Vec<String> = scan(&patterns(None), &logs).into_iter().map(|f| f.id).collect();
+        for id in ["xse_address_library", "smapi_missing_dependency", "tweakxl_missing_record", "unreal_missing_package"] {
+            assert!(found.contains(&id.to_string()), "{id} in {found:?}");
         }
     }
 
@@ -275,7 +373,7 @@ mod tests {
         fs::write(game.join("MelonLoader/Latest.log"), "").unwrap();
         let proton = d.join("steam-1.log");
         fs::write(&proton, "vkCreateInstance failed\n").unwrap();
-        let logs = collect_logs(&game, &[], "ue line\n", Some(&proton));
+        let logs = collect_logs(&game, &[], "ue line\n", Some(&proton), None, &d.join("home"));
         let labels: Vec<&str> = logs.iter().map(|l| l.0.as_str()).collect();
         assert_eq!(labels, vec!["bepinex", "ue4ss", "proton"], "an empty log is left out");
         let found: Vec<String> = scan(&patterns(None), &logs).into_iter().map(|f| f.id).collect();
@@ -283,7 +381,7 @@ mod tests {
         // a log nobody has touched for a month says nothing about today
         let old = fs::File::options().write(true).open(&proton).unwrap();
         old.set_modified(SystemTime::now() - Duration::from_secs(40 * 24 * 3600)).unwrap();
-        assert!(!collect_logs(&game, &[], "", Some(&proton)).iter().any(|l| l.0 == "proton"));
+        assert!(!collect_logs(&game, &[], "", Some(&proton), None, &d.join("home")).iter().any(|l| l.0 == "proton"));
     }
 
     #[test]
@@ -309,7 +407,7 @@ mod tests {
         thread::sleep(Duration::from_millis(30));
         fs::write(game.join("red4ext/logs/red4ext-2026-10-23-21-00-00.log"), "new run\n").unwrap();
         fs::write(game.join("r6/logs/redscript_rCURRENT.log"), "compile ok\n").unwrap();
-        let found = collect_logs(&game, &[], "", None);
+        let found = collect_logs(&game, &[], "", None, None, &d.join("home"));
         assert_eq!(found.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>(), vec!["red4ext", "redscript"]);
         assert_eq!(found[0].1, vec!["new run".to_string()]);
     }

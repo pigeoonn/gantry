@@ -78,9 +78,11 @@ one click. Start the game once afterwards: the first start can take a while.
 When the logs of a game name a problem Gantry knows (a missing library a mod needs, a loader built for the wrong
 kind of game, a MelonLoader first-start failure, a missing Windows runtime in the prefix, Vulkan not starting,
 a crash, a full disk, anti-cheat...), the health bar shows it in plain words with **what to do** and the log
-line it found. You can teach Gantry more: put an `errors.json` next to its settings file with entries like
-`{"id": "my-problem", "logs": ["player"], "contains": ["some text"], "level": "warn", "title": "...",
-"cause": "...", "fix": "..."}`; an entry with the id of a built-in one replaces it, and a text may be a map of
+line it found; while the game runs, a new one arrives as a notification. Gantry knows 121 problems from the logs of
+Unity and Unreal games, BepInEx, MelonLoader, UE4SS, SMAPI, SKSE/F4SE, the Cyberpunk tools and Wine. You can teach
+it more: put an `errors.json` next to its settings file with entries like
+`{"id": "my-problem", "logs": ["player"], "contains": ["some text"], "unless": ["other text"], "level": "warn",
+"title": "...", "cause": "...", "fix": "..."}`; an entry with the id of a built-in one replaces it, and a text may be a map of
 language codes (`{"en": "...", "ro": "..."}`).
 
 ![Game health](img/health.png)

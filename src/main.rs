@@ -2793,7 +2793,7 @@ fn kb_findings(state: &SharedState, g: &GameEntry) -> Vec<kb::Finding> {
     let prefixes: Vec<PathBuf> = [g.pfx.clone(), format!("{}/pfx", g.compatdata)].into_iter().filter(|p| !p.is_empty() && p != "/pfx").map(PathBuf::from).collect();
     let ue_log = ModManager::read_ue4ss_log_tail(g, 400);
     let proton_log = home_dir().join(format!("steam-{}.log", if g.steam_appid.is_empty() { &g.appid } else { &g.steam_appid }));
-    let logs = kb::collect_logs(Path::new(&g.game_dir), &prefixes, &ue_log, Some(proton_log.as_path()).filter(|p| p.is_file()));
+    let logs = kb::collect_logs(Path::new(&g.game_dir), &prefixes, &ue_log, Some(proton_log.as_path()).filter(|p| p.is_file()), crash::unreal_log_files(g).1.as_deref(), &home_dir());
     if logs.is_empty() {
         return Vec::new();
     }

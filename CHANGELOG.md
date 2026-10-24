@@ -2,6 +2,14 @@
 
 ## Next
 
+- **Knowledge base: 34 → 121 known problems.** Every new entry is taken from the message the tool really writes,
+  read from its source code: SMAPI (missing or outdated mods, duplicates, loose files, no suitable graphics card),
+  BepInEx and MelonLoader (skipped, duplicate and incompatible mods, IL2CPP first start, mods for another game or build),
+  UE4SS (C++ and Lua mods, engine not recognised), SKSE and F4SE (Address Library, plugins for another game version,
+  game newer than the script extender), RED4ext, redscript, Cyber Engine Tweaks, TweakXL, ArchiveXL, DXVK, Wine and the
+  Unreal and Unity engines. Each entry keeps that line, and a test checks the pattern against it. The SKSE/F4SE, SMAPI,
+  TweakXL, ArchiveXL and Unreal engine logs are now read; two old patterns that no longer matched what the loaders
+  print were fixed.
 - **Live log watch:** while a game runs, Gantry reads its logs every 15 seconds. A known problem that shows up
   during play (a missing library, a full disk, a mod that fails to load) arrives as a notification right away,
   in your language; problems already in the logs before the game started are not repeated.
