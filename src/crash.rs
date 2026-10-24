@@ -53,6 +53,12 @@ pub struct CrashReport {
     /// Mods updated shortly before this run, with the version they could go back to.
     #[serde(default)]
     pub recent_updates: Vec<crate::deploy::RecentUpdate>,
+    /// Up to three things to try, most promising first (`{ "kind": ..., ... }`, filled in by the app).
+    #[serde(default)]
+    pub tries: Vec<serde_json::Value>,
+    /// How many runs in a row crashed, this one included.
+    #[serde(default)]
+    pub streak: u32,
 }
 
 pub struct AnalysisInput<'a> {
@@ -229,6 +235,8 @@ pub fn analyze(appid: &str, game: &str, inp: &AnalysisInput) -> CrashReport {
         evidence,
         artifacts: inp.artifacts,
         recent_updates: Vec::new(),
+        tries: Vec::new(),
+        streak: 0,
     }
 }
 

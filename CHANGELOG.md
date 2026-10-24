@@ -2,6 +2,10 @@
 
 ## Next
 
+- **Crash Detective report card:** after a crash it shows what happened, the most likely cause and up to three
+  things to try, each with its button (switch the mod off, roll back the update, find the culprit). It remembers
+  the mods it caught and warns when one of them is on again, counts crashes in a row, and opens by itself after
+  the second one.
 - **Make this game moddable** replaces Full Setup and works for every game, not only Unreal ones. It first shows a
   checklist of what it will do (what is already there is ticked), asks once, then ticks each step off: the mod loader
   for Unity games, UE4SS for Unreal games, and for Cyberpunk 2077 RED4ext, Redscript, Cyber Engine Tweaks, ArchiveXL,

@@ -316,6 +316,11 @@ isolates the mod (several culprits are handled; a crash that happens with every 
 not-mod-related). Your original mod selection is restored on finish or cancel, and the session is saved to disk
 so a restart cannot leave mods switched off.
 
+After a crash the report card shows the most likely cause and up to three things to try, in order: a known
+problem from the game doctor, a mod Crash Detective caught before that is on again, rolling back a mod you just
+updated, the game's own update, switching off the top suspect, and *Find the culprit*. Mods it finds are remembered
+per game. After a second crash in a row Crash Detective opens by itself.
+
 ## Layout
 `src/main.rs` HTTP server, state, actions · `crash.rs` + `bisect.rs` Crash Detective · `pak.rs` PAK index + conflicts · `saves.rs` Save Guard · `ue4ss.rs` UE4SS release lookup · `nexus.rs` Nexus Mods · `engine.rs` library/engine scan · `repair.rs` mods, doctor,
 repair, saves · `steam.rs` launch options · `procs.rs` process detection · `fsutil.rs` atomic file ops ·

@@ -7388,6 +7388,43 @@ fn mangohud_dirs() -> Vec<PathBuf> {
     perf::log_dirs(&home, cfg.as_deref())
 }
 
+/// The three most promising things to try after a crash, in order: what a known problem in the logs says to do, a mod
+/// Crash Detective caught before that is on again, going back from a fresh update, checking for updates after a game
+/// update, switching off a strong suspect; else finding the culprit in rounds.
+fn crash_tries(state: &SharedState, g: &GameEntry, report: &crash::CrashReport) -> Vec<Value> {
+    let mut out: Vec<Value> = Vec::new();
+    let (issues, _) = game_issues(state, g, true);
+    for i in issues.iter().filter(|i| i["code"] == "known") {
+        out.push(json!({ "kind": "kb", "kb": i["kb"] }));
+    }
+    let lib_mods = library_of(g).map(|l| l.mods()).unwrap_or_default();
+    // every mod that is on: (id, name, from the library)
+    let mut on: Vec<(String, String, bool)> = lib_mods.iter().filter(|m| m.enabled).map(|m| (m.id.clone(), m.name.clone(), true)).collect();
+    on.extend(ModManager::list_mods(g).into_iter().filter(|m| m.enabled && !m.is_system).map(|m| (m.id, m.name, false)));
+    let culprits = read_state(state).config.culprits.get(&g.appid).cloned().unwrap_or_default();
+    for c in &culprits {
+        if let Some((id, name, lib)) = on.iter().find(|x| &x.1 == c) {
+            out.push(json!({ "kind": "culprit_again", "id": id, "name": name, "library": lib }));
+        }
+    }
+    if let Some(u) = report.recent_updates.first() {
+        out.push(json!({ "kind": "rollback", "id": u.id, "dir": u.dir, "name": u.name, "old_version": u.old_version }));
+    }
+    if issues.iter().any(|i| i["code"] == "game_updated") {
+        out.push(json!({ "kind": "updates" }));
+    }
+    if let Some(s) = report.suspects.first().filter(|s| s.score >= 6) {
+        if !out.iter().any(|t| t["id"] == s.id.as_str()) {
+            out.push(json!({ "kind": "off", "id": s.id, "name": s.name, "library": lib_mods.iter().any(|m| m.id == s.id) }));
+        }
+    }
+    if out.len() < 3 && on.len() >= 2 {
+        out.push(json!({ "kind": "bisect" }));
+    }
+    out.truncate(3);
+    out
+}
+
 /// A run just ended: look for crash evidence and record the result.
 fn finish_run(state: &SharedState, run: Run) {
     let ended = now_ms();
@@ -7425,6 +7462,16 @@ fn finish_run(state: &SharedState, run: Run) {
             });
             stats::record(&path, &stats::Session { appid: run.game.appid.clone(), name: run.game.name.clone(), start_ms: run.started_ms, end_ms: ended, secs, crashed, mods: on, perf });
         }
+    }
+    {
+        let mut st = write_state(state);
+        let n = st.config.crash_streak.entry(run.game.appid.clone()).or_default();
+        *n = if crashed { *n + 1 } else { 0 };
+        report.streak = *n;
+        st.save_config();
+    }
+    if crashed {
+        report.tries = crash_tries(state, &run.game, &report);
     }
     let session_open = {
         let mut st = write_state(state);
@@ -9627,6 +9674,17 @@ fn bisect_finish(state: &SharedState, restore_all: bool) -> Result<String, Strin
     let (file, names) = {
         let mut st = write_state(state);
         let names: Vec<String> = found.iter().map(|i| st.mod_display_name(i)).collect();
+        // what it found is remembered, so a later crash with that mod on again points at it
+        if !names.is_empty() {
+            let known = st.config.culprits.entry(appid.clone()).or_default();
+            for n in &names {
+                if !known.contains(n) {
+                    known.push(n.clone());
+                }
+            }
+            known.truncate(20);
+            st.save_config();
+        }
         let file = bisect_file(&st, &appid);
         st.bisect = None;
         (file, names)
@@ -9643,7 +9701,11 @@ fn bisect_finish(state: &SharedState, restore_all: bool) -> Result<String, Strin
 fn analyze_last_run(state: &SharedState) {
     let Some(g) = selected_game(state) else { return };
     let mods = ModManager::list_mods(&g);
-    let report = crash::analyze_run(&g, &mods, 0, now_ms());
+    let mut report = crash::analyze_run(&g, &mods, 0, now_ms());
+    if report.crashed {
+        report.streak = read_state(state).config.crash_streak.get(&g.appid).copied().unwrap_or(0);
+        report.tries = crash_tries(state, &g, &report);
+    }
     let headline = report.headline.clone();
     write_state(state).crash = Some(report);
     log(state, "INFO", headline);
@@ -12663,6 +12725,9 @@ mod tests {
         let st = api(&h, "/api/state", json!({}));
         assert_eq!(st["crash"]["crashed"], true);
         assert_eq!(st["crash"]["suspects"][0]["id"], "LUA:CoolMod", "{}", st["crash"]);
+        assert_eq!(st["crash"]["streak"], 1);
+        let kinds: Vec<&str> = st["crash"]["tries"].as_array().unwrap().iter().filter_map(|t| t["kind"].as_str()).collect();
+        assert!(!kinds.is_empty() && kinds.len() <= 3, "{}", st["crash"]["tries"]);
         assert_eq!(st["last_run"]["crashed"], true);
         assert!(last_log(&h).contains("crashed") || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("crashed.")));
 
@@ -12682,6 +12747,7 @@ mod tests {
         let st = api(&h, "/api/state", json!({}));
         assert_eq!(st["last_run"]["crashed"], false);
         assert!(st["crash"].is_null(), "a clean run raises no alarm");
+        assert_eq!(h.state.read().unwrap().config.crash_streak.get(&h.game.appid), Some(&0), "a clean run ends the streak");
     }
 
     #[test]
@@ -12814,6 +12880,15 @@ mod tests {
         assert!(st["bisect"].is_null());
         assert_eq!(enabled_user_mods(&h), vec!["Alpha", "Bravo", "CoolMod", "Skin_P"], "culprit stays off, the rest is back");
         assert!(!h.state.read().unwrap().cache_root().join("bisect").join("42.json").exists(), "session file removed");
+        assert_eq!(h.state.read().unwrap().config.culprits.get("42").cloned(), Some(vec!["Charlie".to_string()]), "what it found is remembered");
+        // with it on again, the next crash points at it first
+        api(&h, "/api/toggle_mod", json!({ "id": "LUA:Charlie", "enable": true }));
+        wait_until("Charlie is on again", || enabled_user_mods(&h).contains(&"Charlie".to_string()));
+        let g = selected_game(&h.state).unwrap();
+        let report = crash::analyze_run(&g, &ModManager::list_mods(&g), 0, now_ms());
+        let tries = crash_tries(&h.state, &g, &report);
+        let again = tries.iter().find(|t| t["kind"] == "culprit_again").unwrap_or_else(|| panic!("{tries:?}"));
+        assert_eq!((again["id"].as_str(), again["library"].as_bool()), (Some("LUA:Charlie"), Some(false)));
     }
 
     #[test]
