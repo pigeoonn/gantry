@@ -210,6 +210,9 @@ pub struct RigConfigData {
     /// Hold new downloads while a game is running.
     #[serde(default)]
     pub downloads_wait: bool,
+    /// Let the background checks (health, updates, covers, backups) go on while a game runs; they wait by default.
+    #[serde(default)]
+    pub checks_while_playing: bool,
     /// Soft interface sounds (off by default).
     #[serde(default)]
     pub sounds: bool,

@@ -3698,7 +3698,7 @@
     const body = document.getElementById('downloadsBody');
     if (!body || !document.getElementById('downloadsModal').classList.contains('open')) return;
     const items = dlData.items || [];
-    if (!items.length) { body.innerHTML = `<div class="lib-empty">${t('Nothing downloaded yet.')}<div class="cp-row" style="justify-content:center; margin-top:12px"><button class="btn btn-play" onclick="closeModals(); openFind('store')">${t('Find mods')}</button></div></div>`; return; }
+    if (!items.length) { body.innerHTML = `<div class="lib-empty">${t('Nothing downloaded yet.')}<div class="cp-row" style="justify-content:center; margin-top:12px"><button class="btn btn-play" onclick="closeModals(); openFind('store')">${t('Find mods')}</button></div></div>` + renderChecks(); return; }
     body.innerHTML = items.map(i => {
       const pct = i.total > 0 ? Math.min(100, Math.round(i.done * 100 / i.total)) : 0;
       const eta = i.state === 'active' && i.speed > 0 && i.total > i.done ? fmtDuration(Math.ceil((i.total - i.done) / i.speed)) : '';
@@ -3706,14 +3706,36 @@
       return `<div class="dl-row ${i.state}"><div class="dl-top"><b title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</b>${i.state === 'active' ? `<button class="btn" onclick="ipcSend('/api/download_cancel', { id: ${i.id} })">${t('Cancel')}</button>` : ''}</div>
         ${i.state === 'active' ? `<div class="dl-bar ${i.total ? '' : 'indet'}"><i style="width:${pct}%"></i></div>` : ''}
         <div class="dl-sub"><span>${escapeHtml(i.source)}</span>${i.state === 'active' && i.waiting ? `<span>${t('Waiting for the game to close')}</span>` : i.state === 'active' ? `<span>${i.total ? fmtSize(i.done) + ' / ' + fmtSize(i.total) + ' · ' + pct + '%' : (i.done ? fmtSize(i.done) : t('Starting…'))}</span>${i.speed ? `<span>${fmtSpeed(i.speed)}</span>` : ''}${eta ? `<span>${t('{} left', eta)}</span>` : ''}` : `<span>${state}${i.state === 'done' ? ' · ' + fmtSize(i.total) : ''}</span>${i.error ? `<span>${escapeHtml(tm(i.error))}</span>` : ''}${i.finished_ms ? `<span>${escapeHtml(ago(i.finished_ms))}</span>` : ''}`}</div></div>`;
-    }).join('') + (items.some(i => i.state !== 'active') ? `<div class="wl-foot"><button class="btn" onclick="ipcSend('/api/downloads_clear', {}); setTimeout(pollDownloads, 150)">${t('Clear finished')}</button></div>` : '');
+    }).join('') + (items.some(i => i.state !== 'active') ? `<div class="wl-foot"><button class="btn" onclick="ipcSend('/api/downloads_clear', {}); setTimeout(pollDownloads, 150)">${t('Clear finished')}</button></div>` : '') + renderChecks();
+  }
+  // the checks and scans Gantry does on its own, under the downloads
+  function renderChecks() {
+    const bg = dlData.background || {};
+    const tasks = bg.tasks || [];
+    if (!tasks.length) return '';
+    const playing = !!appState.is_running;
+    const until = ms => { const s = Math.max(0, Math.round((ms - Date.now()) / 1000)); return s < 60 ? t('Next in {} s', s) : t('Next in {}', fmtDuration(s)); };
+    const rows = tasks.map(k => {
+      const state = k.running ? t('Running now')
+        : k.held ? t('Waiting for the game to close')
+        : k.off ? t('Off')
+        : k.error ? t('Last time it failed: {}', tm(k.error))
+        : k.next_ms ? until(k.next_ms) : '';
+      const last = k.last_ms ? ' · ' + t('ran {}', ago(k.last_ms)) : '';
+      return `<div class="dl-row ${k.running ? 'active' : k.error ? 'failed' : ''}"><div class="dl-top"><b style="white-space:normal">${escapeHtml(t(k.label))}</b>${k.running ? '' : `<button class="btn" onclick="ipcSend('/api/background_run', { name: '${escapeHtml(k.name)}' }); setTimeout(pollDownloads, 300)">${t('Run now')}</button>`}</div>
+        <div class="dl-sub"><span>${escapeHtml(state)}${escapeHtml(last)}</span></div></div>`;
+    }).join('');
+    return `<div class="cp-h" style="margin-top:6px">${t('Checks and scans')}</div>` +
+      `<div class="cp-note">${bg.while_playing ? t('They go on while you play.') : playing ? t('A game is running, so they wait until it closes.') : t('They wait while a game runs, so they cannot make it stutter.')}</div>` + rows +
+      `<label class="cp-preset"><span style="flex:1"><b>${t('Let checks go on while a game runs')}</b></span><input type="checkbox" ${bg.while_playing ? 'checked' : ''} aria-label="${escapeHtml(t('Let checks go on while a game runs'))}" onchange="ipcSend('/api/settings', { checks_while_playing: this.checked }); setTimeout(pollDownloads, 200)"></label>`;
   }
   async function pollDownloads() {
     try { dlData = await (await fetch('/api/downloads')).json(); } catch (e) { return; }
     const btn = document.getElementById('dlBtn');
     const badge = document.getElementById('dlBadge');
-    btn.style.display = (dlData.items || []).length ? '' : 'none';
-    btn.classList.toggle('busy', dlData.active > 0);
+    const checking = ((dlData.background || {}).tasks || []).some(k => k.running);
+    btn.style.display = (dlData.items || []).length || checking ? '' : 'none';
+    btn.classList.toggle('busy', dlData.active > 0 || checking);
     badge.style.display = dlData.active > 0 ? 'block' : 'none';
     badge.textContent = dlData.active;
     renderDownloads();
@@ -4575,6 +4597,7 @@
       [t('🚀 Make this game moddable'), fullSetup, !!g],
       [t('👋 Check my games'), openWelcome, true],
       [t('⬇ Downloads'), openDownloads, true],
+      [t('⏳ Checks and scans'), openDownloads, true],
       [t('📊 Play time and timeline'), () => setTab('activity'), true],
       [t('📦 Mods'), () => { setTab('mods'); setModView('lib'); }, true],
       [t('📦 Mod Library'), openModLib, !!g],

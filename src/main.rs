@@ -38,6 +38,7 @@ pub mod platform;
 pub mod readme;
 pub mod richtext;
 pub mod autobackup;
+pub mod background;
 pub mod perf;
 pub mod recipes;
 pub mod repair;
@@ -855,7 +856,7 @@ impl AppState {
             "mods": self.mods,
             "library": self.library,
             "vanilla": self.config.vanilla_sessions,
-            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.config.deck_mode || std::env::var_os("RIG_DECK").is_some(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
+            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.config.deck_mode || std::env::var_os("RIG_DECK").is_some(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
             "notes": self.notes.json(),
             "meta": self.meta_json(),
             "health": self.health,
@@ -2398,25 +2399,47 @@ fn run_auto_backup(state: &SharedState) -> Result<String, String> {
 
 /// Back up once a week, checking now and then; off when the user switched it off.
 fn spawn_auto_backup(state: Weak<RwLock<AppState>>) {
+    spawn_background(state, "weekly_backup", "Weekly backup of settings and mod lists", Duration::from_secs(45), Duration::from_secs(6 * 3600), Box::new(|st, asked| {
+        let (on, dir) = {
+            let s = read_state(st);
+            (!s.config.no_auto_backup, auto_backup_dir(&s))
+        };
+        if !on && !asked {
+            return Ok(false);
+        }
+        if asked || autobackup::due(&dir, now_ms()) {
+            match run_auto_backup(st) {
+                Ok(_) => log(st, "INFO", "Weekly backup of Gantry's settings and mod lists made."),
+                Err(e) => {
+                    log(st, "WARN", format!("Weekly backup failed: {}", e));
+                    return Err(e);
+                }
+            }
+        }
+        Ok(true)
+    }));
+}
+
+/// How often a background task looks whether its time has come (and whether the game has closed).
+const BG_LOOK: Duration = Duration::from_secs(3);
+
+type BgWork = Box<dyn FnMut(&SharedState, bool) -> Result<bool, String> + Send>;
+
+/// Run `work` now and then as the background task `name`, listed in the window. It waits while a game runs
+/// (unless the user lets checks go on during play) and starts at once on Run now; `work` gets whether the user
+/// asked and answers `Ok(false)` when it is switched off.
+fn spawn_background(state: Weak<RwLock<AppState>>, name: &'static str, label: &'static str, first: Duration, every: Duration, mut work: BgWork) {
     if cfg!(test) {
         return;
     }
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(45));
-        loop {
-            let Some(st) = state.upgrade() else { return };
-            let (on, dir) = {
-                let s = read_state(&st);
-                (!s.config.no_auto_backup, auto_backup_dir(&s))
-            };
-            if on && autobackup::due(&dir, now_ms()) {
-                match run_auto_backup(&st) {
-                    Ok(_) => log(&st, "INFO", "Weekly backup of Gantry's settings and mod lists made."),
-                    Err(e) => log(&st, "WARN", format!("Weekly backup failed: {}", e)),
-                }
-            }
-            drop(st);
-            thread::sleep(Duration::from_secs(6 * 3600));
+    background::register(name, label, first.as_millis() as u64, every.as_millis() as u64, now_ms());
+    thread::spawn(move || loop {
+        thread::sleep(BG_LOOK);
+        let Some(st) = state.upgrade() else { return };
+        let hold = background::hold_for(read_state(&st).is_running.load(Ordering::SeqCst));
+        if let Some(asked) = background::due(name, now_ms(), hold) {
+            let res = work(&st, asked);
+            background::finished(name, now_ms(), res);
         }
     });
 }
@@ -2635,24 +2658,20 @@ fn fetch_left_out(state: &SharedState, v: &Value) -> String {
 
 /// Keep the sync folder up to date: look every twenty minutes and copy when something changed.
 fn spawn_sync_push(state: Weak<RwLock<AppState>>) {
-    if cfg!(test) {
-        return;
-    }
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(90));
-        loop {
-            let Some(st) = state.upgrade() else { return };
-            if !read_state(&st).config.sync_folder.is_empty() {
-                match sync_push(&st) {
-                    Ok(n) if n != "unchanged" => log(&st, "INFO", "Your setup was copied to the sync folder."),
-                    Err(e) => log(&st, "WARN", e),
-                    _ => {}
-                }
-            }
-            drop(st);
-            thread::sleep(Duration::from_secs(20 * 60));
+    spawn_background(state, "sync", "Copying your setup to the sync folder", Duration::from_secs(90), Duration::from_secs(20 * 60), Box::new(|st, _| {
+        if read_state(st).config.sync_folder.is_empty() {
+            return Ok(false);
         }
-    });
+        match sync_push(st) {
+            Ok(n) if n != "unchanged" => log(st, "INFO", "Your setup was copied to the sync folder."),
+            Err(e) => {
+                log(st, "WARN", e.clone());
+                return Err(e);
+            }
+            _ => {}
+        }
+        Ok(true)
+    }));
 }
 
 /// Recreate a shared setup: use what the library already has, fetch the Thunderstore packages it
@@ -3371,33 +3390,25 @@ fn dir_join(dir: &str, rel: &str) -> PathBuf {
 
 /// Keep a quiet watch on every installed game: the sidebar shows a chip for the ones with trouble.
 fn spawn_health_monitor(state: Weak<RwLock<AppState>>) {
-    if cfg!(test) {
-        return;
-    }
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(6));
-        loop {
-            let Some(st) = state.upgrade() else { return };
-            let games: Vec<GameEntry> = read_state(&st).games.iter().filter(|g| g.is_installed).cloned().collect();
-            let mut levels: std::collections::BTreeMap<String, String> = Default::default();
-            for g in &games {
-                let (issues, _) = game_issues(&st, g, false);
-                if let Some(w) = issues.iter().map(|i| i["level"].as_str().unwrap_or("")).filter(|l| matches!(*l, "bad" | "warn")).max_by_key(|l| level_rank(l)) {
-                    levels.insert(g.appid.clone(), w.to_string());
-                }
+    spawn_background(state, "health", "Health check of your games", Duration::from_secs(6), Duration::from_secs(25), Box::new(|st, _| {
+        let games: Vec<GameEntry> = read_state(st).games.iter().filter(|g| g.is_installed).cloned().collect();
+        let mut levels: std::collections::BTreeMap<String, String> = Default::default();
+        for g in &games {
+            let (issues, _) = game_issues(st, g, false);
+            if let Some(w) = issues.iter().map(|i| i["level"].as_str().unwrap_or("")).filter(|l| matches!(*l, "bad" | "warn")).max_by_key(|l| level_rank(l)) {
+                levels.insert(g.appid.clone(), w.to_string());
             }
-            {
-                let mut s = write_state(&st);
-                if s.health != levels {
-                    s.health = levels;
-                    s.notifier.bump();
-                }
-            }
-            report_repaired(&st);
-            drop(st);
-            thread::sleep(Duration::from_secs(25));
         }
-    });
+        {
+            let mut s = write_state(st);
+            if s.health != levels {
+                s.health = levels;
+                s.notifier.bump();
+            }
+        }
+        report_repaired(st);
+        Ok(true)
+    }));
 }
 
 /// Apply the pin / notes / tags fields of a `/api/game_meta` request.
@@ -3479,18 +3490,10 @@ fn lookup_missing_covers(state: &SharedState) -> usize {
 }
 
 fn spawn_cover_lookup(state: Weak<RwLock<AppState>>) {
-    if cfg!(test) {
-        return;
-    }
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(10));
-        loop {
-            let Some(st) = state.upgrade() else { return };
-            lookup_missing_covers(&st);
-            drop(st);
-            thread::sleep(Duration::from_secs(1800));
-        }
-    });
+    spawn_background(state, "covers", "Looking up game covers", Duration::from_secs(10), Duration::from_secs(1800), Box::new(|st, _| {
+        lookup_missing_covers(st);
+        Ok(true)
+    }));
 }
 
 /// The Nexus game domain of a game: chosen by hand, else matched by name against Nexus's game list.
@@ -3638,27 +3641,19 @@ fn newer_gantry(state: &SharedState) -> Option<(String, String)> {
 
 /// Check for a newer Gantry once a day and say so once per version. Quiet when GitHub does not answer.
 fn spawn_self_update_check(state: Weak<RwLock<AppState>>) {
-    if cfg!(test) {
-        return;
-    }
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(40));
-        let mut told = String::new();
-        loop {
-            let Some(st) = state.upgrade() else { return };
-            if let Some((tag, _)) = newer_gantry(&st) {
-                write_state(&st).new_version = Some(tag.clone());
-                if tag != told {
-                    told = tag.clone();
-                    let lang = read_state(&st).config.language.clone();
-                    platform::notify(&i18n::tr(&lang, "A new version of Gantry is available"), &tag);
-                }
-                write_state(&st).notifier.bump();
+    let mut told = String::new();
+    spawn_background(state, "gantry_update", "Looking for a newer Gantry", Duration::from_secs(40), Duration::from_secs(24 * 3600), Box::new(move |st, _| {
+        if let Some((tag, _)) = newer_gantry(st) {
+            write_state(st).new_version = Some(tag.clone());
+            if tag != told {
+                told = tag.clone();
+                let lang = read_state(st).config.language.clone();
+                platform::notify(&i18n::tr(&lang, "A new version of Gantry is available"), &tag);
             }
-            drop(st);
-            thread::sleep(Duration::from_secs(24 * 3600));
+            write_state(st).notifier.bump();
         }
-    });
+        Ok(true)
+    }));
 }
 
 /// Download one file of a GitHub release and add it to the selected game's library.
@@ -4886,7 +4881,11 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             let list = read_state(&state).steam_lib.owned.clone();
             return respond_json(req, 200, serde_json::to_string(&list).unwrap_or_else(|_| "[]".into()));
         }
-        "/api/downloads" => return respond_json(req, 200, downloads::status().to_string()),
+        "/api/downloads" => {
+            let mut v = downloads::status();
+            v["background"] = background::status();
+            return respond_json(req, 200, v.to_string());
+        }
         "/api/auto_backups" => {
             let dir = auto_backup_dir(&read_state(&state));
             let list: Vec<Value> = autobackup::list(&dir).iter().map(|e| json!({ "name": e.name, "at_ms": e.at_ms, "size": e.size })).collect();
@@ -6000,6 +5999,12 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             }
         }
         "/api/downloads_clear" => downloads::clear_finished(),
+        "/api/background_run" => {
+            let name = body.get("name").and_then(Value::as_str).unwrap_or("");
+            if !background::run_now(name) {
+                log(state, "INFO", "That check is already running.");
+            }
+        }
         "/api/lib_move_to" => {
             let (id, to) = (body_str(body, "id"), body.get("to").and_then(|v| v.as_u64()).unwrap_or(0) as usize);
             library_task(state, move |st, lib, _| {
@@ -6410,6 +6415,10 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             if let Some(v) = body.get("downloads_wait").and_then(Value::as_bool) {
                 st.config.downloads_wait = v;
             }
+            if let Some(v) = body.get("checks_while_playing").and_then(Value::as_bool) {
+                st.config.checks_while_playing = v;
+            }
+            background::set_while_playing(st.config.checks_while_playing);
             downloads::set_limits(downloads::Limits { kb_per_sec: st.config.download_limit_kb, wait_for_game: st.config.downloads_wait });
             if let Some(v) = body.get("virustotal").and_then(Value::as_bool) {
                 st.config.virustotal = v;
@@ -7946,24 +7955,20 @@ fn clear_steam_key(state: &SharedState) {
 
 /// Keep the owned-games list fresh: a few seconds after start and then twice a day.
 fn spawn_steam_refresher(state: Weak<RwLock<AppState>>) {
-    if cfg!(test) {
-        return;
-    }
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(10));
-        loop {
-            let Some(st) = state.upgrade() else { return };
-            let stale = {
-                let r = read_state(&st);
-                r.steam_lib.key.is_some() && now_ms().saturating_sub(r.steam_lib.fetched_ms) > 12 * 3_600_000
-            };
-            if stale {
-                let _ = refresh_steam_owned(&st);
-            }
-            drop(st);
-            thread::sleep(Duration::from_secs(3600));
+    spawn_background(state, "steam_library", "Refreshing your Steam library", Duration::from_secs(10), Duration::from_secs(3600), Box::new(|st, asked| {
+        let (key, stale) = {
+            let r = read_state(st);
+            (r.steam_lib.key.is_some(), now_ms().saturating_sub(r.steam_lib.fetched_ms) > 12 * 3_600_000)
+        };
+        if !key {
+            return Ok(false);
         }
-    });
+        if stale || asked {
+            refresh_steam_owned(st).map(|_| true)
+        } else {
+            Ok(true)
+        }
+    }));
 }
 
 // ───────────────────────────── Nexus Mods ─────────────────────────────
@@ -9533,34 +9538,29 @@ fn update_digest(st: &AppState) -> String {
 }
 
 fn spawn_update_checker(state: Weak<RwLock<AppState>>) {
-    if cfg!(test) {
-        return;
-    }
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(25));
-        let mut told = 0usize;
-        loop {
-            let Some(st) = state.upgrade() else { return };
-            if read_state(&st).nexus.key.is_some() {
-                let _ = check_nexus_updates(&st);
-            }
-            let _ = check_thunder_updates(&st);
-            auto_update(&st);
-            // one quiet desktop message when there is more to update than the last time we said
-            let (n, lang, summary, digest) = {
-                let s = read_state(&st);
-                (s.nexus.updates.len() + s.thunder.updates.len() + s.github_updates.len() + s.modio_updates.len(), s.config.language.clone(), update_summary(&s.nexus.updates, &s.thunder.updates), update_digest(&s))
-            };
-            if n > told {
-                add_note(&st, "updates", format!("Mod updates: {}", digest), "");
-                let tail = i18n::tr(&lang, "Open Gantry and press Update all.");
-                platform::notify(&i18n::tr(&lang, "Mod updates available"), &if summary.is_empty() { tail } else { format!("{summary}\n{tail}") });
-            }
-            told = n;
-            drop(st);
-            thread::sleep(Duration::from_secs(6 * 3600));
+    let mut told = 0usize;
+    spawn_background(state, "mod_updates", "Looking for mod updates", Duration::from_secs(25), Duration::from_secs(6 * 3600), Box::new(move |st, _| {
+        let mut err = None;
+        if read_state(st).nexus.key.is_some() {
+            err = check_nexus_updates(st).err();
         }
-    });
+        if let Err(e) = check_thunder_updates(st) {
+            err.get_or_insert(e);
+        }
+        auto_update(st);
+        // one quiet desktop message when there is more to update than the last time we said
+        let (n, lang, summary, digest) = {
+            let s = read_state(st);
+            (s.nexus.updates.len() + s.thunder.updates.len() + s.github_updates.len() + s.modio_updates.len(), s.config.language.clone(), update_summary(&s.nexus.updates, &s.thunder.updates), update_digest(&s))
+        };
+        if n > told {
+            add_note(st, "updates", format!("Mod updates: {}", digest), "");
+            let tail = i18n::tr(&lang, "Open Gantry and press Update all.");
+            platform::notify(&i18n::tr(&lang, "Mod updates available"), &if summary.is_empty() { tail } else { format!("{summary}\n{tail}") });
+        }
+        told = n;
+        err.map_or(Ok(true), Err)
+    }));
 }
 
 // ───────────────────────────── Thunderstore ─────────────────────────────
@@ -11077,6 +11077,7 @@ fn main() {
         let st = read_state(&state);
         downloads::watch_game(Arc::clone(&st.is_running));
         downloads::set_limits(downloads::Limits { kb_per_sec: st.config.download_limit_kb, wait_for_game: st.config.downloads_wait });
+        background::set_while_playing(st.config.checks_while_playing);
     }
     resume_vanilla_sessions(&state);
     spawn_health_monitor(Arc::downgrade(&state));
@@ -11227,6 +11228,25 @@ mod tests {
         assert!(!body.contains("__RIG_TOKEN__"));
         assert!(body.contains("Gantry"));
         assert_eq!(http(&h, "GET", "/nope", &[], b"").0, 404);
+    }
+
+    #[test]
+    fn the_checks_gantry_does_on_its_own_are_listed_and_can_be_started_at_once() {
+        let h = harness("bglist");
+        background::register("t-api", "Looking up game covers", 60_000, 60_000, now_ms());
+        let list = |h: &Harness| {
+            let (code, body) = http(h, "GET", "/api/downloads", &[("X-Rig-Token", &h.token)], b"");
+            assert_eq!(code, 200);
+            serde_json::from_str::<Value>(&body).unwrap()["background"]["tasks"].as_array().unwrap().iter().find(|t| t["name"] == "t-api").cloned().unwrap()
+        };
+        assert!(list(&h)["next_ms"].as_u64().unwrap() > now_ms(), "not due yet");
+        api(&h, "/api/background_run", json!({ "name": "t-api" }));
+        assert_eq!(list(&h)["next_ms"], 0, "Run now makes it due at once");
+        assert_eq!(background::due("t-api", now_ms(), true), Some(true), "and it does not wait for the game");
+        api(&h, "/api/background_run", json!({ "name": "t-api" }));
+        assert!(h.state.read().unwrap().logs.iter().any(|l| l.message.contains("already running")));
+        background::finished("t-api", now_ms(), Ok(true));
+        assert_eq!(list(&h)["running"], false);
     }
 
     #[test]
@@ -15308,6 +15328,10 @@ mod tests {
         api(&h, "/api/settings", json!({ "download_limit_kb": 2048, "downloads_wait": true }));
         assert_eq!((get("download_limit_kb"), get("downloads_wait")), (json!(2048), json!(true)));
         api(&h, "/api/settings", json!({ "download_limit_kb": 0, "downloads_wait": false }));
+        assert_eq!(get("checks_while_playing"), json!(false), "background checks wait for the game until told otherwise");
+        api(&h, "/api/settings", json!({ "checks_while_playing": true }));
+        assert_eq!(get("checks_while_playing"), json!(true));
+        api(&h, "/api/settings", json!({ "checks_while_playing": false }));
         api(&h, "/api/settings", json!({ "theme": "midnight", "accent": "pink", "show_adult": true, "accent_from_game": true }));
         assert_eq!((get("theme"), get("accent"), get("show_adult")), (json!("midnight"), json!("pink"), json!(true)));
         api(&h, "/api/settings", json!({ "theme": "<script>", "accent": "#ff0000" }));

@@ -88,6 +88,9 @@ Logs of fatal errors: `~/.cache/rig/rig.log`. Config: `~/.config/protonrig/rig_c
   version before the last change. A file that cannot be read is kept as `<name>.corrupt-<time>` and the copy is used
   (for settings, the newest weekly backup when the copy is bad too); the bell says so. Defaults are never silently used.
   The lists of every installed game are also checked once at start.
+- **Quiet while you play.** The checks Gantry does on its own (health, mod updates, covers, Steam library, weekly
+  backup, sync copy) wait while a game runs unless *Let checks go on while a game runs* is on; they are listed under
+  Downloads with *Run now*. Downloads can wait for the game too (*Wait for the game to close before downloading*).
 - **Zero-copy placement.** Uploads stream to disk; archives are staged on the game's own partition so
   moving mods into place is an instant `rename(2)`; other copies use `copy_file_range`.
 - **Local API is locked down.** `Host` and `Origin` are checked and every call needs a per-launch token
