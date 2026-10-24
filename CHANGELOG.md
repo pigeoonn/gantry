@@ -1,5 +1,16 @@
 # Changes
 
+## Next
+
+- **Make this game moddable** replaces Full Setup and works for every game, not only Unreal ones. It first shows a
+  checklist of what it will do (what is already there is ticked), asks once, then ticks each step off: the mod loader
+  for Unity games, UE4SS for Unreal games, and for Cyberpunk 2077 RED4ext, Redscript, Cyber Engine Tweaks, ArchiveXL,
+  TweakXL and Codeware (SKSE64 for Skyrim SE, F4SE for Fallout 4), each from its official GitHub releases, with no
+  website clicks and no Nexus account. They land in the mod list like any mod. Then saves are backed up and Steam's
+  launch options set. The welcome list offers it for games with missing core mods, and so does the health bar.
+- **Fixed:** a Cyberpunk mod zipped as only `red4ext/...` or `engine/...` lost that folder when the game did not have it
+  yet, and landed in the wrong place.
+
 ## 5.4.0
 
 - **mod.io** is a third place to find mods (*Find mods → mod.io*). Games whose makers let other programs use their mod.io

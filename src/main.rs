@@ -180,6 +180,8 @@ pub struct AppState {
     pub steam_env: SteamEnv,
     /// Set while a Full Setup runs so two cannot interleave on one machine.
     pub setup_busy: Arc<AtomicBool>,
+    /// The checklist of the last "Make this game moddable" run, ticked off as it goes.
+    pub setup_run: Option<SetupRun>,
     /// Latest crash analysis (any game); the UI shows it for the game it belongs to.
     pub crash: Option<CrashReport>,
     /// Open "find the culprit" session, if any (one at a time).
@@ -625,6 +627,7 @@ impl AppState {
             perf_manual: None,
             steam_env: SteamEnv::default(),
             setup_busy: Arc::new(AtomicBool::new(false)),
+            setup_run: None,
             crash: None,
             bisect: None,
             last_run: None,
@@ -2941,12 +2944,17 @@ fn github_install(state: &SharedState, repo: &str, url: &str) {
     let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
         return log(state, "WARN", "Select an installed game first.");
     };
-    github_install_for(state, &g, repo, url, github::GithubRef::from_download(url));
+    github_install_named(state, &g, repo, url, github::GithubRef::from_download(url), None);
 }
 
 /// Download one file of a GitHub release into `g`'s library. A file of the same repository that is already there is
 /// replaced (that is an update), and the mod remembers where it came from so it can be checked for newer releases.
 fn github_install_for(state: &SharedState, g: &GameEntry, repo: &str, url: &str, reference: Option<github::GithubRef>) {
+    github_install_named(state, g, repo, url, reference, None)
+}
+
+/// The same, under a name of Gantry's choosing (the core mods of a game: "RED4ext", not "red4ext-1.30.0").
+fn github_install_named(state: &SharedState, g: &GameEntry, repo: &str, url: &str, reference: Option<github::GithubRef>, label: Option<&str>) {
     let Some((o, r)) = github::parse_repo(repo) else {
         return log(state, "ERR", "That does not look like a GitHub repository.");
     };
@@ -2979,7 +2987,7 @@ fn github_install_for(state: &SharedState, g: &GameEntry, repo: &str, url: &str,
     // a file that is not under github.com/<owner>/<repo>/releases/download (a mirror) simply is not tracked
     let replaces = reference.as_ref().and_then(|new| library_of(g)?.mods().into_iter().find(|m| m.github.as_ref().map(|old| old.same_file_as(new)).unwrap_or(false)).map(|m| m.id));
     let version = reference.as_ref().map(|r| r.tag.trim_start_matches('v').to_string()).unwrap_or_default();
-    install_routed(dest, true, Arc::clone(state), InstallOpts { game: Some(g.clone()), to_library: true, github: reference, replaces, version, ..Default::default() });
+    install_routed(dest, true, Arc::clone(state), InstallOpts { game: Some(g.clone()), to_library: true, github: reference, replaces, version, name: label.map(str::to_string), ..Default::default() });
 }
 
 /// What the compatibility window shows for the selected game.
@@ -3090,15 +3098,20 @@ fn purge_all(state: &SharedState) {
 /// Download a Unity mod loader that fits the selected game and put it in through the mod library,
 /// so "Back to vanilla" removes it again.
 fn install_loader(state: &SharedState, kind: &str) {
-    loader_exclusive(state, |s| install_loader_inner(s, kind, false));
+    let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
+        return log(state, "WARN", "Select an installed game first.");
+    };
+    loader_exclusive(state, &g, |s| {
+        install_loader_inner(s, &g, kind, false);
+    });
 }
 
 /// A second click while a loader is being installed or switched must not start a second one
 /// (that put the same loader into one library twice).
-fn loader_exclusive(state: &SharedState, f: impl FnOnce(&SharedState)) {
+fn loader_exclusive(state: &SharedState, g: &GameEntry, f: impl FnOnce(&SharedState)) {
     static BUSY: std::sync::LazyLock<Mutex<HashSet<String>>> = std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
     // one at a time per library (the library's folder tells libraries apart, game ids can repeat)
-    let Some(appid) = selected_game(state).and_then(|g| library_of(&g)).map(|l| l.root().to_string_lossy().to_string()) else { return };
+    let Some(appid) = library_of(g).map(|l| l.root().to_string_lossy().to_string()) else { return };
     if !BUSY.lock().unwrap_or_else(|e| e.into_inner()).insert(appid.clone()) {
         return log(state, "INFO", "A loader change is already running for this game.");
     }
@@ -3115,17 +3128,17 @@ fn loader_exclusive(state: &SharedState, f: impl FnOnce(&SharedState)) {
 /// Replace the mod loader of the selected game by another one: the old one goes out through the
 /// library (and its generated `MelonLoader` folder, which belongs to nobody else), then the new one in.
 fn switch_loader(state: &SharedState, kind: &str) {
-    loader_exclusive(state, |s| switch_loader_inner(s, kind));
-}
-
-fn switch_loader_inner(state: &SharedState, kind: &str) {
     let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
         return log(state, "WARN", "Select an installed game first.");
     };
+    loader_exclusive(state, &g, |s| switch_loader_inner(s, &g, kind));
+}
+
+fn switch_loader_inner(state: &SharedState, g: &GameEntry, kind: &str) {
     if read_state(state).is_running.load(Ordering::SeqCst) {
         return log(state, "WARN", "Close the game first.");
     }
-    let Some(lib) = library_of(&g) else { return };
+    let Some(lib) = library_of(g) else { return };
     let labels = ["BepInEx 5", "BepInEx 6", "MelonLoader"];
     for m in lib.mods().into_iter().filter(|m| labels.contains(&m.name.as_str())) {
         if let Err(e) = lib.remove(&m.id) {
@@ -3136,25 +3149,27 @@ fn switch_loader_inner(state: &SharedState, kind: &str) {
     if ml.is_dir() && fs::symlink_metadata(&ml).map(|m| !m.file_type().is_symlink()).unwrap_or(false) {
         let _ = fs::remove_dir_all(&ml);
     }
-    install_loader_inner(state, kind, true);
+    install_loader_inner(state, g, kind, true);
 }
 
-fn install_loader_inner(state: &SharedState, kind: &str, switching: bool) {
-    let Some(loader) = loaders::Loader::parse(kind) else { return };
-    let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
-        return log(state, "WARN", "Select an installed game first.");
-    };
+/// Returns whether the loader went in.
+fn install_loader_inner(state: &SharedState, g: &GameEntry, kind: &str, switching: bool) -> bool {
+    let Some(loader) = loaders::Loader::parse(kind) else { return false };
     let Some(info) = loaders::detect(Path::new(&g.game_dir)) else {
-        return log(state, "WARN", format!("{} does not look like a Unity game.", g.name));
+        log(state, "WARN", format!("{} does not look like a Unity game.", g.name));
+        return false;
     };
     if !info.loader.is_empty() && !switching {
-        return log(state, "INFO", format!("{} already has a mod loader.", g.name));
+        log(state, "INFO", format!("{} already has a mod loader.", g.name));
+        return true;
     }
     if let Some(ac) = deploy::anti_cheat(Path::new(&g.game_dir)) {
-        return log(state, "WARN", format!("This game uses {ac}. Mod loaders can get your account banned, so Gantry will not install one."));
+        log(state, "WARN", format!("This game uses {ac}. Mod loaders can get your account banned, so Gantry will not install one."));
+        return false;
     }
     if read_state(state).is_running.load(Ordering::SeqCst) {
-        return log(state, "WARN", "Close the game first.");
+        log(state, "WARN", "Close the game first.");
+        return false;
     }
     let (cache, src) = {
         let st = read_state(state);
@@ -3162,19 +3177,30 @@ fn install_loader_inner(state: &SharedState, kind: &str, switching: bool) {
     };
     let asset = match loaders::find_asset(loader, &info, &src) {
         Ok(a) => a,
-        Err(e) => return log(state, "ERR", e),
+        Err(e) => {
+            log(state, "ERR", e);
+            return false;
+        }
     };
     let zip = match loaders::ensure_zip(&cache, &asset, &|m| log(state, "INFO", m)) {
         Ok(z) => z,
-        Err(e) => return log(state, "ERR", e),
+        Err(e) => {
+            log(state, "ERR", e);
+            return false;
+        }
     };
     // the same loader in the same version is never added twice
-    if library_of(&g).map(|l| l.mods().iter().any(|m| m.name == loader.label() && m.version == asset.version)).unwrap_or(false) {
-        return log(state, "INFO", format!("{} {} is already in the library.", loader.label(), asset.version));
+    if library_of(g).map(|l| l.mods().iter().any(|m| m.name == loader.label() && m.version == asset.version)).unwrap_or(false) {
+        log(state, "INFO", format!("{} {} is already in the library.", loader.label(), asset.version));
+        return true;
     }
     let opts = InstallOpts { game: Some(g.clone()), to_library: true, name: Some(loader.label().to_string()), version: asset.version.clone(), ..Default::default() };
     install_routed(zip, false, Arc::clone(state), opts);
-    log(state, "OK", format!("{} is installed. Start the game once so it can finish setting itself up, then add mods.", loader.label()));
+    let ok = loaders::detect(Path::new(&g.game_dir)).map(|i| !i.loader.is_empty()).unwrap_or(false);
+    if ok {
+        log(state, "OK", format!("{} is installed. Start the game once so it can finish setting itself up, then add mods.", loader.label()));
+    }
+    ok
 }
 
 /// After a Nexus mod went in: tell the user what it needs that the library does not have, and
@@ -4112,6 +4138,14 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             };
             return respond_json(req, 200, store_page(&state, &g, &ask).to_string());
         }
+        "/api/setup_plan" => {
+            let g = match query_param(&query, "appid") {
+                Some(id) => game_by_appid(&state, &id),
+                None => selected_game(&state),
+            };
+            let Some(g) = g.filter(|g| g.is_installed) else { return respond_json(req, 200, json!({ "steps": [], "not_installed": true }).to_string()) };
+            return respond_json(req, 200, setup_plan_json(&state, &g).to_string());
+        }
         "/api/welcome" => {
             let (games, recipes_list) = {
                 let st = read_state(&state);
@@ -4124,7 +4158,8 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
                     let dir = PathBuf::from(&g.game_dir);
                     let rec = recipes::find(&recipes_list, &g.appid, g.recipe_steam_id()).map(|r| r.loader.clone()).unwrap_or_default();
                     let ac = deploy::anti_cheat(&dir);
-                    let v = welcome::verdict(loaders::detect(&dir).as_ref(), &g.engine, g.ue4ss, &rec, ac);
+                    let missing = frameworks::cores(&dir).iter().filter(|c| !c.installed).count();
+                    let v = welcome::verdict_with_cores(loaders::detect(&dir).as_ref(), &g.engine, g.ue4ss, &rec, ac, missing);
                     welcome::row(&g.appid, &g.name, &g.engine, g.mod_count, &v)
                 })
                 .collect();
@@ -5879,8 +5914,23 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/full_setup" => {
             let close_steam = body.get("close_steam").and_then(|v| v.as_bool()).unwrap_or(false);
+            // the welcome list sets up a game without selecting it
+            let game = match body.get("appid").and_then(Value::as_str) {
+                Some(id) => match game_by_appid(state, id).filter(|g| g.is_installed) {
+                    Some(g) => Some(g),
+                    None => return true,
+                },
+                None => None,
+            };
+            // the window waits for the new checklist, not the last one
+            if !read_state(state).setup_busy.load(Ordering::SeqCst) {
+                write_state(state).setup_run = None;
+            }
             let state_bg = Arc::clone(state);
-            thread::spawn(move || full_setup(&state_bg, close_steam));
+            thread::spawn(move || match game {
+                Some(g) => full_setup_for(&state_bg, &g, close_steam),
+                None => full_setup(&state_bg, close_steam),
+            });
         }
         "/api/steam_launch_apply" => {
             let force = body.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -6056,10 +6106,146 @@ fn setup_ue4ss(state: &SharedState) {
     refresh_mods_shared(state);
 }
 
-/// One click: install UE4SS if needed, repair/configure it for the detected engine, back up
-/// saves, make Steam's launch options match, then verify with the doctor and report.
+/// One line of the "Make this game moddable" checklist. `text` is an English phrase with at most one `{}`, filled with
+/// `arg`; the window translates it.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct SetupStep {
+    pub id: String,
+    pub text: &'static str,
+    pub arg: String,
+    /// "todo", "doing", "done", "failed" or "skip".
+    pub status: &'static str,
+    pub detail: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct SetupRun {
+    pub appid: String,
+    pub steps: Vec<SetupStep>,
+    pub finished: bool,
+    /// Why nothing was done, when nothing was (an English phrase with at most one `{}`, filled with `note_arg`).
+    pub note: &'static str,
+    pub note_arg: String,
+}
+
+/// A run that ended before it began, with the reason.
+fn setup_refused(state: &SharedState, g: &GameEntry, note: &'static str, arg: &str) {
+    let mut st = write_state(state);
+    st.setup_run = Some(SetupRun { appid: g.appid.clone(), steps: Vec::new(), finished: true, note, note_arg: arg.to_string() });
+    st.notifier.bump();
+}
+
+fn step(id: &str, text: &'static str, arg: &str, done: bool) -> SetupStep {
+    SetupStep { id: id.into(), text, arg: arg.into(), status: if done { "done" } else { "todo" }, detail: String::new() }
+}
+
+/// The loader that fits a Unity game without one (none when it has one or is not a Unity game).
+fn loader_wanted(state: &SharedState, g: &GameEntry) -> Option<(&'static str, bool)> {
+    let info = loaders::detect(Path::new(&g.game_dir))?;
+    let rec = recipes::find(&read_state(state).recipes, &g.appid, g.recipe_steam_id()).map(|r| r.loader.clone()).unwrap_or_default();
+    let kind = match welcome::verdict(Some(&info), &g.engine, g.ue4ss, &rec, None) {
+        welcome::Verdict::NeedsLoader(k) => k,
+        _ => return Some(("", true)),
+    };
+    Some((kind, false))
+}
+
+/// What "Make this game moddable" would do for `g`, each step already marked done when it is. The second value is why
+/// nothing may be done at all (anti-cheat).
+fn setup_steps(state: &SharedState, g: &GameEntry) -> (Vec<SetupStep>, Option<String>) {
+    let dir = PathBuf::from(&g.game_dir);
+    if let Some(ac) = deploy::anti_cheat(&dir) {
+        return (Vec::new(), Some(ac.to_string()));
+    }
+    let mut steps = Vec::new();
+    if let Some((kind, has)) = loader_wanted(state, g) {
+        let label = loaders::Loader::parse(kind).map(|l| l.label()).unwrap_or("BepInEx");
+        steps.push(step("loader", if has { "A mod loader is installed" } else { "Install the mod loader {}" }, if has { "" } else { label }, has));
+    }
+    if let Some(ue_bin) = RigEngine::find_ue_bin_dir(&dir) {
+        let ok = ue4ss_installed(&ue_bin) && RepairEngine::diagnose(g).issues.is_empty();
+        steps.push(step("ue4ss", "Install and configure UE4SS", "", ok));
+    }
+    for c in frameworks::cores(&dir) {
+        steps.push(step(&format!("core:{}", c.name), if c.installed { "{} is installed" } else { "Install {} (from its official releases)" }, c.name, c.installed));
+    }
+    let installs = steps.iter().any(|s| s.status == "todo");
+    steps.push(step("backup", "Back up your saves", "", false));
+    if !g.launches_directly() {
+        let info = steam_info(state, g);
+        let linux = !platform::IS_WINDOWS && !platform::IS_MAC;
+        let mut s = match info.status.as_str() {
+            "ok" if !(installs && linux) => step("steam", "Steam launch options are set", "", true),
+            "ok" | "missing" | "stale" => step("steam", "Set the Steam launch options", "", false),
+            "custom" => SetupStep { status: "skip", ..step("steam", "Steam has launch options you set yourself; they stay", "", false) },
+            _ => SetupStep { status: "skip", detail: info.detail.clone(), ..step("steam", "Steam launch options cannot be read", "", false) },
+        };
+        if s.status == "todo" && info.steam_running {
+            s.detail = "steam_running".into();
+        }
+        steps.push(s);
+    }
+    (steps, None)
+}
+
+/// The checklist for the window: what will be done (a dry run) and, while or after it runs, how far it got.
+fn setup_plan_json(state: &SharedState, g: &GameEntry) -> Value {
+    let (steps, blocked) = setup_steps(state, g);
+    let run = read_state(state).setup_run.clone().filter(|r| r.appid == g.appid);
+    let busy = read_state(state).setup_busy.load(Ordering::SeqCst);
+    let changes = steps.iter().filter(|s| s.status == "todo" && s.id != "backup").count();
+    json!({ "appid": g.appid, "name": g.name, "blocked": blocked, "steps": steps, "changes": changes, "run": run, "busy": busy })
+}
+
+fn mark_step(state: &SharedState, id: &str, status: &'static str, detail: &str) {
+    let mut st = write_state(state);
+    if let Some(s) = st.setup_run.as_mut().and_then(|r| r.steps.iter_mut().find(|s| s.id == id)) {
+        s.status = status;
+        s.detail = detail.to_string();
+    }
+    st.notifier.bump();
+}
+
+/// Put one core mod in from the newest release of its repository, as a library mod that knows where it came from (so
+/// it is checked for updates like any GitHub mod). Gives the version that went in.
+fn install_core(state: &SharedState, g: &GameEntry, core: &frameworks::Core) -> Result<String, String> {
+    // already in the library but switched off: switching it back on is all it takes
+    if let Some(lib) = library_of(g) {
+        let key = core.name.to_lowercase();
+        if let Some(m) = lib.mods().into_iter().find(|m| !m.enabled && m.name.to_lowercase().contains(&key)) {
+            lib.set_enabled(&m.id, true)?;
+            library_apply(state, &lib, false)?;
+            return Ok(m.version);
+        }
+    }
+    let (api, allow) = {
+        let st = read_state(state);
+        (st.github_api.clone(), st.github_allow.clone())
+    };
+    let (owner, repo) = core.repo.split_once('/').ok_or("No release source is known.")?;
+    let rel = github::latest(owner, repo, &api, allow.as_deref())?;
+    let names: Vec<String> = rel.assets.iter().map(|a| a.name.clone()).collect();
+    let file = core.pick(&names).ok_or_else(|| format!("The newest release of {} has no file Gantry recognises.", core.name))?;
+    let url = rel.assets.iter().find(|a| &a.name == file).map(|a| a.url.clone()).unwrap_or_default();
+    let reference = github::GithubRef::from_download(&url);
+    github_install_named(state, g, core.repo, &url, reference, Some(core.name));
+    let there = frameworks::cores(Path::new(&g.game_dir)).iter().any(|c| c.name == core.name && c.installed);
+    if !there {
+        return Err(format!("{} did not end up in the game folder (see the log).", core.name));
+    }
+    Ok(rel.tag.trim_start_matches('v').to_string())
+}
+
+/// One click: everything a game needs before mods work. Unity games get their loader, Unreal games UE4SS (installed,
+/// then configured for the engine version), Cyberpunk, Skyrim and Fallout 4 their core mods from the official releases.
+/// Then the saves are backed up, Steam's launch options are made to match, and it is all checked again. Each step is
+/// ticked off in `setup_run` for the window.
 fn full_setup(state: &SharedState, close_steam: bool) {
     let Some(g) = selected_game(state) else { return };
+    full_setup_for(state, &g, close_steam)
+}
+
+fn full_setup_for(state: &SharedState, g: &GameEntry, close_steam: bool) {
     let busy_flag = Arc::clone(&read_state(state).setup_busy);
     if busy_flag.swap(true, Ordering::SeqCst) {
         log(state, "WARN", "Full setup is already running.");
@@ -6074,15 +6260,18 @@ fn full_setup(state: &SharedState, close_steam: bool) {
     let _busy = Busy(busy_flag);
 
     log(state, "INFO", format!("Full setup for {}...", g.name));
-    if procs::is_game_running(&g) {
+    if procs::is_game_running(g) {
         log(state, "WARN", format!("{} is running. Close it and run Full setup again.", g.name));
-        return;
+        return setup_refused(state, g, "{} is running. Close it and run Full setup again.", &g.name);
     }
-
-    let mut problems: Vec<String> = Vec::new();
-    let is_unreal = RigEngine::find_ue_bin_dir(Path::new(&g.game_dir)).is_some();
-    if !is_unreal && g.launches_directly() {
-        // Nothing here applies: no UE4SS (Unreal only) and no Steam launch options to sync.
+    let (steps, blocked) = setup_steps(state, g);
+    if let Some(ac) = blocked {
+        log(state, "WARN", format!("This game uses {ac}. Mod loaders can get your account banned, so Gantry will not install one."));
+        return setup_refused(state, g, "This game uses {}. Modified files can get your account banned, so play without mods.", &ac);
+    }
+    let installs = steps.iter().any(|s| ["loader", "ue4ss"].contains(&s.id.as_str()) || s.id.starts_with("core:"));
+    if !installs && g.launches_directly() {
+        // Nothing here applies: no loader, no UE4SS (Unreal only), no core mods and no Steam launch options to sync.
         log(
             state,
             "INFO",
@@ -6091,66 +6280,167 @@ fn full_setup(state: &SharedState, close_steam: bool) {
                 g.name
             ),
         );
-        return;
+        return setup_refused(state, g, "Nothing to set up for this game. Mods can be dragged onto Gantry as they are.", "");
     }
-    match RigEngine::find_ue_bin_dir(Path::new(&g.game_dir)) {
-        None => log(state, "INFO", "Not an Unreal Engine game, so UE4SS steps are skipped."),
-        Some(ue_bin) => {
-            // 1. runtime
-            if ue4ss_installed(&ue_bin) {
-                log(state, "OK", "1/5 UE4SS is already installed.");
-            } else {
-                match install_ue4ss_runtime(state, &g, &ue_bin) {
-                    Ok(n) => log(state, "OK", format!("1/5 Installed UE4SS ({} files).", n)),
+    {
+        let mut st = write_state(state);
+        st.setup_run = Some(SetupRun { appid: g.appid.clone(), steps: steps.clone(), finished: false, note: "", note_arg: String::new() });
+        st.notifier.bump();
+    }
+    let finish = |state: &SharedState| {
+        let mut st = write_state(state);
+        if let Some(r) = st.setup_run.as_mut() {
+            r.finished = true;
+            for s in r.steps.iter_mut().filter(|s| s.status == "todo" || s.status == "doing") {
+                s.status = "skip";
+            }
+        }
+        st.notifier.bump();
+    };
+    // the numbered lines of the log: Unreal games count UE4SS twice (installed, then configured), plus the check at the end
+    let unreal = RigEngine::find_ue_bin_dir(Path::new(&g.game_dir));
+    let total = steps.len() + usize::from(unreal.is_some()) + 1 + usize::from(g.launches_directly() && unreal.is_some());
+    let mut n = 0;
+    let mut next = || {
+        n += 1;
+        format!("{n}/{total}")
+    };
+    let mut problems: Vec<String> = Vec::new();
+    if !installs {
+        log(state, "INFO", "Not an Unreal Engine game, so UE4SS steps are skipped.");
+    }
+
+    for s in &steps {
+        match s.id.as_str() {
+            "loader" => {
+                let k = next();
+                if s.status == "done" {
+                    log(state, "OK", format!("{} The mod loader is already installed.", k));
+                    continue;
+                }
+                mark_step(state, "loader", "doing", "");
+                let kind = loader_wanted(state, g).map(|w| w.0).unwrap_or("");
+                let mut ok = false;
+                loader_exclusive(state, g, |st| ok = install_loader_inner(st, g, kind, false));
+                if ok {
+                    mark_step(state, "loader", "done", "");
+                    log(state, "OK", format!("{} Installed the mod loader.", k));
+                } else {
+                    mark_step(state, "loader", "failed", "");
+                    log(state, "ERR", "Full setup stopped: the mod loader could not be installed (see above).");
+                    return finish(state);
+                }
+            }
+            "ue4ss" => {
+                let Some(ue_bin) = unreal.as_ref() else { continue };
+                mark_step(state, "ue4ss", "doing", "");
+                // 1. runtime
+                let k = next();
+                if ue4ss_installed(ue_bin) {
+                    log(state, "OK", format!("{} UE4SS is already installed.", k));
+                } else {
+                    match install_ue4ss_runtime(state, g, ue_bin) {
+                        Ok(files) => log(state, "OK", format!("{} Installed UE4SS ({} files).", k, files)),
+                        Err(e) => {
+                            mark_step(state, "ue4ss", "failed", &e);
+                            log(state, "ERR", format!("Full setup stopped: {}", e));
+                            return finish(state);
+                        }
+                    }
+                }
+                // 2. repair / configure
+                for a in RepairEngine::repair(g) {
+                    log(state, "UE5", a);
+                }
+                log(state, "OK", format!("{} Configured UE4SS for the detected engine version.", next()));
+                mark_step(state, "ue4ss", "done", "");
+            }
+            id if id.starts_with("core:") => {
+                let k = next();
+                let name = &id[5..];
+                if s.status == "done" {
+                    log(state, "OK", format!("{} {} is already installed.", k, name));
+                    continue;
+                }
+                let Some(core) = frameworks::cores(Path::new(&g.game_dir)).into_iter().find(|c| c.name == name) else { continue };
+                mark_step(state, id, "doing", "");
+                match install_core(state, g, &core) {
+                    Ok(v) => {
+                        mark_step(state, id, "done", &v);
+                        log(state, "OK", format!("{} Installed {} {}.", k, name, v));
+                    }
                     Err(e) => {
-                        log(state, "ERR", format!("Full setup stopped: {}", e));
-                        return;
+                        // one core mod that cannot be had is no reason to stop: the others still help
+                        mark_step(state, id, "failed", &e);
+                        problems.push(format!("{}: {}", name, e));
+                        log(state, "WARN", format!("{} {}", k, e));
                     }
                 }
             }
-            // 2. repair / configure
-            for a in RepairEngine::repair(&g) {
-                log(state, "UE5", a);
-            }
-            log(state, "OK", "2/5 Configured UE4SS for the detected engine version.");
-            // 3. safety net for saves (silent when the game has none yet)
-            let cache_root = read_state(state).cache_root();
-            if let Ok(Some(s)) = saves::snapshot(&g, &cache_root, "setup", &save_places(state, &g)) {
-                log(state, "OK", format!("3/5 Backed up {} save file(s).", s.files));
-            }
-        }
-    }
-
-    // 4. Steam launch options
-    if g.launches_directly() {
-        log(state, "OK", "4/5 This game is launched by rig directly; nothing to change in Steam.");
-    } else {
-        let info = steam_info(state, &g);
-        match info.status.as_str() {
-            "ok" => log(state, "OK", "4/5 Steam launch options are already in sync."),
-            "custom" => log(state, "INFO", "4/5 Steam has launch options you set yourself; left unchanged (Doctor can replace them)."),
-            "missing" | "stale" => match apply_steam_options(state, &g, false, close_steam) {
-                Ok(m) => log(state, "OK", format!("4/5 {}", m)),
-                Err(e) => {
-                    problems.push(format!("Steam launch options: {}", e));
-                    log(state, "WARN", format!("4/5 {}", e));
+            "backup" => {
+                let k = next();
+                mark_step(state, "backup", "doing", "");
+                let cache_root = read_state(state).cache_root();
+                match saves::snapshot(g, &cache_root, "setup", &save_places(state, g)) {
+                    Ok(Some(snap)) => {
+                        mark_step(state, "backup", "done", &snap.files.to_string());
+                        log(state, "OK", format!("{} Backed up {} save file(s).", k, snap.files));
+                    }
+                    // silent when the game has no saves yet
+                    _ => mark_step(state, "backup", "skip", ""),
                 }
-            },
-            _ => log(state, "INFO", format!("4/5 Steam launch options skipped: {}", info.detail)),
+            }
+            "steam" => {
+                let k = next();
+                mark_step(state, "steam", "doing", "");
+                // asked again now: what went in above can change what the game needs
+                let info = steam_info(state, g);
+                match info.status.as_str() {
+                    "ok" => {
+                        mark_step(state, "steam", "done", "");
+                        log(state, "OK", format!("{} Steam launch options are already in sync.", k));
+                    }
+                    "custom" => {
+                        mark_step(state, "steam", "skip", "");
+                        log(state, "INFO", format!("{} Steam has launch options you set yourself; left unchanged (Doctor can replace them).", k));
+                    }
+                    "missing" | "stale" => match apply_steam_options(state, g, false, close_steam) {
+                        Ok(m) => {
+                            mark_step(state, "steam", "done", "");
+                            log(state, "OK", format!("{} {}", k, m));
+                        }
+                        Err(e) => {
+                            mark_step(state, "steam", "failed", &e);
+                            problems.push(format!("Steam launch options: {}", e));
+                            log(state, "WARN", format!("{} {}", k, e));
+                        }
+                    },
+                    _ => {
+                        mark_step(state, "steam", "skip", &info.detail);
+                        log(state, "INFO", format!("{} Steam launch options skipped: {}", k, info.detail));
+                    }
+                }
+            }
+            _ => {}
         }
     }
+    if g.launches_directly() && unreal.is_some() {
+        log(state, "OK", format!("{} This game is launched by rig directly; nothing to change in Steam.", next()));
+    }
 
-    // 5. verify
+    // verify
     RigEngine::invalidate_ue_bin_memo();
-    if is_unreal {
-        problems.extend(RepairEngine::diagnose(&g).issues);
+    if unreal.is_some() {
+        problems.extend(RepairEngine::diagnose(g).issues);
     }
     refresh_mods_shared(state);
+    let k = next();
     if problems.is_empty() {
-        log(state, "OK", "5/5 Setup complete: every check passed. Press Play.");
+        log(state, "OK", format!("{} Setup complete: every check passed. Press Play.", k));
     } else {
-        log(state, "WARN", format!("5/5 Setup finished with {} open item(s): {}", problems.len(), problems.join(" | ")));
+        log(state, "WARN", format!("{} Setup finished with {} open item(s): {}", k, problems.len(), problems.join(" | ")));
     }
+    finish(state);
 }
 
 // ───────────────────────────── Steam launch options ─────────────────────────────
@@ -9909,6 +10199,102 @@ mod tests {
         fs::create_dir_all(dir.join("red4ext/plugins/ArchiveXL")).unwrap();
         fs::write(dir.join("red4ext/plugins/ArchiveXL/ArchiveXL.dll"), b"x").unwrap();
         assert!(issues().iter().all(|i| i["code"] != "needs_framework"));
+    }
+
+    #[test]
+    fn one_click_makes_cyberpunk_moddable_from_the_official_releases() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("makemoddable");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("bin/x64")).unwrap();
+        fs::write(dir.join("bin/x64/Cyberpunk2077.exe"), b"MZ").unwrap();
+        // CET is already there (put in by hand): it is left alone
+        fs::create_dir_all(dir.join("bin/x64/plugins")).unwrap();
+        fs::write(dir.join("bin/x64/plugins/cyber_engine_tweaks.asi"), b"mine").unwrap();
+        // the releases as they are really laid out, each next to the debug files that must not be taken
+        let z = |name: &str, files: &[(&str, &str)]| zip_of(&h, name, files);
+        let (base, hits) = github::fake::start_many(vec![
+            ("wopss/RED4ext", "v1.30.0", vec![("red4ext-symbols-1.30.0.zip", z("r4s", &[("RED4ext.pdb", "p")])), ("red4ext-1.30.0.zip", z("r4", &[("bin/x64/winmm.dll", "w"), ("red4ext/RED4ext.dll", "r")]))]),
+            ("jac3km4/redscript", "v0.5.32", vec![("redscript-v0.5.32-macos.zip", z("rsm", &[("x", "x")])), ("redscript-v0.5.32-windows.zip", z("rs", &[("engine/tools/scc.exe", "s"), ("engine/config/base/scripts.ini", "i")]))]),
+            ("psiberx/cp2077-archive-xl", "v1.27.5", vec![("ArchiveXL-1.27.5-pdb.zip", z("axp", &[("a.pdb", "p")])), ("ArchiveXL-1.27.5.zip", z("ax", &[("red4ext/plugins/ArchiveXL/ArchiveXL.dll", "a"), ("r6/scripts/ArchiveXL/ArchiveXL.reds", "s")]))]),
+            ("psiberx/cp2077-tweak-xl", "v1.11.5", vec![("TweakXL-1.11.5.zip", z("tx", &[("red4ext/plugins/TweakXL/TweakXL.dll", "t"), ("r6/scripts/TweakXL/TweakXL.reds", "s")]))]),
+            ("psiberx/cp2077-codeware", "v1.20.6", vec![("Codeware-1.20.6.zip", z("cw", &[("red4ext/plugins/Codeware/Codeware.dll", "c"), ("r6/scripts/Codeware/Codeware.reds", "s")]))]),
+        ]);
+        {
+            let mut st = h.state.write().unwrap();
+            st.github_api = base.clone();
+            st.github_allow = Some(format!("{base}/dl/"));
+        }
+        let plan = || -> Value {
+            let (_, body) = http(&h, "GET", "/api/setup_plan", &[("X-Rig-Token", &h.token)], b"");
+            serde_json::from_str(&body).unwrap()
+        };
+        // the dry run says what will happen, and nothing has been fetched for it
+        let before = plan();
+        let todo: Vec<String> = before["steps"].as_array().unwrap().iter().filter(|s| s["status"] == "todo").map(|s| s["id"].as_str().unwrap().to_string()).collect();
+        assert_eq!(todo, vec!["core:RED4ext", "core:Redscript", "core:ArchiveXL", "core:TweakXL", "core:Codeware", "backup"], "{before}");
+        assert_eq!(before["steps"][2]["status"], "done", "CET counts as there");
+        assert_eq!(before["changes"], 5);
+        assert!(hits.lock().unwrap().is_empty(), "a dry run never goes online");
+        // the welcome list says the same in one word
+        let (_, wl) = http(&h, "GET", "/api/welcome", &[("X-Rig-Token", &h.token)], b"");
+        let row = serde_json::from_str::<Value>(&wl).unwrap()["games"].as_array().unwrap().iter().find(|r| r["appid"] == "plain1").cloned().unwrap();
+        assert_eq!((row["verdict"].as_str(), row["detail"].as_str()), (Some("needs_core"), Some("5")));
+
+        api(&h, "/api/full_setup", json!({ "appid": "plain1" }));
+        wait_until("setup finished", || plan()["run"]["finished"] == true);
+        for (f, want) in [("red4ext/RED4ext.dll", "r"), ("bin/x64/winmm.dll", "w"), ("engine/tools/scc.exe", "s"), ("red4ext/plugins/ArchiveXL/ArchiveXL.dll", "a"), ("red4ext/plugins/TweakXL/TweakXL.dll", "t"), ("red4ext/plugins/Codeware/Codeware.dll", "c"), ("r6/scripts/Codeware/Codeware.reds", "s"), ("bin/x64/plugins/cyber_engine_tweaks.asi", "mine")] {
+            assert_eq!(fs::read_to_string(dir.join(f)).unwrap_or_default(), want, "{f}");
+        }
+        assert!(!dir.join("RED4ext.pdb").exists() && !dir.join("x").exists(), "debug and macOS files stay out");
+        let run = plan()["run"].clone();
+        let status: Vec<(String, String)> = run["steps"].as_array().unwrap().iter().map(|s| (s["id"].as_str().unwrap().to_string(), s["status"].as_str().unwrap().to_string())).collect();
+        assert!(status.iter().filter(|(id, _)| id.starts_with("core:")).all(|(_, s)| s == "done"), "{status:?}");
+        assert_eq!(run["steps"][0]["detail"], "1.30.0", "the version that went in");
+        // they are library mods under their own names, so they can be turned off, updated and removed like any other
+        let g = h.state.read().unwrap().games.last().unwrap().clone();
+        let names: Vec<String> = library_of(&g).unwrap().mods().into_iter().map(|m| m.name).collect();
+        assert_eq!(names, vec!["RED4ext", "Redscript", "ArchiveXL", "TweakXL", "Codeware"]);
+        assert!(last_log(&h).contains("Setup complete"), "{}", last_log(&h));
+        // the list is green now, and a second run fetches nothing
+        assert_eq!(plan()["changes"], 0);
+        let n = hits.lock().unwrap().len();
+        api(&h, "/api/full_setup", json!({ "appid": "plain1" }));
+        wait_until("second run", || h.state.read().unwrap().logs.iter().filter(|l| l.message.contains("Setup complete")).count() == 2);
+        assert_eq!(hits.lock().unwrap().len(), n);
+        assert_eq!(library_of(&g).unwrap().mods().len(), 5, "nothing twice");
+    }
+
+    #[test]
+    fn a_core_mod_that_cannot_be_had_does_not_stop_the_others() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("makemoddable2");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("bin/x64")).unwrap();
+        fs::write(dir.join("bin/x64/Cyberpunk2077.exe"), b"MZ").unwrap();
+        // only RED4ext is published (and Codeware's release has nothing usable); GitHub knows none of the others
+        let r4 = zip_of(&h, "r4", &[("red4ext/RED4ext.dll", "r")]);
+        let (base, _) = github::fake::start_many(vec![("wopss/RED4ext", "v1.30.0", vec![("red4ext-1.30.0.zip", r4)]), ("psiberx/cp2077-codeware", "v1.20.6", vec![("Codeware-1.20.6-pdb.zip", vec![1])])]);
+        {
+            let mut st = h.state.write().unwrap();
+            st.github_api = base.clone();
+            st.github_allow = Some(format!("{base}/dl/"));
+        }
+        api(&h, "/api/full_setup", json!({ "appid": "plain1" }));
+        wait_until("finished", || h.state.read().unwrap().setup_run.as_ref().map(|r| r.finished).unwrap_or(false));
+        assert!(dir.join("red4ext/RED4ext.dll").is_file());
+        let run = h.state.read().unwrap().setup_run.clone().unwrap();
+        let of = |id: &str| run.steps.iter().find(|s| s.id == id).unwrap().clone();
+        assert_eq!(of("core:RED4ext").status, "done");
+        assert_eq!(of("core:TweakXL").status, "failed");
+        assert!(of("core:Codeware").detail.contains("no file Gantry recognises"), "{:?}", of("core:Codeware"));
+        assert!(last_log(&h).contains("open item"), "{}", last_log(&h));
     }
 
     #[test]

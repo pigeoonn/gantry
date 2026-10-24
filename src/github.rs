@@ -208,6 +208,38 @@ pub mod fake {
         (base, hits)
     }
 
+    /// One repository of [`start_many`]: `owner/repo`, the tag of its release and the release's files.
+    pub type Repo<'a> = (&'a str, &'a str, Vec<(&'a str, Vec<u8>)>);
+    type OwnedRepo = (String, String, Vec<(String, Vec<u8>)>);
+
+    /// Several repositories, each with one release.
+    pub fn start_many(repos: Vec<Repo>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", server.server_addr().to_ip().unwrap());
+        let hits = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (h2, b2) = (hits.clone(), base.clone());
+        let repos: Vec<OwnedRepo> = repos.into_iter().map(|(r, t, f)| (r.to_string(), t.to_string(), f.into_iter().map(|(n, d)| (n.to_string(), d)).collect())).collect();
+        std::thread::spawn(move || {
+            for req in server.incoming_requests() {
+                let url = req.url().to_string();
+                h2.lock().unwrap().push(url.clone());
+                let latest = repos.iter().find(|(r, _, _)| url == format!("/repos/{r}/releases/latest"));
+                let file = repos.iter().flat_map(|(r, _, f)| f.iter().map(move |x| (r, x))).find(|(r, (n, _))| url == format!("/dl/{r}/{n}"));
+                let body = if let Some((r, tag, files)) = latest {
+                    let assets: Vec<String> = files.iter().map(|(n, d)| format!(r#"{{"name":"{n}","size":{},"browser_download_url":"{b2}/dl/{r}/{n}"}}"#, d.len())).collect();
+                    format!(r#"{{"tag_name":"{tag}","name":"Release","html_url":"https://github.com/{r}/releases/tag/{tag}","assets":[{}]}}"#, assets.join(",")).into_bytes()
+                } else if let Some((_, (_, d))) = file {
+                    d.clone()
+                } else {
+                    let _ = req.respond(tiny_http::Response::from_string(r#"{"message":"Not Found"}"#).with_status_code(404));
+                    continue;
+                };
+                let _ = req.respond(tiny_http::Response::from_data(body));
+            }
+        });
+        (base, hits)
+    }
+
     pub fn start_tagged(owner: &str, repo: &str, tag: &str, files: Vec<(&str, Vec<u8>)>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
         let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
         let base = format!("http://{}", server.server_addr().to_ip().unwrap());

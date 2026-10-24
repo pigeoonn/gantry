@@ -12,6 +12,8 @@ pub enum Verdict {
     NeedsLoader(&'static str),
     /// An Unreal game without UE4SS.
     NeedsUe4ss,
+    /// A game with core mods (Cyberpunk's RED4ext and the others, a script extender) that are not there yet: how many.
+    NeedsCore(usize),
     /// The game has anti-cheat; Gantry will not put mods into it.
     Protected(String),
 }
@@ -19,6 +21,11 @@ pub enum Verdict {
 /// Decide from what is on disk: the Unity facts (if any), the engine name, whether UE4SS is there,
 /// the loader a support entry recommends (may be empty) and the anti-cheat found in the folder.
 pub fn verdict(unity: Option<&UnityInfo>, engine: &str, ue4ss: bool, recommended: &str, anti_cheat: Option<&str>) -> Verdict {
+    verdict_with_cores(unity, engine, ue4ss, recommended, anti_cheat, 0)
+}
+
+/// The same, knowing how many of the game's core mods are missing.
+pub fn verdict_with_cores(unity: Option<&UnityInfo>, engine: &str, ue4ss: bool, recommended: &str, anti_cheat: Option<&str>, missing_cores: usize) -> Verdict {
     if let Some(ac) = anti_cheat {
         return Verdict::Protected(ac.to_string());
     }
@@ -38,6 +45,9 @@ pub fn verdict(unity: Option<&UnityInfo>, engine: &str, ue4ss: bool, recommended
     if engine.to_lowercase().contains("unreal") && !ue4ss {
         return Verdict::NeedsUe4ss;
     }
+    if missing_cores > 0 {
+        return Verdict::NeedsCore(missing_cores);
+    }
     Verdict::Ready
 }
 
@@ -47,6 +57,7 @@ pub fn row(appid: &str, name: &str, engine: &str, mods: usize, v: &Verdict) -> V
         Verdict::Ready => ("ready", "", String::new()),
         Verdict::NeedsLoader(k) => ("needs_loader", *k, String::new()),
         Verdict::NeedsUe4ss => ("needs_ue4ss", "", String::new()),
+        Verdict::NeedsCore(n) => ("needs_core", "", n.to_string()),
         Verdict::Protected(ac) => ("protected", "", ac.clone()),
     };
     json!({ "appid": appid, "name": name, "engine": engine, "mods": mods, "verdict": code, "kind": kind, "detail": extra })
@@ -73,6 +84,9 @@ mod tests {
         assert_eq!(verdict(None, "Unreal Engine 5.4", false, "", None), Verdict::NeedsUe4ss);
         assert_eq!(verdict(None, "Unreal Engine 5.4", true, "", None), Verdict::Ready);
         assert_eq!(verdict(None, "Standard / Non-UE", false, "", None), Verdict::Ready);
+        assert_eq!(verdict_with_cores(None, "Standard / Non-UE", false, "", None, 2), Verdict::NeedsCore(2));
+        assert_eq!(verdict_with_cores(None, "Standard / Non-UE", false, "", Some("EAC"), 2), Verdict::Protected("EAC".into()), "anti-cheat still wins");
+        assert_eq!(row("1", "G", "x", 0, &Verdict::NeedsCore(3))["detail"], "3");
     }
 
     #[test]

@@ -959,6 +959,16 @@
   .wl-row .wl-name small { display: block; font-weight: 500; color: var(--text-muted); font-size: 11px; }
   .wl-chip { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-2); white-space: nowrap; }
   .wl-chip.ready { color: var(--acc-fg, var(--acc)); background: var(--acc-soft); border-color: transparent; }
+  .su-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .su-step { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; padding: 8px 10px; border-radius: 10px; background: var(--glass-2, rgba(255,255,255,.04)); }
+  .su-step .su-ico { font-weight: 800; text-align: center; }
+  .su-step.done .su-ico { color: var(--acc-fg, var(--acc)); }
+  .su-step.failed .su-ico { color: color-mix(in srgb, #f2706b, var(--ink) var(--lift)); }
+  .su-step.doing .su-ico { color: color-mix(in srgb, #7cc4ff, var(--ink) var(--lift)); }
+  .su-step.skip { opacity: .65; }
+  .su-step small { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+  .su-sum { font-size: 13px; color: var(--text-muted); }
+  .wl-chip.needs_core { color: color-mix(in srgb, #f0b44c, var(--ink) var(--lift)); }
   .wl-chip.needs_loader, .wl-chip.needs_ue4ss { color: color-mix(in srgb, #f0b44c, var(--ink) var(--lift)); }
   .wl-chip.protected { color: color-mix(in srgb, #f2706b, var(--ink) var(--lift)); }
   .wl-chip.working { color: color-mix(in srgb, #7cc4ff, var(--ink) var(--lift)); }
@@ -1391,7 +1401,7 @@
       </section>
 
       <section class="pane" id="paneTools">
-        <button class="btn btn-play tool-hero ue-only" onclick="fullSetup()" title="Installs and configures UE4SS, backs up saves, syncs Steam launch options and verifies everything">🚀 Full Setup (1 click)</button>
+        <button class="btn btn-play tool-hero" onclick="openSetup()" title="Installs what this game needs before mods work, backs up saves, sets the Steam launch options and checks everything">🚀 Make this game moddable</button>
         <div class="tool-group">
           <h3>SETUP &amp; REPAIR</h3>
           <div class="tool-grid">
@@ -1687,6 +1697,14 @@
   <div class="glass-card modal-window" style="width:min(560px,94vw);">
     <div class="modal-hdr"><span>✨ What's new in Gantry</span><button class="btn" onclick="closeNews()" aria-label="Close">✕</button></div>
     <div id="newsBody" data-dyn style="z-index:2; display:flex; flex-direction:column; gap:10px; overflow-y:auto; min-height:0;"></div>
+  </div>
+</div>
+
+<!-- MAKE THIS GAME MODDABLE: what will be done, then ticked off as it is -->
+<div class="modal-backdrop" id="setupModal" onclick="if (event.target === this) closeSetup()">
+  <div class="glass-card modal-window" style="width:min(560px,calc(94 * var(--vw))); max-height:calc(86 * var(--vh));">
+    <div class="modal-hdr"><span id="setupTitle" data-dyn>🚀 Make this game moddable</span><button class="btn" onclick="closeSetup()" aria-label="Close">✕</button></div>
+    <div id="setupBody" data-dyn style="z-index:2; display:flex; flex-direction:column; gap:8px; overflow:auto;"></div>
   </div>
 </div>
 
@@ -3670,12 +3688,12 @@
     const ready = rows.filter(r => r.verdict === 'ready').length;
     const chip = r => {
       if (working[r.appid]) return `<span class="wl-chip working">${t('Setting up…')}</span>`;
-      return `<span class="wl-chip ${r.verdict}">${({ ready: t('Ready for mods'), needs_loader: t('Needs a mod loader'), needs_ue4ss: t('Needs UE4SS'), protected: t('Protected by {}', r.detail) })[r.verdict]}</span>`;
+      return `<span class="wl-chip ${r.verdict}">${({ ready: t('Ready for mods'), needs_loader: t('Needs a mod loader'), needs_ue4ss: t('Needs UE4SS'), needs_core: tp(Number(r.detail), 'Needs {} core mod', 'Needs {} core mods'), protected: t('Protected by {}', r.detail) })[r.verdict]}</span>`;
     };
     const act = r => {
       if (working[r.appid]) return '';
       if (r.verdict === 'needs_loader') return `<button class="btn" onclick='welcomeSetup(${JS(r.appid)}, ${JS(r.kind)})'>${t('Set up')}</button>`;
-      if (r.verdict === 'needs_ue4ss') return `<button class="btn" onclick='welcomeOpen(${JS(r.appid)})'>${t('Open')}</button>`;
+      if (r.verdict === 'needs_ue4ss' || r.verdict === 'needs_core') return `<button class="btn" onclick='closeModals(); openSetup(${JS(r.appid)})'>${t('Set up')}</button>`;
       return '';
     };
     body.innerHTML = `<div class="wl-sum">${tp(rows.length, '<b>{}</b> game found', '<b>{}</b> games found')} · ${t('{} ready for mods', `<b>${ready}</b>`)}${todo.length ? ' · ' + tp(todo.length, '{} can be set up now', '{} can be set up now') : ''}</div>` +
@@ -3685,10 +3703,6 @@
   async function openWelcome() {
     document.getElementById('welcomeModal').classList.add('open');
     renderWelcome(await loadWelcome(), {});
-  }
-  function welcomeOpen(appid) {
-    const idx = appState.games.findIndex(g => g.appid === appid);
-    if (idx >= 0) { ipcSend('/api/select', { index: idx }); closeModals(); setTab('tools'); showToast(t('Full Setup is under Tools.')); }
   }
   async function welcomeWait(appid, ms) {
     const until = Date.now() + ms;
@@ -3902,16 +3916,83 @@
     if (confirm(t('Wipe UE4SS and ALL installed mods for this game?'))) ipcSend('/api/wipe_mods');
   }
 
-  function fullSetup() {
-    const g = appState.games[appState.selected_idx];
-    if (!g) return;
-    const viaSteam = !g.is_custom && !g.source;
-    const msg = viaSteam
-      ? t('Full Setup will install/repair UE4SS, back up saves and update Steam launch options. If Steam is open it will be closed and restarted. Continue?')
-      : t('Full Setup will install/repair UE4SS and back up saves. Continue?');
-    if (!confirm(msg)) return;
-    ipcSend('/api/full_setup', { close_steam: viaSteam });
+  // ---------- Make this game moddable: a dry run first, then the checklist ticks itself off ----------
+  let setupFor = null, setupTimer = null, setupStarted = false;
+  async function loadSetup() {
+    const q = setupFor ? '?appid=' + encodeURIComponent(setupFor) : '';
+    try { return await (await fetch('/api/setup_plan' + q)).json(); } catch (e) { return null; }
   }
+  async function openSetup(appid) {
+    const g = appState.games[appState.selected_idx];
+    setupFor = appid || (g && g.appid) || null;
+    setupStarted = false;
+    if (!setupFor) return;
+    document.getElementById('setupModal').classList.add('open');
+    document.getElementById('setupBody').innerHTML = `<div class="su-sum">${t('Checking what this game needs…')}</div>`;
+    renderSetup(await loadSetup());
+  }
+  function closeSetup() {
+    document.getElementById('setupModal').classList.remove('open');
+    clearTimeout(setupTimer);
+    setupTimer = null;
+  }
+  function renderSetup(d) {
+    const body = document.getElementById('setupBody');
+    if (!d || !d.steps) { body.innerHTML = `<div class="su-sum">${t('Could not reach Gantry. Try again in a moment.')}</div>`; return; }
+    if (d.not_installed) { body.innerHTML = `<div class="su-sum">${t('This game is not installed, so there is nothing to set up yet.')}</div><div class="wl-foot"><button class="btn" onclick="closeSetup()">${t('Close')}</button></div>`; return; }
+    document.getElementById('setupTitle').textContent = d.name ? t('🚀 Make {} moddable', d.name) : t('🚀 Make this game moddable');
+    if (d.blocked) {
+      body.innerHTML = `<div class="hb-line bad"><span class="hb-dot"></span><span class="hb-text">${escapeHtml(t('This game uses {}. Modified files can get your account banned, so play without mods.', d.blocked))}</span></div><div class="wl-foot"><button class="btn" onclick="closeSetup()">${t('Close')}</button></div>`;
+      return;
+    }
+    if (setupStarted && d.run && d.run.finished && d.run.note) {
+      body.innerHTML = `<div class="hb-line warn"><span class="hb-dot"></span><span class="hb-text">${escapeHtml(t(d.run.note, d.run.note_arg || ''))}</span></div><div class="wl-foot"><button class="btn" onclick="closeSetup()">${t('Close')}</button></div>`;
+      return;
+    }
+    const running = setupStarted && (!d.run || !d.run.finished);
+    const steps = (setupStarted && d.run ? d.run.steps : d.steps) || [];
+    const ico = { done: '✓', todo: '○', doing: '…', failed: '✕', skip: '–' };
+    const note = s => {
+      if (s.status === 'failed' && s.detail) return escapeHtml(s.detail);
+      if (s.status === 'done' && s.detail && s.id.startsWith('core:')) return escapeHtml(t('Version {}', s.detail));
+      if (s.status === 'done' && s.id === 'backup' && s.detail) return escapeHtml(tp(Number(s.detail), '{} save file', '{} save files'));
+      if (s.status === 'todo' && s.id === 'steam' && s.detail === 'steam_running') return escapeHtml(t('Steam is open: it will be closed and started again for this.'));
+      if (s.status === 'todo' && s.id.startsWith('core:')) return escapeHtml(t('Added to your mod list, so it can be turned off, updated or removed like any mod.'));
+      if (s.status === 'skip' && s.id === 'backup') return escapeHtml(t('No saves found yet.'));
+      return s.detail && s.status === 'skip' ? escapeHtml(s.detail) : '';
+    };
+    const list = `<ul class="su-list">${steps.map(s => { const n = note(s); return `<li class="su-step ${s.status}"><span class="su-ico" aria-hidden="true">${ico[s.status] || '○'}</span><span>${escapeHtml(s.arg ? t(s.text, s.arg) : t(s.text))}${n ? `<small>${n}</small>` : ''}</span></li>`; }).join('')}</ul>`;
+    let sum, btns;
+    if (running) {
+      sum = t('Working on it. You can close this window; the setup keeps going.');
+      btns = `<button class="btn" onclick="closeSetup()">${t('Close')}</button>`;
+    } else if (setupStarted) {
+      const failed = steps.filter(s => s.status === 'failed').length;
+      sum = failed ? tp(failed, '{} step did not work. The others are done; the log says more.', '{} steps did not work. The others are done; the log says more.') : t('Done. This game is ready for mods: press Play.');
+      btns = `<button class="btn btn-play" onclick="closeSetup()">${t('Close')}</button>`;
+    } else if (d.busy) {
+      sum = t('A setup is already running. Wait for it to finish.');
+      btns = `<button class="btn" onclick="closeSetup()">${t('Close')}</button>`;
+    } else if (!d.changes) {
+      sum = t('Nothing is missing: this game is ready for mods.');
+      btns = `<button class="btn" onclick="setupGo()">${t('Check again and back up saves')}</button><button class="btn btn-play" onclick="closeSetup()">${t('Close')}</button>`;
+    } else {
+      sum = tp(d.changes, 'Gantry will make {} change. Nothing else in the game is touched.', 'Gantry will make {} changes. Nothing else in the game is touched.');
+      btns = `<button class="btn btn-play" onclick="setupGo()">${t('Do it')}</button><button class="btn" onclick="closeSetup()">${t('Cancel')}</button>`;
+    }
+    body.innerHTML = `<div class="su-sum">${escapeHtml(sum)}</div>${list}<div class="wl-foot">${btns}</div>`;
+    if (running) { clearTimeout(setupTimer); setupTimer = setTimeout(async () => { if (document.getElementById('setupModal').classList.contains('open')) renderSetup(await loadSetup()); }, 900); }
+  }
+  async function setupGo() {
+    const d = await loadSetup();
+    if (!d || d.busy) return renderSetup(d);
+    const steam = (d.steps || []).find(s => s.id === 'steam' && s.status === 'todo');
+    setupStarted = true;
+    ipcSend('/api/full_setup', { appid: setupFor, close_steam: !!(steam && steam.detail === 'steam_running') });
+    await new Promise(r => setTimeout(r, 300));
+    renderSetup(await loadSetup());
+  }
+  function fullSetup() { openSetup(); }
 
   function applySteamLaunch(force, steamRunning) {
     if (steamRunning && !confirm(t('Steam will be closed and restarted to change this setting. Continue?'))) return;
@@ -4271,7 +4352,7 @@
       [t('▶ Play Game'), () => ipcSend('/api/play', {}), !!g],
       [t('⏹ Stop'), () => ipcSend('/api/stop', {}), !!appState.is_running],
       [t('○ Play without mods'), () => ipcSend('/api/play_vanilla', {}), !!g],
-      [t('🚀 Full Setup (1 click)'), fullSetup, !!g],
+      [t('🚀 Make this game moddable'), fullSetup, !!g],
       [t('👋 Check my games'), openWelcome, true],
       [t('⬇ Downloads'), openDownloads, true],
       [t('📊 Play time and timeline'), () => setTab('activity'), true],
@@ -4597,7 +4678,7 @@
         pack_note: () => t('Tip for this game: {}', a[0]),
       }[i.code] || (() => i.code))();
     };
-    const fix = (i) => ({
+    const fix = (i) => i.code === 'needs_framework' ? `<button class="btn btn-play" onclick="openSetup()">${t('Install them')}</button>` : ({
       stop: `<button class="btn btn-danger" onclick="ipcSend('/api/stop', {})">${t('Stop the game')}</button>`,
       launch_option: `<button class="btn btn-play" onclick="fixLaunchOption()">${t('Fix the launch option')}</button>`,
       vanilla: `<button class="btn" onclick="modLibPurge()">${t('○ Back to vanilla')}</button>`,

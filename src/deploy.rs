@@ -736,6 +736,10 @@ impl Library {
         // BepInEx (a Unity mod loader) installed or about to be: its folder names are never wrappers
         let has_bepinex = self.exists_ci(Path::new(""), "BepInEx") || self.load().mods.iter().any(|m| m.files.iter().any(|f| f.starts_with("BepInEx/")));
         let bepinex_dir = |n: &str| ["bepinex", "plugins", "patchers", "monomod", "config", "core"].contains(&n.to_lowercase().as_str());
+        // Cyberpunk 2077: the folders its mods are laid out from, even before the first mod made them (a RED4ext plugin
+        // zipped as `red4ext/plugins/...` must not lose its `red4ext`)
+        let cyberpunk = self.exists_ci(Path::new("bin/x64"), "Cyberpunk2077.exe");
+        let cyberpunk_dir = |n: &str| ["red4ext", "r6", "engine", "bin", "archive", "mods"].contains(&n.to_lowercase().as_str());
         let mut strip = 0usize;
         loop {
             let mut tops: BTreeSet<String> = BTreeSet::new();
@@ -750,7 +754,7 @@ impl Library {
             }
             if strip < 4 && tops.len() == 1 && !loose {
                 let top = tops.iter().next().expect("one element").clone();
-                if self.exists_ci(Path::new(""), &top) || self.find_parent_of(&top).is_some() || (has_bepinex && bepinex_dir(&top)) {
+                if self.exists_ci(Path::new(""), &top) || self.find_parent_of(&top).is_some() || (has_bepinex && bepinex_dir(&top)) || (cyberpunk && cyberpunk_dir(&top)) {
                     break; // a real game folder, keep it
                 }
                 strip += 1; // a wrapper folder named after the mod
@@ -2772,6 +2776,28 @@ mod tests {
         write(&other.join("Other.exe"), "MZ");
         let olib = Library::locate(&other, &d.join("data"), "2");
         assert_eq!(olib.preview(&stage(&d, "o", &[("info.json", "{\"name\": \"x\"}"), ("archives/a.archive", "x")])).unwrap().target, "");
+    }
+
+    #[test]
+    fn cyberpunk_mods_keep_their_top_folder_even_before_the_game_has_it() {
+        let d = TempDir::new("cp-top");
+        let game = d.join("lib/common/Cyberpunk 2077");
+        write(&game.join("bin/x64/Cyberpunk2077.exe"), "MZ");
+        let lib = Library::locate(&game, &d.join("data"), "1091500");
+        // a RED4ext plugin before RED4ext itself made the folder, and Redscript into a game without `engine`
+        let plugin = stage(&d, "pl", &[("red4ext/plugins/Thing/Thing.dll", "x")]);
+        let m = lib.add_with(&plugin, "Thing", "Thing-1.zip", None, "1").unwrap();
+        assert_eq!(m.files, vec!["red4ext/plugins/Thing/Thing.dll"]);
+        let rs = stage(&d, "rs", &[("engine/tools/scc.exe", "s")]);
+        assert_eq!(lib.add_with(&rs, "Redscript", "redscript.zip", None, "1").unwrap().files, vec!["engine/tools/scc.exe"]);
+        // a real wrapper folder is still taken off
+        let wrapped = stage(&d, "wr", &[("Thing-1.2/red4ext/plugins/Other/Other.dll", "x")]);
+        assert_eq!(lib.add_with(&wrapped, "Other", "Other.zip", None, "1").unwrap().files, vec!["red4ext/plugins/Other/Other.dll"]);
+        // other games keep the old rule: one unknown folder is a wrapper
+        let other = d.join("lib/common/Other");
+        write(&other.join("Other.exe"), "MZ");
+        let olib = Library::locate(&other, &d.join("data"), "2");
+        assert_eq!(olib.add_with(&stage(&d, "o", &[("engine/a.dll", "x")]), "A", "a.zip", None, "1").unwrap().files, vec!["a.dll"]);
     }
 
     #[test]

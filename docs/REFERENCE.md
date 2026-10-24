@@ -95,10 +95,21 @@ Logs of fatal errors: `~/.cache/rig/rig.log`. Config: `~/.config/protonrig/rig_c
 - **Running-game detection** via `/proc`, whoever started the game, so *Stop* works and Wine's
   registry is never edited under a live prefix.
 
-## One-click Full Setup
-*🚀 Full Setup* runs, for the selected game: install UE4SS if missing (the latest `zDEV-UE4SS` release is looked up on GitHub, downloaded once and cached; drop your own build into `~/.cache/rig/injectors/UE4SS_Custom.zip` to force it) →
-configure it for the detected engine version (layout templates, a curated per-game config when UE4SS ships one for that game, ini, mods.txt, registry) → back up saves →
-sync Steam launch options (Steam games only) → verify with the doctor and report. Safe to re-run.
+## Make this game moddable
+*🚀 Make this game moddable* (Tools tab, the welcome list's *Set up*, or *Install them* on a "needs RED4ext" health line)
+first shows what it will do, with what is already there ticked off, and asks once. Then, for the selected game:
+
+- **Unity games:** the mod loader that fits (BepInEx 5, BepInEx 6 or MelonLoader).
+- **Unreal Engine games:** UE4SS if missing (the latest `zDEV-UE4SS` release is looked up on GitHub, downloaded once and
+  cached; drop your own build into `~/.cache/rig/injectors/UE4SS_Custom.zip` to force it), then configured for the
+  detected engine version (layout templates, a curated per-game config when UE4SS ships one, ini, mods.txt, registry).
+- **Cyberpunk 2077:** RED4ext, Redscript, Cyber Engine Tweaks, ArchiveXL, TweakXL and Codeware. **Skyrim SE:** SKSE64.
+  **Fallout 4:** F4SE. Each comes from the newest release on its official GitHub page (no website clicks, no Nexus
+  account needed) and becomes a normal mod in your list, so it can be turned off, updated or removed. The ones you already
+  have, however you installed them, are left alone.
+- Then saves are backed up, Steam's launch options are made to match (Steam games only; Steam is closed and restarted
+  when it is open), and everything is checked again. The window ticks each step off; a step that fails says why and the
+  others still run. Safe to re-run.
 
 ## Save Guard
 *💾 Save Guard* snapshots a game's save folders automatically before every launch (skipped when nothing changed), on request,

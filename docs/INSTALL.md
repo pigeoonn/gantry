@@ -167,9 +167,10 @@ cargo build --release
      without it.
    * **🌐 Nexus Mods:** paste your personal API key (Nexus account settings → API Access) to download mods
      and be told about updates, and let Gantry open the website's *Mod Manager Download* links.
-4. Pick a game, then drag mod archives onto the window. Unreal Engine games get a **Full Setup** button
-   that installs and configures UE4SS in one click; every other game uses the **Mod Library**, which keeps
-   your mods safe and can always put the game back to how it was.
+4. Pick a game and press **🚀 Make this game moddable** (Tools tab): it puts in what the game needs before mods
+   work (a mod loader, UE4SS, or Cyberpunk's RED4ext and friends) after showing you the list. Then drag mod
+   archives onto the window. They go into the **Mod Library**, which keeps your mods safe and can always put the
+   game back to how it was.
 
 Gantry never edits Steam's launch options behind your back: it asks, closes Steam first, and keeps a backup.
 Games with an anti-cheat (Easy Anti-Cheat, BattlEye) are refused unless you explicitly confirm.
