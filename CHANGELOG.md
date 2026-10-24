@@ -8,6 +8,12 @@
   TweakXL and Codeware (SKSE64 for Skyrim SE, F4SE for Fallout 4), each from its official GitHub releases, with no
   website clicks and no Nexus account. They land in the mod list like any mod. Then saves are backed up and Steam's
   launch options set. The welcome list offers it for games with missing core mods, and so does the health bar.
+- **Before you play:** pressing Play first checks, in a few milliseconds, for what would make the game start broken:
+  core mods your mods need, a mod loader, the launch option mods need while Steam is open (Gantry can only write it with
+  Steam closed), Steam still updating the game, mods in a game with anti-cheat, the same mod twice, a nearly full drive.
+  If something is found, one window lists it with **Fix and play** (installs what is missing, closes Steam to set the
+  launch option, or plays without mods for anti-cheat games), *Play anyway* and *Cancel*. Nothing found: the game just
+  starts, as before. Core mods that need other core mods (ArchiveXL needs RED4ext) bring them along.
 - **Fixed:** a Cyberpunk mod zipped as only `red4ext/...` or `engine/...` lost that folder when the game did not have it
   yet, and landed in the wrong place.
 

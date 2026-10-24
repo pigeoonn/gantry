@@ -2534,31 +2534,8 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
     if !needs.is_empty() {
         out.push(issue("needs", "warn", "", vec![needs.join(", ")]));
     }
-    // the same mod twice (two versions of one Nexus page, say) is a common reason for scripts that do not compile
-    {
-        let mut groups: std::collections::BTreeMap<String, Vec<String>> = Default::default();
-        for m in mods.iter().filter(|m| m.enabled) {
-            // one Nexus page can offer several files at once (a head and a body, say): only the same name twice is a duplicate
-            let norm = |s: &str| s.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
-            let key = m.nexus.as_ref().filter(|n| n.valid()).map(|n| format!("nx:{}:{}:{}", n.game, n.mod_id, norm(&m.name))).or_else(|| m.thunderstore.as_ref().map(|t| format!("ts:{}", t.full_name().to_lowercase()))).or_else(|| m.modio.as_ref().map(|r| format!("mio:{}:{}", r.game_id, r.mod_id)));
-            if let Some(k) = key {
-                groups.entry(k).or_default().push(if m.version.is_empty() { m.name.clone() } else { format!("{} v{}", m.name, m.version) });
-            }
-        }
-        for names in groups.values().filter(|v| v.len() > 1).take(3) {
-            out.push(issue("duplicate_mod", "warn", "", vec![names.join(", ")]));
-        }
-    }
-    // core mods (RED4ext, ArchiveXL, a script extender ...) that the enabled mods ask for and the game does not have
-    {
-        let enabled: Vec<String> = mods.iter().filter(|m| m.enabled).flat_map(|m| m.files.iter().map(|f| if m.target.is_empty() { f.clone() } else { format!("{}/{}", m.target, f) })).collect();
-        let fw = frameworks::missing(&dir, &enabled);
-        if !fw.is_empty() {
-            let mut i = issue("needs_framework", "warn", "", fw.iter().map(|x| x.name.to_string()).collect());
-            i["links"] = json!(fw.iter().map(|x| json!({ "name": x.name, "url": x.page })).collect::<Vec<_>>());
-            out.push(i);
-        }
-    }
+    out.extend(duplicate_issues(&mods));
+    out.extend(framework_issue(&dir, &mods));
     if status["dirty"].as_bool().unwrap_or(false) && !mods.is_empty() && drift == 0 {
         out.push(issue("dirty", "info", "deploy", vec![]));
     }
@@ -2567,6 +2544,121 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
     info["running"] = json!(running);
     info["loader"] = json!(loader);
     (out, info)
+}
+
+/// The same mod twice (two versions of one Nexus page, say) is a common reason for scripts that do not compile.
+fn duplicate_issues(mods: &[deploy::LibMod]) -> Vec<Value> {
+    let mut groups: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for m in mods.iter().filter(|m| m.enabled) {
+        // one Nexus page can offer several files at once (a head and a body, say): only the same name twice is a duplicate
+        let norm = |s: &str| s.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
+        let key = m.nexus.as_ref().filter(|n| n.valid()).map(|n| format!("nx:{}:{}:{}", n.game, n.mod_id, norm(&m.name))).or_else(|| m.thunderstore.as_ref().map(|t| format!("ts:{}", t.full_name().to_lowercase()))).or_else(|| m.modio.as_ref().map(|r| format!("mio:{}:{}", r.game_id, r.mod_id)));
+        if let Some(k) = key {
+            groups.entry(k).or_default().push(if m.version.is_empty() { m.name.clone() } else { format!("{} v{}", m.name, m.version) });
+        }
+    }
+    groups.values().filter(|v| v.len() > 1).take(3).map(|names| issue("duplicate_mod", "warn", "", vec![names.join(", ")])).collect()
+}
+
+/// Core mods (RED4ext, ArchiveXL, a script extender ...) that the enabled mods ask for and the game does not have.
+fn framework_issue(dir: &Path, mods: &[deploy::LibMod]) -> Option<Value> {
+    let enabled: Vec<String> = mods.iter().filter(|m| m.enabled).flat_map(|m| m.files.iter().map(|f| if m.target.is_empty() { f.clone() } else { format!("{}/{}", m.target, f) })).collect();
+    let fw = frameworks::missing(dir, &enabled);
+    if fw.is_empty() {
+        return None;
+    }
+    let mut i = issue("needs_framework", "warn", "setup", fw.iter().map(|x| x.name.to_string()).collect());
+    i["links"] = json!(fw.iter().map(|x| json!({ "name": x.name, "url": x.page })).collect::<Vec<_>>());
+    Some(i)
+}
+
+/// Less free space than this on the game's drive is worth a word before playing (saves, shader caches, logs).
+const LOW_DISK: u64 = 1 << 30;
+
+/// What would make pressing Play go wrong, checked quickly (no logs are read): Steam updating the game, mods in a game
+/// with anti-cheat, the launch option mods need while Steam is open (Gantry can only write it with Steam closed),
+/// missing core mods or loader, the same mod twice, a nearly full drive. Each has a `fix` when Gantry can fix it.
+fn preflight(state: &SharedState, g: &GameEntry) -> Vec<Value> {
+    let dir = PathBuf::from(&g.game_dir);
+    let mut out: Vec<Value> = Vec::new();
+    let upd = steam_update_of(g);
+    if upd.phase == steamlib::Phase::Updating {
+        out.push(issue("steam_updating", "bad", "", vec![upd.percent.map(|p| p.to_string()).unwrap_or_default()]));
+    }
+    let lib = library_of(g);
+    let mods = lib.as_ref().map(|l| l.mods()).unwrap_or_default();
+    let enabled = mods.iter().filter(|m| m.enabled).count();
+    let ac = deploy::anti_cheat(&dir);
+    if let Some(ac) = ac.filter(|_| enabled > 0) {
+        out.push(issue("anti_cheat", "bad", "vanilla", vec![ac.to_string()]));
+    }
+    // with Steam closed, Play writes the launch option itself; with Steam open it cannot, and the mods would not load
+    if !g.launches_directly() && enabled > 0 && steam_wanted(state, g) != "%command%" {
+        let info = steam_info(state, g);
+        if matches!(info.status.as_str(), "missing" | "stale") && info.steam_running {
+            out.push(issue("launch_option", "bad", "steam", vec![]));
+        }
+    }
+    if ac.is_none() {
+        if let Some(i) = framework_issue(&dir, &mods) {
+            out.push(i);
+        }
+        if enabled > 0 && loader_wanted(state, g).map(|w| !w.1).unwrap_or(false) {
+            out.push(issue("needs_loader", "warn", "setup", vec![]));
+        }
+    }
+    out.extend(duplicate_issues(&mods));
+    if let Some(free) = fsutil::free_bytes(&dir).filter(|f| *f < LOW_DISK) {
+        out.push(issue("low_disk", "warn", "", vec![fsutil::size_text(free)]));
+    }
+    let needs: Vec<String> = read_state(state).nexus.needs.iter().filter(|n| n.appid == g.appid).flat_map(|n| n.missing.iter().map(|m| m.name.clone())).collect();
+    if !needs.is_empty() {
+        out.push(issue("needs", "info", "", vec![needs.join(", ")]));
+    }
+    out.sort_by_key(|i| std::cmp::Reverse(level_rank(i["level"].as_str().unwrap_or(""))));
+    out
+}
+
+/// Fix what the pre-flight found (as many of `fixes` as apply), then play. "vanilla" plays without mods instead.
+fn fix_and_play(state: &SharedState, fixes: &[String]) {
+    let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
+        return log(state, "WARN", "Select an installed game first.");
+    };
+    if fixes.iter().any(|f| f == "vanilla") {
+        return play_without_mods(state);
+    }
+    if fixes.iter().any(|f| f == "setup") {
+        let dir = PathBuf::from(&g.game_dir);
+        // a core mod can need another (ArchiveXL lives in RED4ext's plugin folder): ask again after each round
+        let mut tried: HashSet<&str> = HashSet::new();
+        for _ in 0..3 {
+            let mods = library_of(&g).map(|l| l.mods()).unwrap_or_default();
+            let enabled: Vec<String> = mods.iter().filter(|m| m.enabled).flat_map(|m| m.files.iter().map(|f| if m.target.is_empty() { f.clone() } else { format!("{}/{}", m.target, f) })).collect();
+            let wanted: Vec<&str> = frameworks::missing(&dir, &enabled).iter().map(|m| m.name).filter(|n| !tried.contains(n)).collect();
+            if wanted.is_empty() {
+                break;
+            }
+            for core in frameworks::cores(&dir).into_iter().filter(|c| wanted.contains(&c.name)) {
+                tried.insert(core.name);
+                match install_core(state, &g, &core) {
+                    Ok(v) => log(state, "OK", format!("Installed {} {}.", core.name, v)),
+                    Err(e) => log(state, "WARN", e),
+                }
+            }
+        }
+        if let Some((kind, false)) = loader_wanted(state, &g) {
+            loader_exclusive(state, &g, |st| {
+                install_loader_inner(st, &g, kind, false);
+            });
+        }
+    }
+    if fixes.iter().any(|f| f == "steam") {
+        if let Err(e) = apply_steam_options(state, &g, false, true) {
+            // the game still starts; the line above the Play button keeps saying what is missing
+            log(state, "WARN", e);
+        }
+    }
+    play_game(state);
 }
 
 /// The answer for the game page: every issue, plus the loader's own state.
@@ -4137,6 +4229,12 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
                 },
             };
             return respond_json(req, 200, store_page(&state, &g, &ask).to_string());
+        }
+        "/api/preflight" => {
+            let Some(g) = selected_game(&state).filter(|g| g.is_installed) else { return respond_json(req, 200, json!({ "problems": [] }).to_string()) };
+            let t0 = Instant::now();
+            let problems = preflight(&state, &g);
+            return respond_json(req, 200, json!({ "appid": g.appid, "problems": problems, "ms": t0.elapsed().as_millis() as u64 }).to_string());
         }
         "/api/setup_plan" => {
             let g = match query_param(&query, "appid") {
@@ -5780,6 +5878,11 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         "/api/play" => {
             let state_bg = Arc::clone(state);
             thread::spawn(move || play_game(&state_bg));
+        }
+        "/api/play_fixed" => {
+            let fixes: Vec<String> = body.get("fixes").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).take(8).collect()).unwrap_or_default();
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || fix_and_play(&state_bg, &fixes));
         }
         "/api/play_vanilla" => {
             let state_bg = Arc::clone(state);
@@ -10266,6 +10369,52 @@ mod tests {
         wait_until("second run", || h.state.read().unwrap().logs.iter().filter(|l| l.message.contains("Setup complete")).count() == 2);
         assert_eq!(hits.lock().unwrap().len(), n);
         assert_eq!(library_of(&g).unwrap().mods().len(), 5, "nothing twice");
+    }
+
+    #[test]
+    fn play_is_checked_first_and_fix_and_play_puts_in_what_is_missing() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("preflight");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("bin/x64")).unwrap();
+        fs::write(dir.join("bin/x64/Cyberpunk2077.exe"), b"MZ").unwrap();
+        let check = || -> Vec<Value> {
+            let (_, body) = http(&h, "GET", "/api/preflight", &[("X-Rig-Token", &h.token)], b"");
+            let v: Value = serde_json::from_str(&body).unwrap();
+            assert!(v["ms"].as_u64().unwrap() < 200, "the check is quick: {v}");
+            v["problems"].as_array().unwrap().clone()
+        };
+        assert!(check().is_empty(), "a game without mods is fine");
+        // a mod that needs ArchiveXL, which the game lacks
+        let zip = zip_of(&h, "xl", &[("archive/pc/mod/Cat.archive", "A"), ("archive/pc/mod/Cat.archive.xl", "X")]);
+        assert_eq!(http(&h, "POST", "/api/drop_upload?name=Cat-1-1-0-1700000000.zip", &[("X-Rig-Token", &h.token)], &zip).0, 200);
+        wait_until("mod added", || api(&h, "/api/state", json!({}))["library"]["mods"].as_array().map(|m| m.len()) == Some(1));
+        let found = check();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!((found[0]["code"].as_str(), found[0]["fix"].as_str(), found[0]["args"][0].as_str()), (Some("needs_framework"), Some("setup"), Some("ArchiveXL")));
+        let ax = zip_of(&h, "ax", &[("red4ext/plugins/ArchiveXL/ArchiveXL.dll", "a")]);
+        let r4 = zip_of(&h, "r4", &[("red4ext/RED4ext.dll", "r"), ("bin/x64/winmm.dll", "w")]);
+        let (base, hits) = github::fake::start_many(vec![("psiberx/cp2077-archive-xl", "v1.27.5", vec![("ArchiveXL-1.27.5.zip", ax)]), ("wopss/RED4ext", "v1.30.0", vec![("red4ext-1.30.0.zip", r4)])]);
+        {
+            let mut st = h.state.write().unwrap();
+            st.github_api = base.clone();
+            st.github_allow = Some(format!("{base}/dl/"));
+        }
+        api(&h, "/api/play_fixed", json!({ "fixes": ["setup"] }));
+        wait_until("ArchiveXL in, then played", || dir.join("red4ext/plugins/ArchiveXL/ArchiveXL.dll").is_file() && h.state.read().unwrap().logs.iter().any(|l| l.message.contains("Launching Plain Game")));
+        assert!(dir.join("red4ext/RED4ext.dll").is_file(), "ArchiveXL needs RED4ext, so that came too");
+        assert!(hits.lock().unwrap().iter().all(|u| !u.contains("tweak") && !u.contains("codeware")), "only what the mods need is fetched: {:?}", hits.lock().unwrap());
+        assert!(check().is_empty(), "nothing left to fix");
+        // a game with anti-cheat and mods in it: the fix is to play without them
+        fs::write(dir.join("EasyAntiCheat_EOS.sys"), b"x").unwrap();
+        fs::create_dir_all(dir.join("EasyAntiCheat")).unwrap();
+        if deploy::anti_cheat(&dir).is_some() {
+            let p = check();
+            assert_eq!((p[0]["code"].as_str(), p[0]["fix"].as_str()), (Some("anti_cheat"), Some("vanilla")), "{p:?}");
+        }
     }
 
     #[test]

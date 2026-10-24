@@ -111,6 +111,21 @@ first shows what it will do, with what is already there ticked off, and asks onc
   when it is open), and everything is checked again. The window ticks each step off; a step that fails says why and the
   others still run. Safe to re-run.
 
+## Before you play
+Every Play button (the big one, double-click, the command palette, the controller's X) first runs a quick check. When it
+finds something that would make the game start broken, a window lists it, each line with what the fix does:
+
+| Found | Fix and play does |
+|---|---|
+| Your mods need RED4ext, ArchiveXL, TweakXL, Redscript, CET, SKSE64 or F4SE and the game lacks it | installs it from its official releases (and what it needs in turn) |
+| A Unity game with mods and no mod loader | installs the loader that fits |
+| Steam is open and the launch option your mods need is missing | closes Steam, sets it, starts Steam again |
+| Mods are in a game with anti-cheat | plays without mods this time |
+| Steam is updating the game | nothing: wait for it (Play is not offered) |
+| The same mod twice, less than 1 GB free | nothing to fix automatically; you can still play |
+
+When nothing is found the game starts right away. *Play anyway* skips the fixes.
+
 ## Save Guard
 *💾 Save Guard* snapshots a game's save folders automatically before every launch (skipped when nothing changed), on request,
 during Full Setup and before any restore, and keeps the newest eight of each kind. Unreal `SaveGames` folders are found by

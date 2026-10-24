@@ -1302,7 +1302,7 @@
     </section>
 
     <section class="glass-card action-dock">
-      <span class="play-split"><button class="btn btn-play" onclick="ipcSend('/api/play')">▶ Play Game</button><button class="btn btn-play play-caret" onclick="openPlayMenu(event)" title="More ways to play" aria-label="More ways to play">▾</button></span>
+      <span class="play-split"><button class="btn btn-play" onclick="playChecked()">▶ Play Game</button><button class="btn btn-play play-caret" onclick="openPlayMenu(event)" title="More ways to play" aria-label="More ways to play">▾</button></span>
       <button class="btn btn-stop" id="btnStop" style="display:none" onclick="ipcSend('/api/stop')">⏹ Stop</button>
       <button class="btn btn-trainer" onclick="ipcSend('/api/trainer')">⚡ Run Trainer</button>
 
@@ -1697,6 +1697,14 @@
   <div class="glass-card modal-window" style="width:min(560px,94vw);">
     <div class="modal-hdr"><span>✨ What's new in Gantry</span><button class="btn" onclick="closeNews()" aria-label="Close">✕</button></div>
     <div id="newsBody" data-dyn style="z-index:2; display:flex; flex-direction:column; gap:10px; overflow-y:auto; min-height:0;"></div>
+  </div>
+</div>
+
+<!-- BEFORE YOU PLAY: what would go wrong, with one button to fix it -->
+<div class="modal-backdrop" id="preflightModal" onclick="if (event.target === this) closeModals()">
+  <div class="glass-card modal-window" style="width:min(560px,calc(94 * var(--vw))); max-height:calc(86 * var(--vh));">
+    <div class="modal-hdr"><span>▶ Before you play</span><button class="btn" onclick="closeModals()" aria-label="Close">✕</button></div>
+    <div id="preflightBody" data-dyn style="z-index:2; display:flex; flex-direction:column; gap:8px; overflow:auto;"></div>
   </div>
 </div>
 
@@ -2344,7 +2352,7 @@
     const act = fn => () => { closeCtx(); fn(); };
     const select = () => ipcPost('/api/select', { index: idx });
     const items = [
-      [t('▶ Play Game'), act(async () => { await select(); ipcSend('/api/play'); }), g.is_installed !== false],
+      [t('▶ Play Game'), act(async () => { await select(); playChecked(); }), g.is_installed !== false],
       [t('📂 Game Folder'), act(async () => { await select(); ipcSend('/api/open_folder', {}); }), g.is_installed !== false],
       [((appState.meta || {})[g.appid] || {}).fav ? t('☆ Unpin') : t('★ Pin to top'), act(() => toggleFavorite(g.appid)), true],
       [t('✕ Remove'), act(() => removeGame(g.appid)), true, 'danger'],
@@ -2587,7 +2595,7 @@
     c.className = `game-card ${idx === appState.selected_idx ? 'selected' : ''}`;
     c.setAttribute('data-idx', idx);
     c.onclick = () => ipcSend('/api/select', { index: idx });
-    c.ondblclick = () => ipcSend('/api/play');
+    c.ondblclick = () => playChecked();
     c.oncontextmenu = e => openCtx(e, idx);
     const tile = `<span class="tile" style="background:${tileColor(g.name)}">${escapeHtml(g.name.slice(0, 1).toUpperCase())}</span>`;
     const art = sid
@@ -2648,7 +2656,7 @@
       div.className = `game-item ${idx === appState.selected_idx ? 'selected' : ''}`;
       div.setAttribute('data-idx', idx);
       div.onclick = () => ipcSend('/api/select', { index: idx });
-      div.ondblclick = () => ipcSend('/api/play');
+      div.ondblclick = () => playChecked();
       div.oncontextmenu = e => openCtx(e, idx);
       const modChip = g.mod_count > 0 ? `<span class="mod-count-chip">${g.mod_count}</span>` : '';
       const sid = steamArtId(g);
@@ -3300,7 +3308,7 @@
       else if (document.querySelector('.modal-backdrop.open')) closeTopModal();
       else { const sel = document.querySelector('.game-item.selected, .game-card.selected'); if (sel) { sel.tabIndex = 0; sel.focus(); } }
     }
-    else if (btn === 'x') ipcSend('/api/play');
+    else if (btn === 'x') playChecked();
     else if (btn === 'y') openPalette();
     else if (btn === 'lb' || btn === 'rb') {
       const tabs = ['mods', 'tools', 'activity'];
@@ -3343,7 +3351,7 @@
     try { d = await (await fetch(`/api/stats?tz=${new Date().getTimezoneOffset()}${statsAll ? '&all=1' : ''}`)).json(); } catch (e) { return; }
     if (my !== statsSeq || !d) return;
     if (!d.sessions && !statsAll && !(modLibData() || {}).history?.length) {
-      card.innerHTML = `<div class="st-head"><h3>${t('Play time')}</h3></div><div class="lib-empty" style="padding:18px">${t('Nothing played through Gantry yet. Time and crashes are counted from the first game you start here.')}<div class="cp-row" style="justify-content:center; margin-top:12px"><button class="btn btn-play" onclick="ipcSend('/api/play')">${t('▶ Play Game')}</button></div></div>`;
+      card.innerHTML = `<div class="st-head"><h3>${t('Play time')}</h3></div><div class="lib-empty" style="padding:18px">${t('Nothing played through Gantry yet. Time and crashes are counted from the first game you start here.')}<div class="cp-row" style="justify-content:center; margin-top:12px"><button class="btn btn-play" onclick="playChecked()">${t('▶ Play Game')}</button></div></div>`;
       return;
     }
     const tile = (v, label, cls) => `<div class="st-tile ${cls || ''}"><b>${v}</b><span>${label}</span></div>`;
@@ -3916,6 +3924,41 @@
     if (confirm(t('Wipe UE4SS and ALL installed mods for this game?'))) ipcSend('/api/wipe_mods');
   }
 
+  // ---------- Before you play: a quick check, and "Fix and play" when something would go wrong ----------
+  let preflightBusy = false;
+  async function playChecked() {
+    if (preflightBusy) return;
+    preflightBusy = true;
+    let d = null;
+    try { d = await (await fetch('/api/preflight')).json(); } catch (e) {}
+    preflightBusy = false;
+    const problems = ((d && d.problems) || []).filter(p => p.level === 'bad' || p.level === 'warn');
+    if (!problems.length) { ipcSend('/api/play'); return; }
+    const a = p => p.args || [];
+    const text = p => ({
+      steam_updating: () => a(p)[0] ? t('Steam is updating this game ({}%). Wait until it finishes before playing or changing mods.', a(p)[0]) : t('Steam is updating this game. Wait until it finishes before playing or changing mods.'),
+      anti_cheat: () => t('This game uses {}. Modified files can get your account banned, so play without mods.', a(p)[0]),
+      launch_option: () => t('Steam is open, so the launch option your mods need cannot be written and they would not load.'),
+      needs_framework: () => t('Your mods need {} to work, and the game does not have it yet.', a(p).join(', ')),
+      needs_loader: () => t('These mods need a mod loader first (see the card below).'),
+      duplicate_mod: () => t('The same mod is installed more than once: {}. Keep one of them.', a(p)[0]),
+      low_disk: () => t('Only {} free on the game\'s drive. The game may fail to save.', a(p)[0]),
+    }[p.code] || (() => p.code))();
+    const fixText = { steam: t('closes Steam, sets the launch option and starts Steam again'), setup: t('installs what is missing from its official releases'), vanilla: t('plays without mods this time') };
+    const blocked = problems.some(p => p.code === 'steam_updating');
+    const fixes = [...new Set(problems.map(p => p.fix).filter(Boolean))];
+    const onlyVanilla = fixes.length === 1 && fixes[0] === 'vanilla';
+    const lines = problems.map(p => `<div class="hb-line ${p.level}"><span class="hb-dot"></span><span class="hb-text">${escapeHtml(text(p))}${p.fix && fixText[p.fix] ? `<small style="display:block; color:var(--text-muted)">${escapeHtml(t('Fix: {}', fixText[p.fix]))}</small>` : ''}</span></div>`).join('');
+    let btns = '';
+    if (blocked) btns = `<button class="btn btn-play" onclick="closeModals()">${t('OK')}</button>`;
+    else {
+      if (fixes.length) btns += `<button class="btn btn-play" onclick='closeModals(); ipcSend("/api/play_fixed", { fixes: ${JS(fixes)} })'>${onlyVanilla ? t('○ Play without mods') : t('Fix and play')}</button>`;
+      btns += `<button class="btn" onclick="closeModals(); ipcSend('/api/play')">${t('Play anyway')}</button><button class="btn" onclick="closeModals()">${t('Cancel')}</button>`;
+    }
+    document.getElementById('preflightBody').innerHTML = lines + `<div class="wl-foot">${btns}</div>`;
+    document.getElementById('preflightModal').classList.add('open');
+  }
+
   // ---------- Make this game moddable: a dry run first, then the checklist ticks itself off ----------
   let setupFor = null, setupTimer = null, setupStarted = false;
   async function loadSetup() {
@@ -4242,7 +4285,7 @@
           : `<div style="margin-top:8px; color:color-mix(in srgb, #34d399, var(--ink) var(--lift));">${t('rig noticed: the last run ended <b>without crash markers</b>.')}</div>`) : '';
         h += hint;
         h += `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-          <button class="btn btn-play" onclick="ipcSend('/api/play')">${t('▶ Play')}</button>
+          <button class="btn btn-play" onclick="playChecked()">${t('▶ Play')}</button>
           <button class="btn btn-danger" style="${fresh && run.crashed ? 'outline:2px solid #f87171;' : ''}" onclick="ipcSend('/api/bisect_answer', { crashed: true })">${t('💥 It crashed')}</button>
           <button class="btn btn-heal" style="${fresh && !run.crashed ? 'outline:2px solid #86efac;' : ''}" onclick="ipcSend('/api/bisect_answer', { crashed: false })">${t('✅ It works')}</button>
           <button class="btn" onclick="ipcSend('/api/bisect_finish', { restore_all: true })">${t('Cancel and restore my mods')}</button>
@@ -4349,7 +4392,7 @@
   function paletteActions() {
     const g = appState.games[appState.selected_idx];
     const A = [
-      [t('▶ Play Game'), () => ipcSend('/api/play', {}), !!g],
+      [t('▶ Play Game'), () => playChecked(), !!g],
       [t('⏹ Stop'), () => ipcSend('/api/stop', {}), !!appState.is_running],
       [t('○ Play without mods'), () => ipcSend('/api/play_vanilla', {}), !!g],
       [t('🚀 Make this game moddable'), fullSetup, !!g],
@@ -6128,7 +6171,7 @@
   async function playFromHome(idx) {
     await ipcPost('/api/select', { index: idx });
     closeModals();
-    ipcSend('/api/play', {});
+    playChecked();
   }
 
   async function openForGame(appid, then) {
