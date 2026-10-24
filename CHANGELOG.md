@@ -2,6 +2,13 @@
 
 ## Next
 
+- **Sharing and moving computers.** *Copy share code* puts a game's setup on the clipboard as one line of text; *Import a
+  code* takes it (or a Thunderstore profile code). Importing a modpack, setup file or code, or dropping a `.gantrypack`
+  on the window, now shows every mod and how it will arrive before anything is fetched. Shared setups carry GitHub and
+  mod.io sources too, so core mods like RED4ext download by themselves on a friend's computer (the same release, or the
+  newest when it is gone). *Bring my setup here* in the sync folder settings downloads the mods that are not on the new
+  computer. Library profiles remember launch options, environment, compatibility tool and trainer (the paths of the last
+  two never go to the sync folder).
 - **Save Guard: a save browser.** It lists your saves as they are now, each with the session it was made in (which profile,
   how many mods, whether it crashed). One file of a backup can be put back on its own, and two backups (or a backup and
   your saves now) can be compared: what changed, what is new, what is gone. Saves are now also backed up before a mod

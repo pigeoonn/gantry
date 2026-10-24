@@ -49,7 +49,7 @@ The [tutorial](docs/TUTORIAL.md) walks through it with pictures.
 - A **mod library** for any game: mods are hard-linked in with a journal and undo, ordered by priority, conflicts shown.
 - A **store** for Nexus Mods, Thunderstore and mod.io, sorted by downloads, with starter packs for some games; mods that a
   mod needs are installed with it.
-- One-click setup of **BepInEx, MelonLoader and UE4SS**; installer wizards (FOMOD); modpacks and profile codes.
+- One-click setup of **BepInEx, MelonLoader and UE4SS**; installer wizards (FOMOD); modpacks, share codes and Thunderstore profile codes, with a preview before anything downloads.
 
 **When things go wrong**
 - **Crash Detective** and a health score with one-click fixes; a knowledge base of 121 known problems, each taken from what the mod loaders really write, explained in your language and caught while you play.

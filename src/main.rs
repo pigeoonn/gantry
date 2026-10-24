@@ -224,6 +224,8 @@ pub struct AppState {
     pub pending_queue: std::collections::VecDeque<PendingInstall>,
     /// Installer scripts waiting for answers, oldest first.
     pub pending_fomod: Vec<PendingFomod>,
+    /// A shared setup (file or code) shown to the user before anything of it is fetched.
+    pub import_preview: Option<ImportPreview>,
     /// Where game shortcuts are written (tests point it at a temporary folder; None = the real home).
     pub shortcut_home: Option<PathBuf>,
     /// Games with trouble (appid → "warn" or "bad"), from the background watch.
@@ -471,6 +473,15 @@ pub struct PendingInstall {
     pub preview: deploy::Preview,
 }
 
+/// A shared setup waiting for the user's yes: what it is, for which game, the unpacked files of a modpack (removed
+/// when it is cancelled) and what the window shows.
+pub struct ImportPreview {
+    pub appid: String,
+    pub spec: deploy::ProfileSpec,
+    pub files: Option<PathBuf>,
+    pub view: Value,
+}
+
 /// A mod with an installer script (FOMOD) that is extracted and waiting for the user's answers.
 #[derive(Clone)]
 pub struct PendingFomod {
@@ -670,6 +681,7 @@ impl AppState {
             pending_install: None,
             pending_queue: std::collections::VecDeque::new(),
             pending_fomod: Vec::new(),
+            import_preview: None,
             shortcut_home: None,
             health: Default::default(),
             steam_lib: SteamLibState::default(),
@@ -826,6 +838,7 @@ impl AppState {
         v["trainer_shelf"] = self.trainer_shelf_json();
         v["trainer_run"] = self.trainer_run_json();
         v["batch"] = serde_json::to_value(&self.batch).unwrap_or(Value::Null);
+        v["import_preview"] = self.import_preview.as_ref().map(|p| p.view.clone()).unwrap_or(Value::Null);
         v["place_rules"] = json!(self.games.get(self.selected_idx).and_then(|g| self.config.place_rules.get(&g.appid)).map(|r| r.len()).unwrap_or(0));
         v
     }
@@ -2455,6 +2468,15 @@ fn sync_bundle(state: &SharedState) -> Value {
     let all = b["config"].as_object().cloned().unwrap_or_default();
     b["config"] = Value::Object(all.into_iter().filter(|(k, _)| SYNCED_KEYS.contains(&k.as_str())).collect());
     b["custom_games"] = json!([]);
+    // the tool and trainer of a profile are files on this computer: their paths stay here
+    for entry in b["libraries"].as_array_mut().into_iter().flatten() {
+        for l in entry["library"]["profile_launch"].as_object_mut().into_iter().flat_map(|o| o.values_mut()) {
+            if let Some(o) = l.as_object_mut() {
+                o.remove("tool");
+                o.remove("trainer");
+            }
+        }
+    }
     b
 }
 
@@ -2532,7 +2554,35 @@ fn sync_pull(state: &SharedState) -> Result<String, String> {
     }
     let (restored, left_out, games) = restore_libraries(state, &v);
     refresh_mods_shared(state);
-    Ok(format!("Brought in the setup from the sync folder: {} game(s), {} mod(s) back in their lists, {} left out because their files are not here.", games, restored, left_out))
+    let msg = format!("Brought in the setup from the sync folder: {} game(s), {} mod(s) back in their lists, {} left out because their files are not here.", games, restored, left_out);
+    if left_out > 0 {
+        log(state, "OK", msg);
+        return Ok(fetch_left_out(state, &v));
+    }
+    Ok(msg)
+}
+
+/// Bring my setup here: the mods of a pulled setup whose files are not on this computer are downloaded again
+/// (Thunderstore, GitHub, mod.io by themselves; Nexus Mods ones wait in the game's "still needs" list).
+fn fetch_left_out(state: &SharedState, v: &Value) -> String {
+    let mut done = 0;
+    for entry in v["libraries"].as_array().into_iter().flatten() {
+        let Some(g) = game_by_appid(state, entry["appid"].as_str().unwrap_or("")) else { continue };
+        let (Some(lib), Some(spec)) = (library_of(&g), deploy::spec_from_meta(&entry["library"], &g.name)) else { continue };
+        if lib.missing_of(&spec).is_empty() {
+            continue;
+        }
+        log(state, "INFO", format!("Getting the mods of {} that are not on this computer...", g.name));
+        match import_spec(state, &g, spec) {
+            Ok(m) => {
+                done += 1;
+                log(state, "OK", format!("{}: {}", g.name, m));
+            }
+            Err(e) => log(state, "WARN", format!("{}: {}", g.name, e)),
+        }
+    }
+    refresh_mods_shared(state);
+    format!("Your setup is here: the missing mods of {} game(s) were fetched or are listed to get.", done)
 }
 
 /// Keep the sync folder up to date: look every twenty minutes and copy when something changed.
@@ -2565,15 +2615,15 @@ fn import_spec(state: &SharedState, g: &GameEntry, spec: deploy::ProfileSpec) ->
     let missing = lib.apply_spec(&spec)?;
     let (mut fetched, mut manual) = (0, 0);
     for m in &missing {
-        if let Some(t) = &m.thunderstore {
-            match thunder_install(state, g, &format!("{}-{}-{}", t.namespace, t.name, t.version)) {
+        if let Some(res) = fetch_spec_mod(state, g, m) {
+            match res {
                 Ok(msg) => {
                     fetched += 1;
                     log(state, "OK", msg);
                 }
                 Err(e) => {
                     manual += 1;
-                    log(state, "ERR", e);
+                    log(state, "ERR", format!("{}: {}", m.name, e));
                 }
             }
         } else {
@@ -2601,6 +2651,39 @@ fn import_spec(state: &SharedState, g: &GameEntry, spec: deploy::ProfileSpec) ->
     }
     let applied = library_apply(state, &lib, false)?;
     Ok(format!("Imported the setup: {} fetched, {} still to get yourself. {}", fetched, manual, applied))
+}
+
+/// Download one mod of a shared setup from where it came from, when that needs no clicks: Thunderstore, a GitHub
+/// release (the same release when it still exists, else the newest one's matching file) or mod.io. `None` for the
+/// rest (Nexus Mods, files that were never online).
+fn fetch_spec_mod(state: &SharedState, g: &GameEntry, m: &deploy::SpecMod) -> Option<Result<String, String>> {
+    if let Some(t) = &m.thunderstore {
+        return Some(thunder_install(state, g, &format!("{}-{}-{}", t.namespace, t.name, t.version)));
+    }
+    if let Some(r) = &m.github {
+        return Some((|| {
+            let (owner, repo) = github::parse_repo(&r.repo_name()).ok_or("That does not look like a GitHub repository.")?;
+            let (api, allow) = {
+                let st = read_state(state);
+                (st.github_api.clone(), st.github_allow.clone())
+            };
+            let rel = github::release_or_latest(&owner, &repo, &r.tag, &api, allow.as_deref())?;
+            let asset = rel.assets.iter().find(|a| a.name == r.asset).cloned().or_else(|| github::matching_asset(&r.asset, &rel.assets)).ok_or("That release no longer has a file Gantry recognises.")?;
+            let before = library_of(g).map(|l| l.mods().len()).unwrap_or(0);
+            let reference = github::GithubRef { owner: owner.clone(), repo: repo.clone(), tag: rel.tag.clone(), asset: asset.name.clone() };
+            github_install_named(state, g, &r.repo_name(), &asset.url, Some(reference), Some(&m.name));
+            let after = library_of(g).map(|l| l.mods().len()).unwrap_or(0);
+            if after > before {
+                Ok(format!("Added {} from {}/{}.", m.name, owner, repo))
+            } else {
+                Err("The download did not work (see the log).".to_string())
+            }
+        })());
+    }
+    if let Some(r) = &m.modio {
+        return Some(modio_install(state, g, r.mod_id));
+    }
+    None
 }
 
 /// What a modpack imported earlier still waits for in this game's library (null when nothing).
@@ -2719,6 +2802,70 @@ fn profile_from_code(state: &SharedState, code: &str, game: &str) -> Result<depl
     })();
     let _ = fs::remove_dir_all(&dir);
     done
+}
+
+/// Show a shared setup before anything is fetched: every mod and how it would arrive ("have": already here,
+/// "included": its files are in the modpack, "auto": downloads by itself, "nexus": one click on Nexus Mods each with a
+/// free account, "manual": it was never online). Replaces a preview that was still open.
+fn preview_import(state: &SharedState, g: &GameEntry, spec: deploy::ProfileSpec, files: Option<PathBuf>) -> Result<(), String> {
+    let lib = library_of(g).ok_or_else(|| format!("{} is not installed.", g.name))?;
+    if spec.gantry_profile != 1 {
+        return Err("This file is not a Gantry setup.".into());
+    }
+    let missing = lib.missing_of(&spec);
+    let mut left: Vec<&deploy::SpecMod> = missing.iter().collect();
+    let mut counts: std::collections::BTreeMap<&str, usize> = Default::default();
+    let rows: Vec<Value> = spec
+        .mods
+        .iter()
+        .map(|m| {
+            let how = match left.iter().position(|x| *x == m) {
+                None => "have",
+                Some(i) => {
+                    left.remove(i);
+                    if !m.files.is_empty() && files.as_ref().map(|d| d.join(&m.files).is_dir()).unwrap_or(false) {
+                        "included"
+                    } else if m.thunderstore.is_some() || m.github.is_some() || m.modio.is_some() {
+                        "auto"
+                    } else if m.nexus.is_some() {
+                        "nexus"
+                    } else {
+                        "manual"
+                    }
+                }
+            };
+            *counts.entry(how).or_default() += 1;
+            json!({ "name": m.name, "version": m.version, "enabled": m.enabled, "how": how })
+        })
+        .collect();
+    let same_game = spec.game.is_empty() || spec.game.eq_ignore_ascii_case(&g.name);
+    let view = json!({ "name": spec.name, "note": spec.note, "game": spec.game, "here": g.name, "same_game": same_game, "mods": rows, "counts": counts });
+    let old = write_state(state).import_preview.replace(ImportPreview { appid: g.appid.clone(), spec, files, view });
+    if let Some(dir) = old.and_then(|o| o.files) {
+        let _ = fs::remove_dir_all(dir);
+    }
+    read_state(state).notifier.bump();
+    Ok(())
+}
+
+/// The user said yes (or no) to the setup in the preview.
+fn finish_import(state: &SharedState, accept: bool) {
+    let Some(p) = write_state(state).import_preview.take() else { return };
+    read_state(state).notifier.bump();
+    if !accept {
+        if let Some(dir) = p.files {
+            let _ = fs::remove_dir_all(dir);
+        }
+        return;
+    }
+    let Some(g) = game_by_appid(state, &p.appid) else {
+        return log(state, "WARN", "That game is no longer in the list.");
+    };
+    match import_pack(state, &g, p.spec, p.files) {
+        Ok(m) => log(state, "OK", m),
+        Err(e) => log(state, "ERR", e),
+    }
+    refresh_mods_shared(state);
 }
 
 /// Bring a modpack into the game's library: its own files first, then the Thunderstore mods, and what is left
@@ -4560,6 +4707,16 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             let snaps = game.map(|g| saves::list(&g, &cache_root)).unwrap_or_default();
             return respond_json(req, 200, json!({ "snapshots": snaps }).to_string());
         }
+        "/api/share_code" => {
+            let body = match selected_game(&state).filter(|g| g.is_installed).and_then(|g| library_of(&g).map(|l| l.export_spec(&g.name))) {
+                Some(spec) => {
+                    let (code, left_out) = profilecode::share_code(&spec);
+                    json!({ "code": code, "mods": spec.mods.len() - left_out, "left_out": left_out })
+                }
+                None => json!({ "error": "Select an installed game first." }),
+            };
+            return respond_json(req, 200, body.to_string());
+        }
         "/api/saves_files" => {
             let (game, cache_root, sessions_file) = {
                 let st = read_state(&state);
@@ -5006,6 +5163,18 @@ fn handle_drop_upload(mut req: Request, query: &str, state: &SharedState) {
             Ok(n)
         });
     match saved {
+        Ok(n) if n > 0 && is_setup_file(&safe_name) => {
+            // a shared setup dropped on the window: show what it holds, fetch nothing yet
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || {
+                let res = selected_game(&state_bg).filter(|g| g.is_installed).ok_or_else(|| "Select an installed game first.".to_string()).and_then(|g| read_pack_file(&state_bg, &target).and_then(|(spec, files)| preview_import(&state_bg, &g, spec, files)));
+                let _ = fs::remove_dir_all(&drop_dir);
+                if let Err(e) = res {
+                    log(&state_bg, "ERR", e);
+                }
+            });
+            respond_state(req, state);
+        }
         Ok(n) if n > 0 => {
             let state_bg = Arc::clone(state);
             let to_lib = query_param(query, "lib").as_deref() == Some("1");
@@ -5022,6 +5191,12 @@ fn handle_drop_upload(mut req: Request, query: &str, state: &SharedState) {
             respond_json(req, 400, json!({ "error": msg }).to_string());
         }
     }
+}
+
+/// A modpack or setup file of Gantry's, by its name.
+fn is_setup_file(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.ends_with(".gantrypack") || n.ends_with(".gantry.json")
 }
 
 /// Resolve a mod from the request: stable `id` first, positional `index` as legacy fallback.
@@ -5992,9 +6167,8 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             thread::spawn(move || {
                 let Some(g) = selected_game(&state_bg).filter(|g| g.is_installed) else { return };
                 let Some(path) = rfd::FileDialog::new().set_title(i18n::tr(&lang, "Open a modpack")).add_filter(i18n::tr(&lang, "Gantry modpack"), &["gantrypack", "zip", "json"]).pick_file() else { return };
-                match read_pack_file(&state_bg, &path).and_then(|(spec, files)| import_pack(&state_bg, &g, spec, files)) {
-                    Ok(m) => log(&state_bg, "OK", m),
-                    Err(e) => log(&state_bg, "ERR", e),
+                if let Err(e) = read_pack_file(&state_bg, &path).and_then(|(spec, files)| preview_import(&state_bg, &g, spec, files)) {
+                    log(&state_bg, "ERR", e);
                 }
             });
         }
@@ -6017,15 +6191,16 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             let state_bg = Arc::clone(state);
             thread::spawn(move || {
                 let Some(g) = selected_game(&state_bg).filter(|g| g.is_installed) else { return };
-                let result = profile_from_code(&state_bg, &code, &g.name).and_then(|spec| {
-                    log(&state_bg, "INFO", format!("Importing the profile code: {} mods.", spec.mods.len()));
-                    import_spec(&state_bg, &g, spec)
-                });
-                match result {
-                    Ok(m) => log(&state_bg, "OK", m),
-                    Err(e) => log(&state_bg, "ERR", e),
+                let spec = if profilecode::is_share_code(&code) { profilecode::from_share_code(&code, &g.name) } else { profile_from_code(&state_bg, &code, &g.name) };
+                if let Err(e) = spec.and_then(|spec| preview_import(&state_bg, &g, spec, None)) {
+                    log(&state_bg, "ERR", e);
                 }
             });
+        }
+        "/api/import_confirm" => {
+            let accept = body.get("accept").and_then(Value::as_bool).unwrap_or(false);
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || finish_import(&state_bg, accept));
         }
         "/api/notes_read" => {
             let id = body.get("id").and_then(Value::as_u64);
@@ -6391,13 +6566,30 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/lib_profile_save" => {
             let name = body_str(body, "name");
-            library_task(state, move |_, lib, _| lib.save_profile(&name).map(|n| format!("Library profile '{}' saved.", n)));
+            library_task(state, move |st, lib, g| {
+                let n = lib.save_profile(&name)?;
+                let launch = {
+                    let s = read_state(st);
+                    let cur = s.games.iter().find(|x| x.appid == g.appid).unwrap_or(g);
+                    deploy::ProfileLaunch {
+                        launch_args: cur.launch_args.clone(),
+                        env_vars: cur.env_vars.clone(),
+                        tool: if g.launches_directly() { s.config.proton_choice.get(&g.appid).cloned().unwrap_or_default() } else { String::new() },
+                        trainer: s.config.trainers.get(&g.appid).cloned().unwrap_or_default(),
+                    }
+                };
+                lib.set_profile_launch(&n, launch)?;
+                Ok(format!("Library profile '{}' saved.", n))
+            });
         }
         "/api/lib_profile_load" => {
             let name = body_str(body, "name");
             library_task(state, move |st, lib, g| {
                 guard_saves(st, g, "before-profile");
                 let n = lib.load_profile(&name)?;
+                if let Some(l) = lib.profile_launch(&name) {
+                    apply_profile_launch(st, g, &l);
+                }
                 log(st, "OK", format!("Library profile '{}' loaded ({} mods changed).", name, n));
                 switch_saves(st, g, lib, &name, false);
                 library_apply(st, lib, false)
@@ -9815,6 +10007,41 @@ fn snapshot_after_session(state: &SharedState, g: &GameEntry) {
     }
 }
 
+/// A profile was loaded: its launch options, environment, compatibility tool and trainer come back too. A tool or
+/// trainer that is no longer on this computer is left as it is.
+fn apply_profile_launch(state: &SharedState, g: &GameEntry, l: &deploy::ProfileLaunch) {
+    let mut st = write_state(state);
+    if let Some(game) = st.games.iter_mut().find(|x| x.appid == g.appid) {
+        game.launch_args = l.launch_args.clone();
+        game.env_vars = l.env_vars.clone();
+    }
+    st.config.launch_options.insert(g.appid.clone(), LaunchOpts { launch_args: l.launch_args.clone(), env_vars: l.env_vars.clone() });
+    let mut missing = Vec::new();
+    if g.launches_directly() && !l.tool.is_empty() {
+        if Path::new(&l.tool).is_file() {
+            st.config.proton_choice.insert(g.appid.clone(), l.tool.clone());
+        } else {
+            missing.push("compatibility tool");
+        }
+    }
+    if !l.trainer.is_empty() {
+        if Path::new(&l.trainer).is_file() {
+            st.config.trainers.insert(g.appid.clone(), l.trainer.clone());
+        } else {
+            missing.push("trainer");
+        }
+    }
+    st.save_config();
+    st.save_custom_games();
+    st.notifier.bump();
+    drop(st);
+    if missing.is_empty() {
+        log(state, "OK", "The profile's launch options came back too.");
+    } else {
+        log(state, "WARN", "The profile's launch options came back; its compatibility tool or trainer is no longer on this computer, so the current one stays.");
+    }
+}
+
 /// Save Guard before something that can change or hide the saves: a mod update, a rollback, a profile
 /// switch, another compatibility tool. Silent when nothing changed or there are no saves.
 fn guard_saves(state: &SharedState, g: &GameEntry, label: &str) {
@@ -12140,6 +12367,43 @@ mod tests {
     }
 
     #[test]
+    fn a_profile_brings_back_how_the_game_starts_and_its_paths_stay_on_this_computer() {
+        let h = harness("proflaunch");
+        let dir = add_plain_game(&h);
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        let stage = h._dir.join("pl-one");
+        fs::create_dir_all(stage.join("Data")).unwrap();
+        fs::write(stage.join("Data/one.esp"), "1").unwrap();
+        lib.add_with(&stage, "One", "one.zip", None, "1").unwrap();
+        let trainer = dir.join("Cool Trainer.exe");
+        fs::write(&trainer, b"MZ").unwrap();
+        h.state.write().unwrap().config.trainers.insert(g.appid.clone(), trainer.to_string_lossy().to_string());
+        api(&h, "/api/launch_options", json!({ "launch_args": "-skipintro", "env_vars": "DXVK_HUD=fps" }));
+        api(&h, "/api/lib_profile_save", json!({ "name": "Night" }));
+        wait_until("saved with its launch", || lib.profile_launch("Night").map(|l| l.launch_args == "-skipintro" && l.trainer.ends_with("Cool Trainer.exe")).unwrap_or(false));
+
+        // something else later, then the profile again
+        api(&h, "/api/launch_options", json!({ "launch_args": "", "env_vars": "" }));
+        h.state.write().unwrap().config.trainers.remove(&g.appid);
+        api(&h, "/api/lib_profile_load", json!({ "name": "Night" }));
+        wait_until("back", || selected_game(&h.state).unwrap().launch_args == "-skipintro");
+        let st = h.state.read().unwrap();
+        assert_eq!(st.config.launch_options.get(&g.appid).map(|o| o.env_vars.as_str()), Some("DXVK_HUD=fps"));
+        assert_eq!(st.config.trainers.get(&g.appid), Some(&trainer.to_string_lossy().to_string()));
+        drop(st);
+        // a trainer that is gone is not put back, and that is said
+        fs::remove_file(&trainer).unwrap();
+        h.state.write().unwrap().config.trainers.remove(&g.appid);
+        api(&h, "/api/lib_profile_load", json!({ "name": "Night" }));
+        wait_until("the warning", || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("no longer on this computer")));
+        assert!(!h.state.read().unwrap().config.trainers.contains_key(&g.appid));
+        // what goes to a sync folder has the launch options but not the paths
+        let bundle = sync_bundle(&h.state).to_string();
+        assert!(bundle.contains("-skipintro") && !bundle.contains("Cool Trainer.exe"), "{bundle}");
+    }
+
+    #[test]
     fn unreal_games_can_take_pak_mods_into_the_library_while_ue4ss_mods_keep_their_routing() {
         if fsutil::find_in_path("bsdtar").is_none() {
             eprintln!("skipping: bsdtar missing");
@@ -13674,6 +13938,66 @@ mod tests {
     }
 
     #[test]
+    fn a_shared_setup_is_shown_before_anything_is_fetched_and_a_share_code_travels_as_text() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("preview");
+        let from = h.game.clone();
+        let src = library_of(&from).unwrap();
+        let stage = |n: &str, f: &str| {
+            let d = h._dir.join(&format!("pv-{n}"));
+            fs::create_dir_all(d.join("Data")).unwrap();
+            fs::write(d.join("Data").join(f), n).unwrap();
+            d
+        };
+        src.add_with(&stage("own", "own.esp"), "My Own Mod", "own.zip", None, "1.0").unwrap();
+        src.add_with(&stage("nx", "nx.esp"), "Nexus Mod", "nx.zip", Some(nexus::NexusRef { game: "coolgame".into(), mod_id: 42, file_id: 7 }), "2.0").unwrap();
+        let (c, b) = http(&h, "GET", "/api/share_code", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 200);
+        let share: Value = serde_json::from_str(&b).unwrap();
+        assert_eq!((share["mods"].as_u64(), share["left_out"].as_u64()), (Some(1), Some(1)), "{share}");
+        let pack = h._dir.join("my.gantrypack");
+        export_pack_file(&h.state, &from, "Cool setup", &pack).unwrap();
+
+        add_plain_game(&h);
+        let preview = || api(&h, "/api/state", json!({}))["import_preview"].clone();
+        let packs = || fs::read_dir(read_state(&h.state).cache_root().join("pack")).map(|d| d.count()).unwrap_or(0);
+        let drop = || assert_eq!(http(&h, "POST", "/api/drop_upload?name=my.gantrypack", &[("X-Rig-Token", &h.token)], &fs::read(&pack).unwrap()).0, 200);
+        // dropped on the window: shown, nothing added yet
+        drop();
+        wait_until("the preview", || !preview().is_null());
+        let p = preview();
+        assert_eq!((p["name"].as_str(), p["same_game"].as_bool(), p["counts"].clone()), (Some("Cool setup"), Some(false), json!({ "included": 1, "nexus": 1 })), "{p}");
+        let lib = library_of(&selected_game(&h.state).unwrap()).unwrap();
+        assert!(lib.mods().is_empty());
+        // no: nothing changes and the unpacked files go away
+        api(&h, "/api/import_confirm", json!({ "accept": false }));
+        wait_until("closed", || preview().is_null());
+        wait_until("the unpacked modpack is gone", || packs() == 0);
+        assert!(lib.mods().is_empty());
+        // yes: the mod that came with its files is in, the Nexus one waits in the list
+        drop();
+        wait_until("the preview again", || !preview().is_null());
+        api(&h, "/api/import_confirm", json!({ "accept": true }));
+        wait_until("imported", || lib.mods().len() == 1);
+        assert_eq!(lib.mods()[0].name, "My Own Mod");
+        wait_until("the rest is listed", || api(&h, "/api/state", json!({}))["library"]["pending_pack"]["mods"][0]["name"] == "Nexus Mod");
+        assert_eq!(packs(), 0);
+
+        // the share code says the same, without the hand-made mod
+        api(&h, "/api/profile_code", json!({ "code": share["code"] }));
+        wait_until("the code's preview", || !preview().is_null());
+        assert_eq!(preview()["counts"], json!({ "nexus": 1 }));
+        api(&h, "/api/import_confirm", json!({ "accept": false }));
+        wait_until("closed", || preview().is_null());
+        api(&h, "/api/profile_code", json!({ "code": "GANTRY1:broken" }));
+        wait_until("the refusal", || last_log(&h).contains("damaged"));
+        assert!(preview().is_null());
+    }
+
+    #[test]
     fn a_modpack_carries_hand_added_mods_and_links_the_rest_and_nexus_mods_fall_into_place_when_they_arrive() {
         if fsutil::find_in_path("bsdtar").is_none() {
             eprintln!("skipping: bsdtar missing");
@@ -15091,6 +15415,51 @@ mod tests {
         // switching it off
         api(&h, "/api/sync_folder_set", json!({ "path": "" }));
         assert!(h.state.read().unwrap().config.sync_folder.is_empty());
+    }
+
+    #[test]
+    fn bringing_a_setup_here_downloads_the_mods_that_are_not_on_this_computer() {
+        if fsutil::find_in_path("bsdtar").is_none() {
+            eprintln!("skipping: bsdtar missing");
+            return;
+        }
+        let h = harness("bringhere");
+        add_plain_game(&h);
+        {
+            // a game added by hand, so the rescan after the pull keeps it
+            let mut st = h.state.write().unwrap();
+            st.games.last_mut().unwrap().is_custom = true;
+            st.save_custom_games();
+        }
+        let folder = h._dir.join("Sync");
+        fs::create_dir_all(&folder).unwrap();
+        api(&h, "/api/sync_folder_set", json!({ "path": folder.to_string_lossy() }));
+        let r4 = zip_of(&h, "r4", &[("red4ext/RED4ext.dll", "r")]);
+        let (base, hits) = github::fake::start_many(vec![("wopss/RED4ext", "v1.30.0", vec![("red4ext-1.30.0.zip", r4)])]);
+        {
+            let mut st = h.state.write().unwrap();
+            st.github_api = base.clone();
+            st.github_allow = Some(format!("{base}/dl/"));
+        }
+        // the other computer had RED4ext from an older release (gone now) and a mod from Nexus Mods
+        let lib = json!({ "mods": [
+            { "id": "a", "name": "RED4ext", "version": "1.29.0", "enabled": true, "files": ["red4ext/RED4ext.dll"], "github": { "owner": "wopss", "repo": "RED4ext", "tag": "v1.29.0", "asset": "red4ext-1.29.0.zip" } },
+            { "id": "b", "name": "Cool Cars", "version": "2", "enabled": true, "files": ["x.archive"], "nexus": { "game": "cyberpunk2077", "mod_id": 77, "file_id": 1 } },
+        ] });
+        let bundle = json!({ "gantry_backup": 1, "created_ms": now_ms(), "config": {}, "custom_games": [], "libraries": [{ "appid": "plain1", "library": lib }] });
+        let dir = sync_dir(&h.state.read().unwrap().config.sync_folder.clone());
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(autobackup::file_name(now_ms())), bundle.to_string()).unwrap();
+
+        api(&h, "/api/sync_pull", json!({}));
+        wait_until("the setup is here", || last_log(&h).contains("Your setup is here"));
+        let g = selected_game(&h.state).unwrap();
+        let mods = library_of(&g).unwrap().mods();
+        let r = mods.iter().find(|m| m.name == "RED4ext").expect("fetched from its releases");
+        assert_eq!(r.github.as_ref().map(|x| x.tag.as_str()), Some("v1.30.0"), "the old release is gone, so the newest one's file");
+        assert!(hits.lock().unwrap().iter().any(|u| u.contains("/releases/tags/v1.29.0")), "the same release was tried first");
+        let pending = api(&h, "/api/state", json!({}))["library"]["pending_pack"].clone();
+        assert_eq!(pending["mods"][0]["name"], "Cool Cars", "the Nexus one waits to be got: {pending}");
     }
 
     #[test]

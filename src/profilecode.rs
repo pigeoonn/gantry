@@ -154,9 +154,7 @@ pub fn to_spec(r: &R2x, game: &str) -> ProfileSpec {
                 source: "profile code".into(),
                 nexus: None,
                 thunderstore: Some(ThunderRef { namespace: ns, name, version: m.version.clone() }),
-                files: String::new(),
-                group: String::new(),
-                note: String::new(),
+                ..Default::default()
             })
         })
         .collect();
@@ -182,9 +180,180 @@ pub fn clean_code(input: &str) -> Option<String> {
     ok.then(|| last.to_lowercase())
 }
 
+/// Gantry's own share code: a setup as one line of text, made and read without going online.
+pub const SHARE_PREFIX: &str = "GANTRY1:";
+/// A code longer than this is not something anyone pasted on purpose.
+const SHARE_MAX: usize = 200_000;
+const SHARE_MODS_MAX: usize = 1000;
+
+fn short(s: &str, n: usize) -> String {
+    s.chars().filter(|c| !c.is_control()).take(n).collect()
+}
+
+/// Where a mod comes from, written short: `nx/<game>/<mod>/<file>`, `ts/<owner>/<name>/<version>`,
+/// `gh/<owner>/<repo>/<tag>/<file>` or `mio/<game>/<mod>/<file>`.
+fn source_of(m: &SpecMod) -> Option<String> {
+    if let Some(t) = &m.thunderstore {
+        return Some(format!("ts/{}/{}/{}", t.namespace, t.name, t.version));
+    }
+    if let Some(n) = &m.nexus {
+        return Some(format!("nx/{}/{}/{}", n.game, n.mod_id, n.file_id));
+    }
+    if let Some(g) = &m.github {
+        return Some(format!("gh/{}/{}/{}/{}", g.owner, g.repo, g.tag, g.asset));
+    }
+    m.modio.as_ref().map(|r| format!("mio/{}/{}/{}", r.game_id, r.mod_id, r.file_id))
+}
+
+fn plain(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 120 && !s.starts_with('.') && s.chars().all(|c| c.is_ascii_alphanumeric() || "-_.+".contains(c))
+}
+
+fn read_source(src: &str, m: &mut SpecMod) -> bool {
+    let p: Vec<&str> = src.split('/').collect();
+    let num = |s: &str| s.parse::<u64>().ok();
+    match p.as_slice() {
+        ["ts", ns, name, ver] if plain(ns) && plain(name) && plain(ver) => {
+            m.thunderstore = Some(ThunderRef { namespace: ns.to_string(), name: name.to_string(), version: ver.to_string() });
+        }
+        ["nx", game, id, file] if plain(game) && num(id).is_some() => {
+            m.nexus = Some(crate::nexus::NexusRef { game: game.to_string(), mod_id: num(id).unwrap_or(0), file_id: num(file).unwrap_or(0) });
+        }
+        ["gh", owner, repo, tag @ .., asset] if plain(owner) && plain(repo) && plain(asset) && !tag.is_empty() && tag.iter().all(|t| plain(t)) => {
+            m.github = Some(crate::github::GithubRef { owner: owner.to_string(), repo: repo.to_string(), tag: tag.join("/"), asset: asset.to_string() });
+        }
+        ["mio", game, id, file] if num(game).is_some() && num(id).is_some() => {
+            m.modio = Some(crate::modio::ModioRef { game_id: num(game).unwrap_or(0), mod_id: num(id).unwrap_or(0), file_id: num(file).unwrap_or(0) });
+        }
+        _ => return false,
+    }
+    true
+}
+
+/// A setup as a share code. Mods that were never online (made from files on this computer) cannot be in it;
+/// how many were left out is returned too.
+pub fn share_code(spec: &ProfileSpec) -> (String, usize) {
+    let mut left_out = 0;
+    let mods: Vec<serde_json::Value> = spec
+        .mods
+        .iter()
+        .filter_map(|m| {
+            let Some(src) = source_of(m) else {
+                left_out += 1;
+                return None;
+            };
+            let mut v = serde_json::json!({ "n": m.name, "s": src });
+            if !m.version.is_empty() {
+                v["v"] = m.version.clone().into();
+            }
+            if !m.enabled {
+                v["off"] = true.into();
+            }
+            if !m.target.is_empty() {
+                v["t"] = m.target.clone().into();
+            }
+            Some(v)
+        })
+        .collect();
+    let mut body = serde_json::json!({ "g": spec.game, "m": mods });
+    if !spec.name.is_empty() {
+        body["n"] = spec.name.clone().into();
+    }
+    (format!("{SHARE_PREFIX}{}", base64_encode(body.to_string().as_bytes())), left_out)
+}
+
+/// Is this text a Gantry share code (and not a Thunderstore one)?
+pub fn is_share_code(text: &str) -> bool {
+    text.trim().starts_with(SHARE_PREFIX)
+}
+
+/// A share code back into a setup. Anything that is not a mod with a source Gantry knows is dropped.
+pub fn from_share_code(text: &str, game: &str) -> Result<ProfileSpec, String> {
+    let bad = || "That share code is damaged or incomplete.".to_string();
+    let t = text.trim();
+    if t.len() > SHARE_MAX {
+        return Err(bad());
+    }
+    let raw = base64_decode(t.strip_prefix(SHARE_PREFIX).ok_or_else(bad)?).ok_or_else(bad)?;
+    let v: serde_json::Value = serde_json::from_slice(&raw).map_err(|_| bad())?;
+    let mods: Vec<SpecMod> = v["m"]
+        .as_array()
+        .ok_or_else(bad)?
+        .iter()
+        .take(SHARE_MODS_MAX)
+        .filter_map(|x| {
+            let mut m = SpecMod {
+                name: short(x["n"].as_str()?, 200),
+                version: short(x["v"].as_str().unwrap_or(""), 60),
+                enabled: !x["off"].as_bool().unwrap_or(false),
+                target: short(x["t"].as_str().unwrap_or(""), 200),
+                source: "share code".into(),
+                ..Default::default()
+            };
+            // a folder inside the game folder, never one outside it
+            if m.target.split(['/', '\\']).any(|p| p == ".." || p.contains(':')) || m.target.starts_with(['/', '\\']) {
+                m.target.clear();
+            }
+            (!m.name.trim().is_empty() && read_source(x["s"].as_str()?, &mut m)).then_some(m)
+        })
+        .collect();
+    if mods.is_empty() {
+        return Err("This share code has no mods Gantry can fetch.".into());
+    }
+    Ok(ProfileSpec { gantry_profile: 1, game: game.to_string(), mods, name: short(v["n"].as_str().unwrap_or(""), 80), note: String::new() })
+}
+
+/// The game a share code was made for, as its maker's Gantry named it.
+pub fn share_code_game(text: &str) -> Option<String> {
+    let raw = base64_decode(text.trim().strip_prefix(SHARE_PREFIX)?)?;
+    serde_json::from_slice::<serde_json::Value>(&raw).ok()?["g"].as_str().map(|g| short(g, 200))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_share_code_carries_every_online_source_and_nothing_that_could_escape() {
+        let m = |name: &str| SpecMod { name: name.into(), version: "1.0".into(), enabled: true, ..Default::default() };
+        let spec = ProfileSpec {
+            gantry_profile: 1,
+            game: "Cyberpunk 2077".into(),
+            name: "Night run".into(),
+            note: String::new(),
+            mods: vec![
+                SpecMod { github: Some(crate::github::GithubRef { owner: "wopss".into(), repo: "RED4ext".into(), tag: "v1.30.0".into(), asset: "red4ext-1.30.0.zip".into() }), ..m("RED4ext") },
+                SpecMod { nexus: Some(crate::nexus::NexusRef { game: "cyberpunk2077".into(), mod_id: 77, file_id: 9 }), enabled: false, target: "archive/pc/mod".into(), ..m("Cool Cars") },
+                SpecMod { thunderstore: Some(ThunderRef { namespace: "Own".into(), name: "Cool_Mod".into(), version: "1.2.3".into() }), ..m("Cool Mod") },
+                SpecMod { modio: Some(crate::modio::ModioRef { game_id: 5, mod_id: 6, file_id: 7 }), ..m("Map") },
+                m("My own edit"),
+            ],
+        };
+        let (code, left_out) = share_code(&spec);
+        assert!(is_share_code(&code) && !code.contains(' ') && left_out == 1, "{code}");
+        assert_eq!(share_code_game(&code).as_deref(), Some("Cyberpunk 2077"));
+        let back = from_share_code(&format!("  {code}\n"), "Cyberpunk 2077").unwrap();
+        let mut want = spec.clone();
+        want.mods.pop();
+        for x in &mut want.mods {
+            x.source = "share code".into();
+        }
+        assert_eq!(back, want);
+
+        // damaged, foreign and hostile codes
+        for bad in ["GANTRY1:", "GANTRY1:@@@", "GANTRY1:bm90IGpzb24=", "#r2modman", "hello"] {
+            assert!(from_share_code(bad, "G").is_err(), "{bad}");
+        }
+        let hostile = format!("{SHARE_PREFIX}{}", base64_encode(serde_json::json!({ "g": "G", "m": [
+            { "n": "Escape", "s": "gh/../x/v1/a.zip" },
+            { "n": "Slash", "s": "nx/a b/1/2" },
+            { "n": "Folder", "s": "nx/game/1/2", "t": "../../.ssh" },
+            { "n": "", "s": "nx/game/2/2" },
+            { "n": "Fine", "s": "ts/Own/Mod/1.0.0" },
+        ] }).to_string().as_bytes()));
+        let got = from_share_code(&hostile, "G").unwrap();
+        assert_eq!(got.mods.iter().map(|m| (m.name.as_str(), m.target.as_str())).collect::<Vec<_>>(), vec![("Folder", ""), ("Fine", "")]);
+    }
 
     #[test]
     fn base64_round_trips_and_refuses_what_is_not_base64() {

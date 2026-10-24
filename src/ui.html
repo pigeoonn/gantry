@@ -1808,6 +1808,17 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="importModal">
+  <div class="glass-card modal-window" style="width:600px; max-height:calc(86 * var(--vh));">
+    <div class="modal-hdr"><span id="importTitle" data-dyn></span></div>
+    <div id="importBody" data-dyn style="z-index:2; font-size:13px; line-height:1.55;"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; z-index:2;">
+      <button class="btn" onclick="ipcSend('/api/import_confirm', { accept: false })">Cancel</button>
+      <button class="btn btn-play" id="importGo" data-dyn onclick="ipcSend('/api/import_confirm', { accept: true })"></button>
+    </div>
+  </div>
+</div>
+
 <!-- THUNDERSTORE BROWSER -->
 <div class="modal-backdrop" id="tsModal" onclick="if (event.target === this) closeModals()">
   <div class="glass-card modal-window" style="width:min(1120px,calc(95 * var(--vw))); height:calc(88 * var(--vh)); max-height:calc(88 * var(--vh));">
@@ -2603,6 +2614,7 @@
     renderVanillaBar();
     renderPlaceDialog();
     renderFomodDialog();
+    renderImportPreview();
     {
       const key = [(appState.games[appState.selected_idx] || {}).appid, appState.is_running, appState.unity && appState.unity.loader].join('|');
       if (key !== lastHealthApp) { lastHealthApp = key; refreshHealth(); refreshInbox(true); loadCompat(); }
@@ -3099,10 +3111,10 @@
     const has = !!st.sync_folder;
     return `<div class="cp-preset" style="flex-direction:column; align-items:stretch; gap:8px"><span><b>${t('Sync folder')}</b><code>${t('A folder that Syncthing, Dropbox or a USB stick keeps in step between your computers. Gantry puts your profiles, notes, favourites, saved mods and mod lists there (never paths, keys or play time).')}</code></span>
       <div class="cp-row"><input type="text" class="input-field" id="syncPath" value="${escapeHtml(st.sync_folder || '')}" placeholder="${escapeHtml(t('Full path of a folder'))}" aria-label="${escapeHtml(t('Sync folder'))}" autocomplete="off" spellcheck="false" style="flex:1; min-width:0"><button class="btn" onclick="ipcSend('/api/sync_folder_set', { path: document.getElementById('syncPath').value }); setTimeout(openSettings, 500)">${t('Save')}</button></div>
-      ${has ? `<div class="cp-row"><button class="btn" onclick="ipcSend('/api/sync_push', {}); setTimeout(openSettings, 900)">${t('Send now')}</button><button class="btn" onclick="syncPull()">${t('Bring in')}</button><span id="syncInfo" style="color:var(--text-muted); font-size:12px"></span></div>` : ''}</div>`;
+      ${has ? `<div class="cp-row"><button class="btn" onclick="ipcSend('/api/sync_push', {}); setTimeout(openSettings, 900)">${t('Send now')}</button><button class="btn" onclick="syncPull()">${t('Bring my setup here')}</button><span id="syncInfo" style="color:var(--text-muted); font-size:12px"></span></div>` : ''}</div>`;
   }
   async function syncPull() {
-    if (!confirm(t('Bring in the setup from the sync folder? Your current settings are kept first.'))) return;
+    if (!confirm(t('Bring in the setup from the sync folder? Your current settings are kept first, and mods that are not on this computer are downloaded again.'))) return;
     ipcSend('/api/sync_pull', {});
     setTimeout(openSettings, 1500);
   }
@@ -4120,7 +4132,7 @@
     return `<small style="display:block; color:var(--text-muted)" title="${escapeHtml((s.names || []).join(', '))}">${s.mods ? t('Made while playing with {}', escapeHtml(what)) : t('Made while playing without mods')}${s.crashed ? ' · ' + t('that session crashed') : ''}</small>`;
   }
   function sgFileRow(f, extra, button) {
-    return `<div class="disk-row"><span style="flex:1; min-width:0; overflow-wrap:anywhere"><b>${escapeHtml(f.path)}</b> <span style="color:var(--text-muted)">· ${escapeHtml(sgWhen(f.modified_ms))} · ${fmtSize(f.bytes)}</span>${extra || ''}</span>${button || ''}</div>`;
+    return `<div class="disk-row"><span style="flex:1; min-width:0; overflow-wrap:anywhere"><b style="white-space:normal">${escapeHtml(f.path)}</b> <span style="color:var(--text-muted)">· ${escapeHtml(sgWhen(f.modified_ms))} · ${fmtSize(f.bytes)}</span>${extra || ''}</span>${button || ''}</div>`;
   }
 
   async function renderSaveGuard() {
@@ -4538,7 +4550,7 @@
     if (top) top.classList.remove('open');
   }
   function closeModals() {
-    document.querySelectorAll('.modal-backdrop:not(#placeModal):not(#fomodModal)').forEach(m => m.classList.remove('open'));
+    document.querySelectorAll('.modal-backdrop:not(#placeModal):not(#fomodModal):not(#importModal)').forEach(m => m.classList.remove('open'));
   }
 
 
@@ -4563,6 +4575,8 @@
       [t('🔄 Check for updates'), checkNexusUpdates, true],
       [t('📤 Share setup'), () => ipcSend('/api/lib_export', {}), !!g],
       [t('📥 Import setup'), () => ipcSend('/api/lib_import', {}), !!g],
+      [t('🔗 Copy share code'), copyShareCode, !!g],
+      [t('🔑 Import a code'), importProfileCode, !!g],
       [t('⬆ Update all'), () => ipcSend('/api/update_all', {}), true],
       [t('⏪ Everything back to vanilla (all games)'), purgeAllGames, true],
       [t('🧭 Fix placement'), () => { openModLib(); modLibRelayout(); }, !!g],
@@ -5044,6 +5058,27 @@
     ipcSend('/api/nexus_check', {});
   }
 
+  // a shared setup (file or code), shown before anything of it is fetched
+  function renderImportPreview() {
+    const m = document.getElementById('importModal');
+    const p = appState.import_preview;
+    if (!p) { m.classList.remove('open'); return; }
+    const how = { have: ['✓', t('you have it')], included: ['📦', t('included in the file')], auto: ['⬇', t('downloads by itself')], nexus: ['↗', t('from Nexus Mods')], manual: ['✋', t('never online: get it yourself')] };
+    const c = p.counts || {};
+    document.getElementById('importTitle').textContent = p.name ? t('Import “{}”', p.name) : t('Import this setup');
+    let h = '';
+    if (!p.same_game) h += `<div class="cd-card" style="color:var(--accent-amber)">${t('This setup was made for {}; it will be added to {}.', escapeHtml(p.game), escapeHtml(p.here))}</div>`;
+    if (p.note) h += `<div style="margin-bottom:6px">${escapeHtml(p.note)}</div>`;
+    h += `<div style="display:flex; flex-wrap:wrap; gap:6px 14px; margin:6px 0 10px">${Object.keys(how).filter(k => c[k]).map(k => `<span>${how[k][0]} <b>${c[k]}</b> ${how[k][1]}</span>`).join('')}</div>`;
+    if (c.nexus && !(appState.nexus || {}).premium) h += `<div class="cp-note" style="margin:0 0 8px">${t('With a free Nexus account each mod from Nexus Mods opens its page: press Slow download and Gantry takes the file.')}</div>`;
+    if (c.manual) h += `<div class="cp-note" style="margin:0 0 8px">${t('Mods that were never online cannot travel in a code; ask for a modpack file to get them too.')}</div>`;
+    h += `<div style="max-height:calc(42 * var(--vh)); overflow-y:auto">` + (p.mods || []).slice(0, 300).map(x => `<div class="disk-row"><span style="flex:none; width:1.4em">${how[x.how] ? how[x.how][0] : ''}</span><span style="flex:1; min-width:0; overflow-wrap:anywhere"><b style="white-space:normal">${escapeHtml(x.name)}</b>${x.version ? ' <span style="color:var(--text-muted)">v' + escapeHtml(x.version) + '</span>' : ''}${x.enabled ? '' : ' <span style="color:var(--text-muted)">· ' + t('off') + '</span>'}</span><span style="flex:none; color:var(--text-muted); font-size:12px">${how[x.how] ? how[x.how][1] : ''}</span></div>`).join('') + '</div>';
+    document.getElementById('importBody').innerHTML = h;
+    const todo = (c.included || 0) + (c.auto || 0) + (c.nexus || 0);
+    document.getElementById('importGo').textContent = todo ? t('Get them') : t('Use this order');
+    m.classList.add('open');
+  }
+
   function renderPlaceDialog() {
     const m = document.getElementById('placeModal');
     const p = appState.pending_install;
@@ -5413,7 +5448,8 @@
     const items = [
       [t('📤 Share as modpack'), () => shareModpack()],
       [t('📥 Import a modpack'), () => ipcSend('/api/lib_import', {})],
-      [t('🔑 Import a profile code'), () => importProfileCode()],
+      [t('🔗 Copy share code'), () => copyShareCode()],
+      [t('🔑 Import a code'), () => importProfileCode()],
       [t('📋 Copy the mod list'), () => copyModList()],
       [t('🧭 Fix placement'), () => modLibRelayout()],
       [t('📁 Folder'), () => ipcSend('/api/lib_open')],
@@ -6028,8 +6064,17 @@
     ipcSend('/api/pack_export', { name: name.trim() });
   }
   function importProfileCode() {
-    const code = prompt(t('Paste a Thunderstore profile code (the one r2modman or Gale gives you for a profile):'));
-    if (code && code.trim()) { ipcSend('/api/profile_code', { code: code.trim() }); showToast(t('Fetching the profile…')); }
+    const code = prompt(t('Paste a share code from Gantry, or a Thunderstore profile code (the one r2modman or Gale gives you):'));
+    if (code && code.trim()) { ipcSend('/api/profile_code', { code: code.trim() }); showToast(t('Reading the code…')); }
+  }
+  async function copyShareCode() {
+    try {
+      const r = await (await fetch('/api/share_code')).json();
+      if (r.error) return showToast(tm(r.error));
+      if (!r.mods) return showToast(t('None of these mods came from a site, so a code cannot carry them; share a modpack file instead.'));
+      await navigator.clipboard.writeText(r.code);
+      showToast(r.left_out ? tp(r.left_out, 'Share code copied. {} mod made from your own files is not in it; a modpack file carries it.', 'Share code copied. {} mods made from your own files are not in it; a modpack file carries them.') : t('Share code copied. Your friend pastes it in Import a code.'));
+    } catch (e) { showToast(t('Could not copy.')); }
   }
   function renderPackBar(lib) {
     const bar = document.getElementById('packBar');

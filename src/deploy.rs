@@ -122,6 +122,9 @@ struct LibFile {
     /// Named sets of mods: `(id, enabled)` in load order.
     #[serde(default)]
     profiles: BTreeMap<String, Vec<(String, bool)>>,
+    /// How the game starts with each profile (kept apart so older files and versions still read `profiles`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    profile_launch: BTreeMap<String, ProfileLaunch>,
     /// How things were before the last change in the list (one step back).
     #[serde(default)]
     undo: Option<Snapshot>,
@@ -177,8 +180,22 @@ fn dir_bytes(p: &Path) -> u64 {
     WalkDir::new(p).follow_links(false).into_iter().flatten().filter(|e| e.file_type().is_file()).filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum()
 }
 
+/// What a profile remembers besides its mods: how the game is started with it.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileLaunch {
+    #[serde(default)]
+    pub launch_args: String,
+    #[serde(default)]
+    pub env_vars: String,
+    /// The compatibility tool (for games Gantry starts itself; Steam keeps its own choice).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tool: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub trainer: String,
+}
+
 /// One mod of a shared setup: what it is and where to get it again, never its files.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SpecMod {
     pub name: String,
     #[serde(default)]
@@ -192,6 +209,10 @@ pub struct SpecMod {
     pub nexus: Option<NexusRef>,
     #[serde(default)]
     pub thunderstore: Option<ThunderRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github: Option<crate::github::GithubRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modio: Option<crate::modio::ModioRef>,
     /// Folder inside a modpack file that holds this mod's own files (only for mods that cannot be fetched again).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub files: String,
@@ -216,11 +237,61 @@ pub struct ProfileSpec {
 }
 
 fn same_mod(m: &LibMod, s: &SpecMod) -> bool {
-    match (&m.thunderstore, &s.thunderstore, &m.nexus, &s.nexus) {
-        (Some(a), Some(b), ..) => a.namespace.eq_ignore_ascii_case(&b.namespace) && a.name.eq_ignore_ascii_case(&b.name),
-        (_, _, Some(a), Some(b)) => a.game == b.game && a.mod_id == b.mod_id,
-        _ => s.thunderstore.is_none() && s.nexus.is_none() && m.name.eq_ignore_ascii_case(&s.name),
+    if let (Some(a), Some(b)) = (&m.thunderstore, &s.thunderstore) {
+        return a.namespace.eq_ignore_ascii_case(&b.namespace) && a.name.eq_ignore_ascii_case(&b.name);
     }
+    if let (Some(a), Some(b)) = (&m.nexus, &s.nexus) {
+        return a.game == b.game && a.mod_id == b.mod_id;
+    }
+    if let (Some(a), Some(b)) = (&m.github, &s.github) {
+        return a.same_file_as(b);
+    }
+    if let (Some(a), Some(b)) = (&m.modio, &s.modio) {
+        return a.mod_id == b.mod_id;
+    }
+    // no source in common: the same name is the same mod when one side does not know where it came from
+    let local = m.thunderstore.is_none() && m.nexus.is_none() && m.github.is_none() && m.modio.is_none();
+    (local || !s.fetchable()) && m.name.eq_ignore_ascii_case(&s.name)
+}
+
+impl SpecMod {
+    /// Can it be downloaded again from where it came from?
+    pub fn fetchable(&self) -> bool {
+        self.thunderstore.is_some() || self.nexus.is_some() || self.github.is_some() || self.modio.is_some()
+    }
+}
+
+/// A library's mods as a shared setup.
+fn spec_of(lf: &LibFile, game: &str) -> ProfileSpec {
+    ProfileSpec {
+        gantry_profile: 1,
+        game: game.to_string(),
+        mods: lf
+            .mods
+            .iter()
+            .map(|m| SpecMod {
+                name: m.name.clone(),
+                version: m.version.clone(),
+                enabled: m.enabled,
+                target: m.target.clone(),
+                source: m.source.clone(),
+                nexus: m.nexus.clone(),
+                thunderstore: m.thunderstore.clone(),
+                github: m.github.clone(),
+                modio: m.modio.clone(),
+                group: m.group.clone(),
+                note: m.note.clone(),
+                ..Default::default()
+            })
+            .collect(),
+        name: String::new(),
+        note: String::new(),
+    }
+}
+
+/// The setup a backed-up mod list (`export_meta`, as a backup or the sync folder keeps it) stands for.
+pub fn spec_from_meta(v: &Value, game: &str) -> Option<ProfileSpec> {
+    serde_json::from_value::<LibFile>(v.clone()).ok().map(|lf| spec_of(&lf, game))
 }
 
 /// How many earlier states of the list are kept to go back to.
@@ -1869,7 +1940,23 @@ impl Library {
         let _g = lock();
         let mut lf = self.load();
         lf.profiles.remove(name).ok_or("No such profile.")?;
+        lf.profile_launch.remove(name);
         self.save(&lf)
+    }
+
+    /// Remember how the game starts with a saved profile.
+    pub fn set_profile_launch(&self, name: &str, launch: ProfileLaunch) -> Result<(), String> {
+        let _g = lock();
+        let mut lf = self.load();
+        if !lf.profiles.contains_key(name) {
+            return Err("No such profile.".into());
+        }
+        lf.profile_launch.insert(name.to_string(), launch);
+        self.save(&lf)
+    }
+
+    pub fn profile_launch(&self, name: &str) -> Option<ProfileLaunch> {
+        self.load().profile_launch.get(name).cloned()
     }
 
     /// Take back the last change of the list (enabled state, order or target folder). Returns its label.
@@ -2115,18 +2202,7 @@ impl Library {
 
     /// The mod list as a shareable setup (no files, only what each mod is and where it came from).
     pub fn export_spec(&self, game: &str) -> ProfileSpec {
-        let lf = self.load();
-        ProfileSpec {
-            gantry_profile: 1,
-            game: game.to_string(),
-            mods: lf
-                .mods
-                .iter()
-                .map(|m| SpecMod { name: m.name.clone(), version: m.version.clone(), enabled: m.enabled, target: m.target.clone(), source: m.source.clone(), nexus: m.nexus.clone(), thunderstore: m.thunderstore.clone(), files: String::new(), group: m.group.clone(), note: m.note.clone() })
-                .collect(),
-            name: String::new(),
-            note: String::new(),
-        }
+        spec_of(&self.load(), game)
     }
 
     /// The setup as a modpack: `export_spec`, with the files of every mod that cannot be fetched again (one that
@@ -2139,7 +2215,7 @@ impl Library {
         spec.note = note.chars().take(400).collect();
         let mut copied = 0;
         for (i, m) in lf.mods.iter().enumerate() {
-            if m.nexus.is_some() || m.thunderstore.is_some() {
+            if spec.mods[i].fetchable() {
                 continue;
             }
             let from = self.mod_files_dir(&m.id);

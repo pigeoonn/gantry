@@ -180,6 +180,16 @@ pub fn latest(owner: &str, repo: &str, api: &str, allowed: Option<&str>) -> Resu
     parse_release(&v, owner, repo, allowed).ok_or_else(|| "That repository has no releases.".to_string())
 }
 
+/// The release with that tag, or the newest one when it is gone (an old release can be deleted).
+pub fn release_or_latest(owner: &str, repo: &str, tag: &str, api: &str, allowed: Option<&str>) -> Result<Release, String> {
+    if part_ok(tag) {
+        if let Some(r) = get(&format!("{api}/repos/{owner}/{repo}/releases/tags/{tag}")).ok().filter(|v| v.get("tag_name").is_some()).and_then(|v| parse_release(&v, owner, repo, allowed)) {
+            return Ok(r);
+        }
+    }
+    latest(owner, repo, api, allowed)
+}
+
 #[cfg(test)]
 pub mod fake {
     /// A GitHub API stand-in: one repository with one release and its files.
@@ -223,7 +233,7 @@ pub mod fake {
             for req in server.incoming_requests() {
                 let url = req.url().to_string();
                 h2.lock().unwrap().push(url.clone());
-                let latest = repos.iter().find(|(r, _, _)| url == format!("/repos/{r}/releases/latest"));
+                let latest = repos.iter().find(|(r, t, _)| url == format!("/repos/{r}/releases/latest") || url == format!("/repos/{r}/releases/tags/{t}"));
                 let file = repos.iter().flat_map(|(r, _, f)| f.iter().map(move |x| (r, x))).find(|(r, (n, _))| url == format!("/dl/{r}/{n}"));
                 let body = if let Some((r, tag, files)) = latest {
                     let assets: Vec<String> = files.iter().map(|(n, d)| format!(r#"{{"name":"{n}","size":{},"browser_download_url":"{b2}/dl/{r}/{n}"}}"#, d.len())).collect();
