@@ -10200,6 +10200,7 @@ mod tests {
         api(&h, "/api/update_all", json!({}));
         wait_until("updated in place", || fs::read_to_string(dir.join("BepInEx/plugins/CoolMod.dll")).map(|t| t == "v2").unwrap_or(false));
         wait_until("no update left", || api(&h, "/api/state", json!({}))["thunder_updates"].as_array().map(|u| u.is_empty()).unwrap_or(false));
+        wait_until("the new version is listed", || st()["mods"][1]["version"].as_str() == Some("1.1.0"));
         let mods = st()["mods"].clone();
         assert_eq!(mods.as_array().unwrap().len(), 2, "replaced, not added; BepInEx was not fetched again");
         assert_eq!((mods[1]["name"].as_str(), mods[1]["version"].as_str()), (Some("Cool Mod"), Some("1.1.0")));

@@ -2775,6 +2775,30 @@ mod tests {
     }
 
     #[test]
+    fn a_mod_that_clashes_with_the_games_folders_fails_cleanly_and_leaves_the_game_as_it_was() {
+        let d = TempDir::new("clash");
+        let game = d.join("lib/common/Clash");
+        write(&game.join("Data"), "I am a file, not a folder");
+        write(&game.join("Folder/inner.txt"), "ORIGINAL");
+        write(&game.join("Clash.exe"), "MZ");
+        let lib = Library::locate(&game, &d.join("data"), "7");
+        // a mod that needs a folder where the game has a file, and a file where the game has a folder
+        let s = stage(&d, "c", &[("Data/x.esp", "X"), ("Folder", "now a file"), ("ok.txt", "fine")]);
+        lib.add_with_target(&s, "Clash", "c.zip", None, "", Some("")).unwrap();
+        let r = lib.deploy(false);
+        // whatever it decided, the game's own things are intact and nothing is half done
+        assert_eq!(fs::read_to_string(game.join("Data")).unwrap(), "I am a file, not a folder");
+        assert_eq!(fs::read_to_string(game.join("Folder/inner.txt")).unwrap(), "ORIGINAL");
+        if r.is_err() {
+            assert!(!game.join("ok.txt").exists(), "a failed deploy leaves nothing behind");
+        }
+        lib.purge().unwrap();
+        assert_eq!(fs::read_to_string(game.join("Data")).unwrap(), "I am a file, not a folder");
+        assert_eq!(fs::read_to_string(game.join("Folder/inner.txt")).unwrap(), "ORIGINAL");
+        assert!(!game.join("ok.txt").exists());
+    }
+
+    #[test]
     fn a_preview_says_where_files_would_go_and_a_chosen_folder_beats_the_guess() {
         let (d, game, lib) = racing_setup("preview");
         let s = stage(&d, "p", &[("Replace/VEH_2_HI.BNDL", "H"), ("Replace/VEH_2_LO.BNDL", "L"), ("Readme.txt", "r")]);
