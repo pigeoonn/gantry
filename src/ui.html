@@ -565,6 +565,7 @@
   .ml-main { flex: 1; min-width: 0; }
   .ml-name { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ml-sub { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ml-sub.wrap { white-space: normal; overflow: visible; }
   .ml-row input[type=checkbox] { width: 17px; height: 17px; accent-color: color-mix(in srgb, #34d399, var(--ink) var(--lift)); cursor: pointer; }
   .ml-conf { font-size: 11px; color: var(--text-muted); line-height: 1.7; z-index: 2; }
   .ml-conf b { color: color-mix(in srgb, #fbbf24, var(--ink) var(--lift)); }
@@ -2058,11 +2059,11 @@
       default: return n === 1 ? 0 : 1;
     }
   }
-  function tp(n, one, other) {
+  function tp(n, one, other, ...more) {
     const v = DICT[other];
-    if (Array.isArray(v)) return fmtN(v[Math.min(pluralIdx(n), v.length - 1)], [n]);
-    if (typeof v === 'string') return fmtN(v, [n]);
-    return fmt(n === 1 ? one : other, [n]);
+    if (Array.isArray(v)) return fmtN(v[Math.min(pluralIdx(n), v.length - 1)], [n, ...more]);
+    if (typeof v === 'string') return fmtN(v, [n, ...more]);
+    return fmt(n === 1 ? one : other, [n, ...more]);
   }
   function buildPatterns() {
     PATS = [];
@@ -4129,7 +4130,25 @@
 
   // ---------- Conflict viewer (the mod library) ----------
   let lcQuery = '', lcTimer = null;
-  async function openLibConflicts() {
+  // conflicts inside archives and scripts, which file names do not show
+  function lcDeepHtml(r) {
+    const ar = r.archives || [], sc = r.scripts || [];
+    let h = '';
+    if (ar.length) {
+      h += `<div class="cp-h" style="margin-top:12px">${t('Inside the archives')}</div><div style="color:var(--text-muted); font-size:12px; margin-bottom:4px">${ar[0].ordered ? t('The game reads archives in the order of their file names (# and numbers first, then capital letters, then small ones). When two change the same thing, the one read first wins.') : t('Your modlist.txt sets the order the game reads archives in, so it decides who wins.')}</div>` +
+        ar.slice(0, 30).map(c => `<div class="disk-row"><span style="flex:1; min-width:0"><b>${escapeHtml(c.winner_mod)}</b>${c.ordered ? ' → ' : ' ⇄ '}${escapeHtml(c.loser_mod)}<small style="display:block; color:var(--text-muted)">${escapeHtml(c.winner)} · ${escapeHtml(c.loser)}</small></span><span>${tp(c.resources, '{} game file', '{} game files')}</span><button class="btn" onclick='ipcSend("/api/lib_toggle", { id: ${JS(lcModId(c.loser_mod))}, enabled: false }); setTimeout(() => renderLibConflicts(false), 1200)'>${t('Switch off {}', escapeHtml(c.loser_mod))}</button></div>`).join('');
+    }
+    if (sc.length) {
+      const kind = c => c.kind === 'class' ? t('both define {}', c.what) : c.kind === 'replace' ? t('both replace {}', c.what) : t('both add {}', c.what);
+      h += `<div class="cp-h" style="margin-top:12px">${t('Scripts')}</div><div style="color:var(--text-muted); font-size:12px; margin-bottom:4px">${t('Two mods that define the same script code usually stop the game\'s scripts from loading. Keep one of them on.')}</div>` +
+        sc.slice(0, 30).map(c => `<div class="disk-row"><span style="flex:1; min-width:0"><b>${escapeHtml(c.mods.join(', '))}</b><small style="display:block; color:var(--text-muted)">${escapeHtml(kind(c))}</small></span></div>`).join('');
+    }
+    return h;
+  }
+  function lcModId(name) { const m = ((modLibData() || {}).mods || []).find(x => x.name === name); return m ? m.id : ''; }
+
+  async function openLibConflicts(q) {
+    lcQuery = typeof q === 'string' ? q : '';
     document.getElementById('lcModal').classList.add('open');
     await renderLibConflicts(true);
   }
@@ -4153,7 +4172,7 @@
       return;
     }
     if (!r.total) {
-      box.innerHTML = `<div class="cd-card" style="color:color-mix(in srgb, #34d399, var(--ink) var(--lift)); font-weight:700;">${t('✅ No two of your enabled mods provide the same file.')}</div>`;
+      box.innerHTML = `<div class="cd-card" style="color:color-mix(in srgb, #34d399, var(--ink) var(--lift)); font-weight:700;">${t('✅ No two of your enabled mods provide the same file.')}</div>` + lcDeepHtml(r);
       return;
     }
     const dead = r.mods.filter(m => m.dead);
@@ -4164,7 +4183,7 @@
       <div style="color:var(--text-muted)">${tp(r.total, '{} file is provided by more than one mod.', '{} files are provided by more than one mod.')} ${r.pinned ? tp(r.pinned, '{} is decided by you.', '{} are decided by you.') : t('The mod lower in the list wins.')}
         ${r.pinned ? `<a class="pick" style="cursor:pointer; text-decoration:underline" onclick="lcAct('/api/lib_clear_pins', {})">${t('Back to the load order')}</a>` : ''}</div>
       ${deadHtml}
-      <div class="cp-h" style="margin-top:12px">${t('Who overwrites whom')}</div>${pairsHtml}
+      <div class="cp-h" style="margin-top:12px">${t('Who overwrites whom')}</div>${pairsHtml}${lcDeepHtml(r)}
       <div class="cp-h" style="margin-top:12px">${t('Files')}</div>
       <input type="text" class="input-field" id="lcSearch" placeholder="${escapeHtml(t('Search a file or a mod'))}" value="${escapeHtml(lcQuery)}" oninput="lcSearch(this.value)" style="width:100%">
       <div id="lcCount" style="color:var(--text-muted); font-size:12px; margin:6px 0">${lcCountText(r)}</div>
@@ -4802,6 +4821,8 @@
         drift: () => tp(Number(a[0]), '{} deployed file was changed outside Gantry', '{} deployed files were changed outside Gantry'),
         needs: () => t('Missing mods these mods need: {}', a[0]),
         duplicate_mod: () => t('The same mod is installed more than once: {}. Keep one of them.', a[0]),
+        archive_clash: () => t('Mods change the same game files inside their archives: {}. Only one of each pair takes effect.', a.join('; ')),
+        script_clash: () => t('Two mods define the same script code: {}. The game may refuse to load their scripts.', a.join('; ')),
         needs_framework: () => t('Your mods need {} to work, and the game does not have it yet.', a.join(', ')),
         dirty: () => t('Changes are not deployed yet.'),
         needs_loader: () => t('These mods need a mod loader first (see the card below).'),
@@ -4814,6 +4835,7 @@
       vanilla: `<button class="btn" onclick="modLibPurge()">${t('○ Back to vanilla')}</button>`,
       redeploy: `<button class="btn" onclick="ipcSend('/api/lib_deploy', {})">${t('▶ Deploy')}</button>`,
       deploy: `<button class="btn" onclick="ipcSend('/api/lib_deploy', {})">${t('▶ Deploy')}</button>`,
+      conflicts: `<button class="btn" onclick="openLibConflicts()">${t('Show them')}</button>`,
     }[i.fix] || '');
     const switchBtn = (i) => {
       if (!['frozen', 'incomplete', 'errors', 'not_loaded'].includes(i.code) || !d.loader) return '';
@@ -6133,6 +6155,7 @@
           <div class="ml-name">${dot ? `<span class="ml-dot ${dot[0]}" title="${escapeHtml(dot[1])}"></span>` : ''}<span class="ml-src ${src[0]}" title="${escapeHtml(src[1])}">${src[0] === 'hand' ? '✋' : src[0] === 'nx' ? 'N' : src[0] === 'ts' ? 'TS' : src[0] === 'mio' ? 'io' : 'GH'}</span>${escapeHtml(m.name)}${m.group ? `<span class="ml-group">${escapeHtml(m.group)}</span>` : ''} ${m.version ? `<small style="color:var(--text-muted)">v${escapeHtml(m.version)}</small>` : ''}${(m.programs || []).length ? ` <span title="${escapeHtml(t('Contains programs: {}', m.programs.slice(0, 3).join(', ')))}">⚠</span>` : ''}${m.update_rule === 'never' ? ` <span title="${escapeHtml(t('You chose to keep this version: it is never updated.'))}">🔒</span>` : m.update_rule === 'auto' ? ` <span title="${escapeHtml(t('Updates itself when the game is closed.'))}">⟳</span>` : ''} ${m.conflicts ? '<span class="ml-pill warn" style="margin-left:4px">⚔</span>' : ''}</div>
           ${need ? `<div class="ml-need">⚠ ${t('Needs')}: ${need.missing.map(r => r.page_url ? `<a onclick='openNexusPage(${JS(r.page_url)})' title="${escapeHtml(r.notes || t('Open its Nexus page'))}">↗ ${escapeHtml(r.name)}</a>` : escapeHtml(r.name)).join(', ')}<button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:6px" title="${escapeHtml(nx.premium ? '' : t('Opens their Nexus pages one after another: press Mod Manager Download on each and Gantry installs it.'))}" onclick='ipcSend("/api/nexus_install_needs", { appid: ${JS(need.appid)}, lib_id: ${JS(need.lib_id)} })'>${nx.premium ? t('Install them') : t('Get them')}</button></div>` : ''}
           ${cores.length ? `<div class="ml-need">⚠ ${t('Needs')}: ${cores.map(c => `<span style="white-space:nowrap"><a onclick='openWeb(${JS(c.url)})' title="${escapeHtml(t('Open its page'))}">↗ ${escapeHtml(c.name)}</a><button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:4px" title="${escapeHtml(t('Installs it from its official releases, with what it needs itself'))}" onclick='ipcSend("/api/core_install", { name: ${JS(c.name)} })'>${t('Install {}', escapeHtml(c.name))}</button></span>`).join(' ')}</div>` : ''}
+          ${(m.wins || []).length || (m.loses || []).length ? `<div class="ml-sub wrap">⚔ ${[].concat((m.wins || []).map(w => escapeHtml(tp(w.files, 'wins {} file over {}', 'wins {} files over {}', w.mod))), (m.loses || []).map(w => escapeHtml(tp(w.files, 'loses {} file to {}', 'loses {} files to {}', w.mod)))).join(' · ')}${(m.loses || []).length ? ` <button class="btn" style="padding:1px 8px; font-size:10.5px" onclick='ipcSend("/api/lib_prefer", { winner: ${JS(m.id)}, over: "" })'>${t('Let it win them all')}</button>` : ''} <button class="btn" style="padding:1px 8px; font-size:10.5px" onclick='openLibConflicts(${JS(m.name)})'>${t('Show')}</button></div>` : ''}
           ${m.note ? `<div class="ml-note">${escapeHtml(m.note)}</div>` : ''}
           <div class="ml-sub">${tp(m.files, '{} file', '{} files')} · ${fmtSize(m.size)}${m.added_ms ? ' · ' + escapeHtml(t('added {}', ago(m.added_ms))) : ''} · ${escapeHtml(m.source || t('manual'))}${m.target ? ' · ' + t('into {}/', escapeHtml(m.target)) : ''}${m.placed_by === 'names' ? ' · ' + t('placed by matching file names') : (m.placed_by === 'readme' ? ' · ' + t('placed as its instructions say') : (m.placed_by === 'pack' ? ' · ' + t('placed by the game\'s support entry') : ''))}${m.nexus ? ' · ' + t('from Nexus') : ''}${m.thunderstore ? ' · ' + t('from Thunderstore') : ''}${(m.depends_on || []).length ? ' · ' + t('needs {}', m.depends_on.map(d => d.split('-').slice(1).join('-').replace(/_/g, ' ')).join(', ')) : ''}</div>
         </div>

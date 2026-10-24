@@ -611,6 +611,22 @@ impl Library {
         self.root.join("mods").join(id).join("files")
     }
 
+    /// Every file of the enabled mods: which mod, where it lands in the game, where it is kept.
+    pub fn enabled_mod_files(&self) -> Vec<crate::clashes::ModFile> {
+        self.load()
+            .mods
+            .into_iter()
+            .filter(|m| m.enabled)
+            .flat_map(|m| {
+                let dir = self.mod_files_dir(&m.id);
+                m.files
+                    .iter()
+                    .map(|f| crate::clashes::ModFile { mod_name: m.name.clone(), dest: if m.target.is_empty() { f.clone() } else { format!("{}/{}", m.target, f) }, src: dir.join(f) })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     fn load(&self) -> LibFile {
         let p = self.lib_path();
         match fs::read(&p) {
@@ -2400,6 +2416,22 @@ impl Library {
             json!({ "count": d.len(), "files": first })
         };
         let in_conflict: HashSet<&String> = plan.conflicts.iter().flat_map(|c| c.mods.iter()).collect();
+        // per mod: over whom it wins files and to whom it loses them, the most first
+        let mut wins: HashMap<&str, BTreeMap<&str, usize>> = HashMap::new();
+        let mut loses: HashMap<&str, BTreeMap<&str, usize>> = HashMap::new();
+        for c in &plan.conflicts {
+            for (id, name) in c.ids.iter().zip(&c.mods) {
+                if *id != c.winner_id {
+                    *wins.entry(c.winner_id.as_str()).or_default().entry(name.as_str()).or_default() += 1;
+                    *loses.entry(id.as_str()).or_default().entry(c.winner.as_str()).or_default() += 1;
+                }
+            }
+        }
+        let top = |m: Option<&BTreeMap<&str, usize>>| -> Vec<Value> {
+            let mut v: Vec<(&str, usize)> = m.map(|m| m.iter().map(|(k, n)| (*k, *n)).collect()).unwrap_or_default();
+            v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+            v.into_iter().take(2).map(|(k, n)| json!({ "mod": k, "files": n })).collect()
+        };
         let ours: HashSet<String> = j.entries.iter().map(|e| e.rel.to_lowercase()).collect();
         let overwrites = plan
             .files
@@ -2426,6 +2458,8 @@ impl Library {
                 "source": m.source, "files": m.files.len(), "size": m.size, "added_ms": m.added_ms, "notes": m.notes.len(), "placed_by": m.placed_by, "note": m.note, "group": m.group, "depends_on": m.depends_on, "update_rule": m.update_rule, "verified": m.verified, "programs": m.programs,
                 "needed_by": m.thunderstore.as_ref().map(|t| lf.mods.iter().filter(|o| o.id != m.id && o.depends_on.iter().any(|d| d.eq_ignore_ascii_case(&t.full_name()))).map(|o| o.name.clone()).collect::<Vec<_>>()).unwrap_or_default(),
                 "conflicts": in_conflict.contains(&m.name),
+                "wins": top(wins.get(m.id.as_str())),
+                "loses": top(loses.get(m.id.as_str())),
             })).collect::<Vec<_>>(),
         })
     }

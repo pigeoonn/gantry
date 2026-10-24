@@ -478,8 +478,7 @@ mod tests {
                 };
                 for it in items {
                     assert!(!it.trim().is_empty(), "{code}: empty translation of {key:?}");
-                    let mut want: Vec<usize> = if plurals.contains(key) { vec![1] } else { (1..=n).collect() };
-                    want.sort();
+                    let want: Vec<usize> = (1..=n).collect();
                     let mut found: Vec<usize> = NUMBERED.captures_iter(it).map(|c| c[1].parse().unwrap()).collect();
                     found.sort();
                     found.dedup();

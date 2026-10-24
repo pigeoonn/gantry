@@ -154,6 +154,23 @@ Under a mod's name in the Mods tab, *⚠ Needs* lists what it needs and is missi
 - **Nexus requirements**, as the author listed them on the mod's page (needs your Nexus key). *↗ Name* opens that mod's
   page; *Install them* / *Get them* fetches all of them (one page at a time on a free account).
 
+## Conflicts
+
+When two mods put the same file in the game, the one later in the load order wins it. Each mod's row says what it wins
+and loses (*⚔ wins 12 files over X · loses 1 file to Y*); *Let it win them all* moves it ahead of everyone, *Show* opens
+*Conflicts between your mods* filtered to it.
+
+Cyberpunk 2077 packs its changes inside `.archive` files, so two mods with different file names can still change the
+same thing. Gantry reads the index of every enabled archive in `archive/pc/mod`:
+
+- **Inside the archives.** The game loads archives in the order of their file names (byte order: `#` and digits, then
+  capitals, then small letters), and the first loaded wins. A `modlist.txt` in `archive/pc/mod` replaces that order;
+  Gantry then shows the pair without guessing a winner. *Switch off Y* turns the losing mod off.
+- **Scripts.** Two Redscript mods that declare the same `class`, or both `@replaceMethod` / `@addMethod` the same
+  method, usually stop every script from loading. `@wrapMethod` is fine and is not flagged.
+
+Both appear in the health check as warnings with *Show them*.
+
 ## Trainers
 
 Drop a trainer `.exe` on the window (or pick it with Browse) to attach it to the selected game. *Run Trainer* starts it

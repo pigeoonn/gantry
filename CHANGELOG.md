@@ -40,6 +40,11 @@
   red dot when it needs another mod and an amber one when it shares files with another; new chips *Needs something* and
   *Core* (the game's core mods and loaders, grouped by themselves); a group shown by itself can be turned on or off
   as a whole. A mod that was updated has *↶ v1.2* on its row to go back, and three old versions are kept (was two).
+- **Conflicts you could not see before:** each mod's row says which mods it wins files over and loses files to, with
+  *Let it win them all*. For Cyberpunk 2077 Gantry also looks inside `.archive` files: two archives that change the same
+  game resource are shown with the one the game actually uses (the one whose file name sorts first, or your
+  `modlist.txt` order), and two Redscript mods that define or replace the same class or method are flagged, since that
+  usually stops all scripts from loading. Both also show up in the game's health check.
 - **Fixed:** a Cyberpunk mod zipped as only `red4ext/...` or `engine/...` lost that folder when the game did not have it
   yet, and landed in the wrong place.
 

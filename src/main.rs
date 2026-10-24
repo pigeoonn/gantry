@@ -7,6 +7,7 @@ pub mod crash;
 pub mod deploy;
 pub mod engine;
 pub mod fomod;
+pub mod clashes;
 pub mod frameworks;
 pub mod fsutil;
 pub mod github;
@@ -2866,6 +2867,9 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
     }
     out.extend(duplicate_issues(&mods));
     out.extend(framework_issue(&dir, &mods));
+    if let Some(l) = &lib {
+        out.extend(clash_issues(&dir, l));
+    }
     if status["dirty"].as_bool().unwrap_or(false) && !mods.is_empty() && drift == 0 {
         out.push(issue("dirty", "info", "deploy", vec![]));
     }
@@ -2899,6 +2903,30 @@ fn framework_issue(dir: &Path, mods: &[deploy::LibMod]) -> Option<Value> {
     let mut i = issue("needs_framework", "warn", "setup", fw.iter().map(|x| x.name.to_string()).collect());
     i["links"] = json!(fw.iter().map(|x| json!({ "name": x.name, "url": x.page })).collect::<Vec<_>>());
     Some(i)
+}
+
+/// Conflicts that file names do not show: Cyberpunk archives bringing the same game resource, and Redscript
+/// declarations made by two mods.
+fn clash_view(dir: &Path, lib: &deploy::Library) -> (Vec<clashes::ArchiveClash>, Vec<clashes::ScriptClash>) {
+    let files = lib.enabled_mod_files();
+    let has_modlist = dir.join("archive/pc/mod/modlist.txt").is_file();
+    (clashes::archive_clashes(&files, has_modlist), clashes::script_clashes(&files))
+}
+
+fn clash_issues(dir: &Path, lib: &deploy::Library) -> Vec<Value> {
+    // only games whose mods have archives or scripts are read at all
+    if !dir.join("archive/pc").is_dir() && !dir.join("r6").is_dir() {
+        return Vec::new();
+    }
+    let (archives, scripts) = clash_view(dir, lib);
+    let mut out = Vec::new();
+    if !archives.is_empty() {
+        out.push(issue("archive_clash", "warn", "conflicts", archives.iter().take(4).map(|c| format!("{} / {}", c.winner_mod, c.loser_mod)).collect()));
+    }
+    if !scripts.is_empty() {
+        out.push(issue("script_clash", "warn", "conflicts", scripts.iter().take(4).map(|c| format!("{} ({})", c.what, c.mods.join(", "))).collect()));
+    }
+    out
 }
 
 /// Less free space than this on the game's drive is worth a word before playing (saves, shader caches, logs).
@@ -4529,7 +4557,14 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             let q = query_param(&query, "q").unwrap_or_default();
             let body = selected_game(&state)
                 .and_then(|g| library_of(&g))
-                .map(|lib| lib.conflict_view(&q, 300))
+                .map(|lib| {
+                    let mut v = lib.conflict_view(&q, 300);
+                    let dir = selected_game(&state).map(|g| PathBuf::from(g.game_dir)).unwrap_or_default();
+                    let (archives, scripts) = clash_view(&dir, &lib);
+                    v["archives"] = json!(archives);
+                    v["scripts"] = json!(scripts);
+                    v
+                })
                 .unwrap_or_else(|| json!({ "total": 0, "matching": 0, "pinned": 0, "mods": [], "pairs": [], "files": [] }));
             return respond_json(req, 200, body.to_string());
         }
@@ -11247,11 +11282,47 @@ mod tests {
         api(&h, "/api/core_install", json!({ "name": "ArchiveXL" }));
         wait_until("ArchiveXL and RED4ext are in", || dir.join("red4ext/plugins/ArchiveXL/ArchiveXL.dll").is_file() && dir.join("red4ext/RED4ext.dll").is_file());
         wait_until("the list follows", || names(&needs()[&jacket]) == vec!["TweakXL"]);
-        let core_ids = api(&h, "/api/state", json!({}))["library"]["core_ids"].clone();
-        assert_eq!(core_ids.as_array().map(|a| a.len()), Some(2), "ArchiveXL and RED4ext are core mods, the jacket is not: {core_ids}");
+        // ArchiveXL and RED4ext are core mods, the jacket is not
+        wait_until("both core mods are marked", || api(&h, "/api/state", json!({}))["library"]["core_ids"].as_array().map(|a| a.len()) == Some(2));
         assert!(!dir.join("red4ext/plugins/TweakXL").exists());
         api(&h, "/api/core_install", json!({ "name": "Not A Core" }));
         assert!(last_log(&h).contains("does not know that core mod"));
+    }
+
+    #[test]
+    fn conflicts_inside_archives_and_scripts_are_shown_with_who_wins() {
+        let h = harness("deepclash");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("bin/x64")).unwrap();
+        fs::write(dir.join("bin/x64/Cyberpunk2077.exe"), b"MZ").unwrap();
+        fs::create_dir_all(dir.join("archive/pc/mod")).unwrap();
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        let add = |n: &str, files: Vec<(&str, Vec<u8>)>| {
+            let s = h._dir.join(&format!("stage-{n}"));
+            for (f, b) in files {
+                fs::create_dir_all(s.join(f).parent().unwrap()).unwrap();
+                fs::write(s.join(f), b).unwrap();
+            }
+            lib.add_with(&s, n, &format!("{n}.zip"), None, "1").unwrap();
+        };
+        add("Judy Stays", vec![("archive/pc/mod/#Stay_Judy.archive", clashes::testutil::archive(&[7, 8])), ("r6/scripts/j.reds", b"class StayHelper {}".to_vec()), ("shared.txt", b"J".to_vec())]);
+        add("Panam Stays", vec![("archive/pc/mod/#Stay_Panam.archive", clashes::testutil::archive(&[8, 9])), ("r6/scripts/p.reds", b"class StayHelper {}".to_vec()), ("shared.txt", b"P".to_vec())]);
+        refresh_mods_shared(&h.state);
+        let (issues, _) = game_issues(&h.state, &g, false);
+        let codes: Vec<&str> = issues.iter().filter_map(|i| i["code"].as_str()).collect();
+        assert!(codes.contains(&"archive_clash") && codes.contains(&"script_clash"), "{codes:?}");
+        let (_, body) = http(&h, "GET", "/api/conflict_view", &[("X-Rig-Token", &h.token)], b"");
+        let v: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!((v["archives"][0]["winner_mod"].as_str(), v["archives"][0]["resources"].as_u64()), (Some("Judy Stays"), Some(1)), "{}", v["archives"]);
+        assert_eq!(v["scripts"][0]["what"], "StayHelper");
+        // the shared plain file: the later mod wins it, and each row says so
+        let mods = api(&h, "/api/state", json!({}))["library"]["mods"].clone();
+        let row = |n: &str| mods.as_array().unwrap().iter().find(|m| m["name"] == n).unwrap().clone();
+        assert_eq!(row("Panam Stays")["wins"][0], json!({ "mod": "Judy Stays", "files": 1 }));
+        assert_eq!(row("Judy Stays")["loses"][0], json!({ "mod": "Panam Stays", "files": 1 }));
+        // a game without archives or scripts is not read at all
+        assert!(clash_issues(&h._dir.join("nowhere"), &lib).is_empty());
     }
 
     #[test]
