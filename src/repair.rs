@@ -105,6 +105,9 @@ pub struct LaunchOpts {
 pub struct RigConfigData {
     #[serde(default)]
     pub trainers: HashMap<String, String>,
+    /// Every trainer kept for a game (paths), the attached one among them.
+    #[serde(default)]
+    pub trainer_shelf: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub launch_options: HashMap<String, LaunchOpts>,
     #[serde(default)]

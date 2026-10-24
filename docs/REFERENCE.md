@@ -133,6 +133,22 @@ finds something that would make the game start broken, a window lists it, each l
 
 When nothing is found the game starts right away. *Play anyway* skips the fixes.
 
+## Trainers
+
+Drop a trainer `.exe` on the window (or pick it with Browse) to attach it to the selected game. *Run Trainer* starts it
+the way Steam starts the game (the same Proton build, prefix and settings), and Gantry starts it by itself after
+*Play* when *Auto Trainer* is on.
+
+- **Does it run?** For about ten seconds after the start Gantry looks for the trainer among the running programs. Next
+  to its name it then says *Running with the game*, *Running, but in another prefix* (the game was started some other
+  way, so the trainer cannot reach it), *Closed after N s* (with what the trainer printed, and the fix when it is a
+  known one: Visual C++ or .NET missing in the prefix, a different compatibility tool) or *Not seen yet*.
+- **Version check.** Trainer names usually say which game versions they are for ("Cyberpunk 2077 v2.0-v2.5 Plus 46
+  Trainer.exe"). Gantry compares that with the version the game's executable declares and warns when the game is
+  newer or older. When the two numbers cannot be compared (an engine version, a build number), it says nothing.
+- **Several trainers per game.** Every trainer attached to a game is kept. *▾ N trainers kept* switches to another one
+  or removes one; Gantry's own copy is deleted then, a file somewhere else (your Downloads) is only forgotten.
+
 ## Save Guard
 *💾 Save Guard* snapshots a game's save folders automatically before every launch (skipped when nothing changed), on request,
 during Full Setup and before any restore, and keeps the newest eight of each kind. Unreal `SaveGames` folders are found by

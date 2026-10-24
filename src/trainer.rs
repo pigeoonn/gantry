@@ -7,6 +7,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -93,8 +94,16 @@ fn start_one(mut cmd: Command, log: &Path, first: bool, name: &str, settle: Dura
     Ok(child)
 }
 
+/// A started trainer: the way that worked, the pid Gantry started, and when that process ended (with its exit status).
+#[derive(Debug, Clone)]
+pub struct Started {
+    pub how: &'static str,
+    pub pid: u32,
+    pub ended: Arc<Mutex<Option<(Instant, String)>>>,
+}
+
 /// Starts the trainer. `Ok` names the way that worked; `Err` says what every way printed or why it stopped.
-pub fn start(l: &Launch, settle: Duration) -> Result<&'static str, String> {
+pub fn start(l: &Launch, settle: Duration) -> Result<Started, String> {
     if let Some(parent) = l.log_file.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -102,10 +111,13 @@ pub fn start(l: &Launch, settle: Duration) -> Result<&'static str, String> {
     for (i, (name, cmd)) in commands(l).into_iter().enumerate() {
         match start_one(cmd, l.log_file, i == 0, name, settle) {
             Ok(mut child) => {
+                let ended = Arc::new(Mutex::new(None));
+                let (pid, mark) = (child.id(), Arc::clone(&ended));
                 thread::spawn(move || {
-                    let _ = child.wait();
+                    let status = child.wait().map(|s| s.to_string()).unwrap_or_default();
+                    *mark.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), status));
                 });
-                return Ok(name);
+                return Ok(Started { how: name, pid, ended });
             }
             Err(e) => why.push(e),
         }
@@ -136,6 +148,63 @@ pub fn cause_of(output: &str) -> Option<Cause> {
     } else {
         None
     }
+}
+
+/// The game versions a trainer says it is made for, from its file name ("Cyberpunk 2077 v2.0-v2.5 Plus 46 Trainer.exe"
+/// gives 2.0 to 2.5; "v1.100.0 Plus 18" gives exactly 1.100.0). `None` when the name does not say.
+pub fn made_for(file_name: &str) -> Option<(Vec<u32>, Vec<u32>)> {
+    static RANGE: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"(?i)(?:^|[\s_(\[-])v(\d+(?:\.\d+){1,3})(?:\s*[-~]\s*v?(\d+(?:\.\d+){1,3}))?(?:$|[\s_)\].+-])").unwrap());
+    let c = RANGE.captures(file_name)?;
+    let parse = |t: &str| t.split('.').map(|n| n.parse::<u32>().ok()).collect::<Option<Vec<u32>>>();
+    let from = parse(c.get(1)?.as_str())?;
+    let to = c.get(2).and_then(|m| parse(m.as_str())).unwrap_or_else(|| from.clone());
+    Some((from, to))
+}
+
+fn cmp_version(a: &[u32], b: &[u32]) -> std::cmp::Ordering {
+    let n = a.len().max(b.len());
+    (0..n).map(|i| a.get(i).unwrap_or(&0).cmp(b.get(i).unwrap_or(&0))).find(|o| o.is_ne()).unwrap_or(std::cmp::Ordering::Equal)
+}
+
+/// How a game version sits against what the trainer is made for: `Less` (older), `Greater` (newer) or `Equal` (fits).
+/// `None` when the two cannot be compared: different first numbers usually mean the game's file carries some other
+/// number (an engine version, a build), and a wrong warning is worse than none.
+pub fn fits(game: &[u32], made_for: &(Vec<u32>, Vec<u32>)) -> Option<std::cmp::Ordering> {
+    let (from, to) = made_for;
+    if game.is_empty() || game.first() != from.first() || game.iter().all(|&n| n == 0) {
+        return None;
+    }
+    // compare only as many parts as the trainer names: v2.5 covers 2.5.0.1 too
+    let cut = |v: &[u32], n: usize| v.iter().copied().take(n).collect::<Vec<u32>>();
+    if cmp_version(&cut(game, from.len()), from).is_lt() {
+        Some(std::cmp::Ordering::Less)
+    } else if cmp_version(&cut(game, to.len()), to).is_gt() {
+        Some(std::cmp::Ordering::Greater)
+    } else {
+        Some(std::cmp::Ordering::Equal)
+    }
+}
+
+/// The product version a Windows executable declares (`VS_FIXEDFILEINFO`), trailing zero parts dropped.
+pub fn product_version(data: &[u8]) -> Option<Vec<u32>> {
+    let sig = [0xBDu8, 0x04, 0xEF, 0xFE];
+    let pos = data.windows(4).position(|w| w == sig)?;
+    let b = data.get(pos..pos + 24)?;
+    let word = |i: usize| u32::from_le_bytes(b[i..i + 4].try_into().unwrap());
+    if word(4) != 0x0001_0000 {
+        return None;
+    }
+    let (ms, ls) = (word(16), word(20));
+    let mut v = vec![ms >> 16, ms & 0xffff, ls >> 16, ls & 0xffff];
+    while v.len() > 1 && v.last() == Some(&0) {
+        v.pop();
+    }
+    Some(v)
+}
+
+pub fn version_text(v: &[u32]) -> String {
+    v.iter().map(u32::to_string).collect::<Vec<_>>().join(".")
 }
 
 /// Where the trainer's output goes.
@@ -199,13 +268,13 @@ mod tests {
         // proton works: it stays up
         let good = d.join("Good/proton");
         script(&good, "echo started \"$@\"; sleep 2");
-        assert_eq!(start(&launch(Some(&good), &trainer, &compat, &steam, &log), Duration::from_millis(300)), Ok("proton run"));
+        assert_eq!(start(&launch(Some(&good), &trainer, &compat, &steam, &log), Duration::from_millis(300)).unwrap().how, "proton run");
         assert!(fs::read_to_string(&log).unwrap().contains("started run"));
         // proton refuses, its Wine works
         let bad = d.join("Bad/proton");
         script(&bad, "echo 'wineserver: version mismatch' >&2; exit 3");
         script(&d.join("Bad/files/bin/wine64"), "echo wine got \"$@\"; sleep 2");
-        assert_eq!(start(&launch(Some(&bad), &trainer, &compat, &steam, &log), Duration::from_millis(300)), Ok("wine"));
+        assert_eq!(start(&launch(Some(&bad), &trainer, &compat, &steam, &log), Duration::from_millis(300)).unwrap().how, "wine");
         let said = fs::read_to_string(&log).unwrap();
         assert!(said.contains("version mismatch") && said.contains("wine got"), "both tries are in the log: {said}");
         // nothing works: the message carries what was printed
@@ -223,6 +292,60 @@ mod tests {
         assert_eq!(cause_of("wineserver: version mismatch 811/815 - wineserver binary is from a different version"), Some(Cause::OtherBuild));
         assert_eq!(cause_of("fixme:ntdll:something unimportant"), None);
         assert_eq!(cause_of("the vcruntime was mentioned, nothing is wrong"), None);
+    }
+
+    #[test]
+    fn the_end_of_a_started_trainer_is_noticed() {
+        let d = TempDir::new("trainer-end");
+        let (compat, steam, log) = (d.join("compat"), d.join("Steam"), d.join("trainer.log"));
+        let trainer = d.join("t/x.exe");
+        fs::create_dir_all(d.join("t")).unwrap();
+        let quick = d.join("Quick/proton");
+        script(&quick, "sleep 0.4; exit 5");
+        let s = start(&launch(Some(&quick), &trainer, &compat, &steam, &log), Duration::from_millis(100)).unwrap();
+        assert!(s.pid > 0);
+        let until = Instant::now() + Duration::from_secs(5);
+        while s.ended.lock().unwrap().is_none() && Instant::now() < until {
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert!(s.ended.lock().unwrap().as_ref().is_some_and(|(_, st)| st.contains('5')), "the exit status is kept");
+    }
+
+    #[test]
+    fn the_versions_a_trainer_is_made_for_come_from_its_name() {
+        assert_eq!(made_for("Cyberpunk 2077 v2.0-v2.5 Plus 46 Trainer.exe"), Some((vec![2, 0], vec![2, 5])));
+        assert_eq!(made_for("hydra_steam_360430_Mafia III Definitive Edition v1.100.0 Plus 18 Trainer.exe"), Some((vec![1, 100, 0], vec![1, 100, 0])));
+        assert_eq!(made_for("Game v1.0.3 - v1.2 Trainer.exe"), Some((vec![1, 0, 3], vec![1, 2])));
+        assert_eq!(made_for("MPayne3+11Tr-LNG.exe"), None);
+        assert_eq!(made_for("WeMod Setup.exe"), None);
+        assert_eq!(made_for("Elden Ring v1 Trainer.exe"), None, "a lone number says too little");
+        assert_eq!(made_for("dev2.5 build.exe"), None);
+        let r = made_for("Cyberpunk 2077 v2.0-v2.5 Plus 46 Trainer.exe").unwrap();
+        use std::cmp::Ordering::*;
+        assert_eq!(fits(&[2, 5], &r), Some(Equal));
+        assert_eq!(fits(&[2, 5, 0, 1], &r), Some(Equal), "v2.5 covers its hotfixes");
+        assert_eq!(fits(&[2, 31], &r), Some(Greater));
+        assert_eq!(fits(&[2, 0], &r), Some(Equal));
+        assert_eq!(fits(&[1, 6], &r), None, "another first number: not comparable");
+        assert_eq!(fits(&[2021, 3, 1], &r), None, "a Unity version is not a game version");
+        let one = made_for("Mafia III v1.100.0 Trainer.exe").unwrap();
+        assert_eq!(fits(&[1, 100], &one), Some(Equal));
+        assert_eq!(fits(&[1, 110], &one), Some(Greater));
+        assert_eq!(fits(&[1, 90], &one), Some(Less));
+    }
+
+    #[test]
+    fn the_product_version_is_read_from_the_version_resource() {
+        let mut exe = b"MZ.....".to_vec();
+        exe.extend_from_slice(&[0xBD, 0x04, 0xEF, 0xFE, 0, 0, 1, 0]);
+        // file version 3.0.88.46235, product version 2.5.0.0, like Cyberpunk 2077 2.5
+        exe.extend_from_slice(&((3u32 << 16).to_le_bytes()));
+        exe.extend_from_slice(&((88u32 << 16 | 46235).to_le_bytes()));
+        exe.extend_from_slice(&((2u32 << 16 | 5).to_le_bytes()));
+        exe.extend_from_slice(&0u32.to_le_bytes());
+        assert_eq!(product_version(&exe), Some(vec![2, 5]));
+        assert_eq!(version_text(&[2, 5]), "2.5");
+        assert_eq!(product_version(b"MZ no resource"), None);
     }
 
     #[test]

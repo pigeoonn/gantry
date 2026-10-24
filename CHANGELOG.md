@@ -19,6 +19,12 @@
   in the Mods tab shows "3 of 7 done", which mod it waits for and what comes next, with *Open the page again*, *Skip*
   and *Stop*. Files saved with the website's *Manual download* button are picked up from the Downloads folder and
   installed too, so no link handler is needed.
+- **Trainers say whether they work.** After *Run Trainer*, Gantry looks for the trainer among the running programs and
+  checks it runs in the same Wine prefix as the game: "Running with the game" next to its name, or a plain reason
+  (it closed after 2 s and what it printed, it runs in another prefix, a missing Visual C++ or .NET). A trainer whose
+  name says which game versions it is for ("v2.0-v2.5") is checked against the version the game's executable declares,
+  with a warning when the game is newer or older. Several trainers are kept per game; *▾ 2 trainers kept* switches
+  between them or removes one.
 - **Fixed:** a Cyberpunk mod zipped as only `red4ext/...` or `engine/...` lost that folder when the game did not have it
   yet, and landed in the wrong place.
 

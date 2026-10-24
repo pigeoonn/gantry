@@ -303,6 +303,10 @@
   .badge.steam { background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.42); color: color-mix(in srgb, #bae6fd, var(--ink) var(--lift)); }
   .badge.pfx { background: rgba(16, 185, 129, 0.18); border: 1px solid rgba(16, 185, 129, 0.42); color: color-mix(in srgb, #a7f3d0, var(--ink) var(--lift)); }
 
+  .tr-run { font-size: 11px; font-weight: 600; white-space: nowrap; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 14%, transparent); color: var(--text-muted); }
+  .tr-run.ok { background: color-mix(in srgb, #22c55e 16%, transparent); color: color-mix(in srgb, #22c55e, var(--ink) var(--lift)); }
+  .tr-run.warn { background: color-mix(in srgb, #f59e0b 16%, transparent); color: color-mix(in srgb, #f59e0b, var(--ink) var(--lift)); }
+  .tr-run.bad { background: color-mix(in srgb, #ef4444 16%, transparent); color: color-mix(in srgb, #ef4444, var(--ink) var(--lift)); }
   .trainer-line { font-size: 12px; color: color-mix(in srgb, #fbbf24, var(--ink) var(--lift)); font-weight: 600; display: flex; align-items: center; gap: 8px; }
 
   .action-dock { display: flex; align-items: center; gap: 9px; padding: 10px 14px; flex-wrap: wrap; }
@@ -1296,7 +1300,9 @@
         </div>
         <div class="trainer-line">
           <span id="trainerLine" data-dyn></span>
+          <span id="trainerRun" class="tr-run" style="display:none" data-dyn></span>
           <button class="btn" id="btnDetachTrainer" style="display:none; padding:2px 7px; font-size:10px;" onclick="ipcSend('/api/detach_trainer')">Detach</button>
+          <button class="btn" id="btnTrainerShelf" style="display:none; padding:2px 7px; font-size:10px;" onclick="openTrainerShelf(event)" data-dyn></button>
         </div>
       </div>
       <div class="hero-stats" id="heroStats" data-dyn></div>
@@ -2161,6 +2167,25 @@
   let libAutoOpened = false;
   let ownedGames = [];   // everything the Steam account owns (from the Web API), fetched on demand
   let ownedStamp = -1;
+  // what came of the last Run Trainer for this game, next to the trainer's name
+  function renderTrainerRun(g) {
+    const el = document.getElementById('trainerRun');
+    const r = appState.trainer_run;
+    if (!el) return;
+    if (!r || !g || r.appid !== g.appid || !g.trainer_name) { el.style.display = 'none'; return; }
+    let cls = '', text;
+    if (r.state === 'starting') text = t('Starting…');
+    else if (r.state === 'attached' && r.alive) { cls = 'ok'; text = t('● Running with the game'); }
+    else if (r.state === 'elsewhere' && r.alive) { cls = 'warn'; text = t('● Running, but in another prefix'); }
+    else if (r.state === 'closed') { cls = 'bad'; text = r.secs ? t('Closed after {} s', r.secs) : t('Did not start'); }
+    else if (r.state === 'unseen') { cls = 'warn'; text = t('Not seen yet'); }
+    else text = t('Not running');
+    el.className = 'tr-run ' + cls;
+    el.textContent = text;
+    el.title = r.state === 'closed' || r.state === 'unseen' ? t('See the log for what it printed') : '';
+    el.style.display = '';
+  }
+
   let appState = { version: 0, games: [], mods: [], logs: [], profiles: [], protons: [], selected_idx: 0 };
   let currentFilter = 'all';
   let currentModTypeFilter = 'ALL';
@@ -2723,6 +2748,11 @@
     document.getElementById('trainerLine').textContent = g.trainer_name
       ? t('⚡ Attached Trainer: {}', g.trainer_name)
       : t('No trainer attached (Drag .exe trainer here or click Browse)');
+    renderTrainerRun(g);
+    const shelf = appState.trainer_shelf || [];
+    const shelfBtn = document.getElementById('btnTrainerShelf');
+    shelfBtn.style.display = shelf.length > (g.trainer_name ? 1 : 0) ? 'inline-flex' : 'none';
+    shelfBtn.textContent = tp(shelf.length, '▾ {} trainer kept', '▾ {} trainers kept');
 
     const steamId = steamArtId(g) || (g.name.toLowerCase().includes('half sword') ? '2397300' : '');
     const img = document.getElementById('coverImg');
@@ -5265,6 +5295,33 @@
     });
     document.body.appendChild(m);
     iconize(m);
+    const r = e.currentTarget.getBoundingClientRect();
+    m.style.left = Math.min(r.left, innerWidth - m.offsetWidth - 8) + 'px';
+    m.style.top = (r.bottom + 6) + 'px';
+    ctxEl = m;
+  }
+
+  // the trainers kept for this game: switch to another or let one go
+  function openTrainerShelf(e) {
+    e.stopPropagation();
+    closeCtx();
+    const m = document.createElement('div');
+    m.className = 'ctx-menu';
+    const add = (label, fn, cls) => {
+      const b = document.createElement('button');
+      b.className = 'ctx-item' + (cls ? ' ' + cls : '');
+      b.textContent = label;
+      if (fn) b.onclick = () => { closeCtx(); fn(); }; else b.disabled = true;
+      m.appendChild(b);
+    };
+    (appState.trainer_shelf || []).forEach(tr => {
+      const label = tr.made_for ? t('{} (for {})', tr.name, tr.made_for) : tr.name;
+      add((tr.current ? '✓ ' : '') + label, tr.current ? null : () => ipcSend('/api/trainer_use', { id: tr.id }));
+    });
+    (appState.trainer_shelf || []).forEach(tr => {
+      add(t('✕ Remove {}', tr.name), () => { if (confirm(t('Remove the trainer {} from this game? A copy Gantry keeps is deleted; a file elsewhere stays where it is.', tr.name))) ipcSend('/api/trainer_forget', { id: tr.id }); });
+    });
+    document.body.appendChild(m);
     const r = e.currentTarget.getBoundingClientRect();
     m.style.left = Math.min(r.left, innerWidth - m.offsetWidth - 8) + 'px';
     m.style.top = (r.bottom + 6) + 'px';

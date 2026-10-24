@@ -211,6 +211,29 @@ pub fn is_game_running(game: &GameEntry) -> bool {
     !game_pids(game).is_empty()
 }
 
+/// The Wine prefix a process runs in (its `WINEPREFIX`, without a trailing slash), when the system tells.
+#[cfg(target_os = "linux")]
+pub fn wine_prefix_of(pid: u32) -> Option<String> {
+    let raw = fs::read(format!("/proc/{pid}/environ")).ok()?;
+    raw.split(|&b| b == 0).find_map(|kv| kv.strip_prefix(b"WINEPREFIX=")).map(|v| String::from_utf8_lossy(v).trim_end_matches('/').to_string()).filter(|v| !v.is_empty())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn wine_prefix_of(_pid: u32) -> Option<String> {
+    None
+}
+
+/// Is this process still there?
+#[cfg(target_os = "linux")]
+pub fn alive(pid: u32) -> bool {
+    Path::new(&format!("/proc/{pid}")).exists() && !fs::read_to_string(format!("/proc/{pid}/stat")).map(|s| s.rsplit_once(')').map(|(_, r)| r.trim_start().starts_with('Z')).unwrap_or(false)).unwrap_or(true)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn alive(pid: u32) -> bool {
+    processes().iter().any(|(p, _)| *p == pid)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -182,6 +182,8 @@ pub struct AppState {
     pub setup_busy: Arc<AtomicBool>,
     /// The checklist of the last "Make this game moddable" run, ticked off as it goes.
     pub setup_run: Option<SetupRun>,
+    /// What came of the last trainer start (one trainer at a time).
+    pub trainer_run: Option<TrainerRun>,
     /// Latest crash analysis (any game); the UI shows it for the game it belongs to.
     pub crash: Option<CrashReport>,
     /// Open "find the culprit" session, if any (one at a time).
@@ -635,6 +637,7 @@ impl AppState {
             steam_env: SteamEnv::default(),
             setup_busy: Arc::new(AtomicBool::new(false)),
             setup_run: None,
+            trainer_run: None,
             crash: None,
             bisect: None,
             last_run: None,
@@ -802,6 +805,15 @@ impl AppState {
             "bisect": self.bisect_json(),
             "last_run": self.last_run,
             "undo": self.undo_json(),
+            "trainer_shelf": self.games.get(self.selected_idx).map(|g| {
+                let current = self.config.trainers.get(&g.appid).map(PathBuf::from);
+                trainer_shelf(self, &g.appid).iter().map(|p| {
+                    let name = trainer_display(&g.appid, p);
+                    let made_for = trainer::made_for(&name).map(|(a, b)| if a == b { trainer::version_text(&a) } else { format!("{}–{}", trainer::version_text(&a), trainer::version_text(&b)) });
+                    json!({ "id": p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(), "name": name, "made_for": made_for, "current": current.as_deref() == Some(p.as_path()) })
+                }).collect::<Vec<_>>()
+            }).unwrap_or_default(),
+            "trainer_run": self.trainer_run.as_ref().map(|r| json!({ "appid": r.appid, "state": r.state, "file": r.file, "alive": r.pid != 0 && procs::alive(r.pid), "secs": r.secs })),
             "nexus": self.nexus_json(),
             "steam_lib": self.steam_lib_json(),
             "last_played": self.last_played_json(),
@@ -1290,6 +1302,137 @@ fn game_proton(state: &SharedState, g: &GameEntry) -> Option<PathBuf> {
 }
 
 /// Starts a trainer for a game that is running (or about to) and says in the activity log what happened.
+/// What came of starting a trainer. `state` is "starting", "attached" (seen running in the game's Wine prefix),
+/// "elsewhere" (running, but the game runs in another prefix), "closed" (it ended; `secs` after the start) or
+/// "unseen" (started, but Gantry could not see it).
+#[derive(Clone, Debug)]
+pub struct TrainerRun {
+    pub appid: String,
+    pub file: String,
+    pub state: &'static str,
+    /// The trainer's own process once seen (0 before).
+    pub pid: u32,
+    pub secs: u64,
+}
+
+fn set_trainer_run(state: &SharedState, g: &GameEntry, file: &str, run_state: &'static str, pid: u32, secs: u64) {
+    let mut st = write_state(state);
+    st.trainer_run = Some(TrainerRun { appid: g.appid.clone(), file: file.to_string(), state: run_state, pid, secs });
+    st.notifier.bump();
+}
+
+/// The game's own executable, for its version.
+fn game_exe_file(g: &GameEntry) -> Option<PathBuf> {
+    [&g.shipping_exe, &g.exe_path].into_iter().filter(|p| !p.is_empty()).map(|p| {
+        let p = PathBuf::from(p);
+        if p.is_absolute() { p } else { Path::new(&g.game_dir).join(p) }
+    }).find(|p| p.is_file())
+}
+
+/// The product version the game's executable declares, read once per file version on disk.
+fn game_version(g: &GameEntry) -> Option<Vec<u32>> {
+    type Seen = std::collections::HashMap<PathBuf, (u64, Option<std::time::SystemTime>, Option<Vec<u32>>)>;
+    static SEEN: std::sync::LazyLock<Mutex<Seen>> = std::sync::LazyLock::new(Default::default);
+    let exe = game_exe_file(g)?;
+    let meta = fs::metadata(&exe).ok()?;
+    let key = (meta.len(), meta.modified().ok());
+    if let Some((len, at, v)) = SEEN.lock().unwrap_or_else(|e| e.into_inner()).get(&exe) {
+        if (*len, *at) == key {
+            return v.clone();
+        }
+    }
+    let v = fs::read(&exe).ok().and_then(|d| trainer::product_version(&d));
+    SEEN.lock().unwrap_or_else(|e| e.into_inner()).insert(exe, (key.0, key.1, v.clone()));
+    v
+}
+
+/// A warning when the trainer's name says it is made for other game versions than the one installed.
+fn trainer_version_warning(state: &SharedState, g: &GameEntry, file: &str) {
+    let Some(range) = trainer::made_for(file) else { return };
+    let Some(have) = game_version(g) else { return };
+    let span = if range.0 == range.1 { trainer::version_text(&range.0) } else { format!("{}–{}", trainer::version_text(&range.0), trainer::version_text(&range.1)) };
+    match trainer::fits(&have, &range) {
+        Some(std::cmp::Ordering::Greater) => log(state, "WARN", format!("This trainer is made for {} {}, and the game is {} now. Its cheats may not work or may crash the game; look for a newer trainer.", g.name, span, trainer::version_text(&have))),
+        Some(std::cmp::Ordering::Less) => log(state, "WARN", format!("This trainer is made for {} {}, and the game is the older {}. Its cheats may not work or may crash the game.", g.name, span, trainer::version_text(&have))),
+        _ => {}
+    }
+}
+
+/// How long the trainer gets to show up in the game's Wine session.
+fn attach_wait() -> Duration {
+    Duration::from_millis(if cfg!(test) { 2500 } else { 12_000 })
+}
+
+/// After the start: is the trainer really running, and in the game's Wine session? Says so in the log either way.
+fn watch_trainer(state: &SharedState, g: &GameEntry, trainer: &Path, started: &trainer::Started, log_file: &Path) {
+    let file = trainer.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let needle = file.to_lowercase();
+    let t0 = Instant::now();
+    set_trainer_run(state, g, &file, "starting", 0, 0);
+    let direct = started.how == "directly";
+    let ended_for = || started.ended.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(at, status)| (at.duration_since(t0), status.clone()));
+    let seen = loop {
+        // the process Gantry started is the trainer itself only on Windows; elsewhere it is Proton or Wine starting it
+        let pids: Vec<u32> = procs::pids_with_cmdline(&needle).into_iter().filter(|&p| direct || p != started.pid).collect();
+        if let Some(&pid) = pids.first() {
+            break Some((pid, pids));
+        }
+        let gone = ended_for().is_some_and(|(at, _)| t0.elapsed().saturating_sub(at) > Duration::from_millis(if cfg!(test) { 300 } else { 2000 }));
+        if gone || t0.elapsed() > attach_wait() {
+            break None;
+        }
+        thread::sleep(Duration::from_millis(if cfg!(test) { 50 } else { 400 }));
+    };
+    let secs = t0.elapsed().as_secs();
+    match seen {
+        Some((pid, pids)) => {
+            let trainer_pfx = pids.iter().find_map(|&p| procs::wine_prefix_of(p));
+            let game_pfx = procs::game_pids(g).into_iter().find_map(procs::wine_prefix_of);
+            match (trainer_pfx, game_pfx) {
+                (Some(t), Some(gp)) if t != gp => {
+                    set_trainer_run(state, g, &file, "elsewhere", pid, secs);
+                    log(state, "WARN", format!("The trainer runs, but in another Wine prefix than the game ({} instead of {}), so it cannot reach the game. Start the game through Gantry or Steam, then Run Trainer again.", t, gp));
+                }
+                _ => {
+                    set_trainer_run(state, g, &file, "attached", pid, secs);
+                    if platform::IS_WINDOWS || procs::wine_prefix_of(pid).is_none() {
+                        log(state, "OK", "The trainer is running. Use its hotkeys inside the game.");
+                    } else {
+                        log(state, "OK", format!("The trainer is running in {}'s Wine session. Use its hotkeys inside the game.", g.name));
+                    }
+                }
+            }
+        }
+        None => match ended_for() {
+            Some((at, status)) => {
+                set_trainer_run(state, g, &file, "closed", 0, at.as_secs());
+                let said = trainer::tail(log_file, 3);
+                if said.is_empty() {
+                    log(state, "WARN", format!("The trainer closed {} s after it started ({}).", at.as_secs(), status));
+                } else {
+                    log(state, "WARN", format!("The trainer closed {} s after it started ({}). It said: {}", at.as_secs(), status, said));
+                }
+                trainer_cause_hint(state, g, log_file);
+            }
+            None => {
+                set_trainer_run(state, g, &file, "unseen", 0, secs);
+                log(state, "INFO", "The trainer was started, but Gantry cannot see it among the game's processes yet. If its window does not show up, see the trainer log under Logs.");
+            }
+        },
+    }
+}
+
+fn trainer_cause_hint(state: &SharedState, g: &GameEntry, log_file: &Path) {
+    let app_id = compat_app_id(g);
+    let said = fs::read_to_string(log_file).unwrap_or_default();
+    match trainer::cause_of(&said) {
+        Some(trainer::Cause::CppRuntime) => log(state, "WARN", format!("The trainer needs the Visual C++ runtime in the game's prefix. Install it with protontricks: protontricks {} vcrun2022", app_id)),
+        Some(trainer::Cause::DotNet) => log(state, "WARN", format!("The trainer needs .NET in the game's prefix. Install it with protontricks: protontricks {} dotnet48", app_id)),
+        Some(trainer::Cause::OtherBuild) => log(state, "WARN", "The game and the trainer run with different compatibility tools. Pick the same one for both under Compatibility."),
+        None => {}
+    }
+}
+
 fn start_trainer(state: &SharedState, g: &GameEntry, trainer: &Path) -> bool {
     if !trainer.is_file() {
         log(state, "ERR", format!("The trainer file is missing: {}", trainer.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
@@ -1301,20 +1444,18 @@ fn start_trainer(state: &SharedState, g: &GameEntry, trainer: &Path) -> bool {
     let steam_root = home_dir().join(".local/share/Steam");
     let log_file = trainer::log_path(&read_state(state).cache_root());
     let launch = trainer::Launch { trainer, pfx: &pfx, compat: &compat, proton: proton.as_deref(), steam_root: &steam_root, app_id: &app_id, env_lines: &g.env_vars, log_file: &log_file };
-    match trainer::start(&launch, Duration::from_secs(6)) {
-        Ok(_) => {
-            log(state, "OK", "Trainer started. Use its hotkeys inside the game.");
+    let file = trainer.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    trainer_version_warning(state, g, &file);
+    match trainer::start(&launch, Duration::from_secs(if cfg!(test) { 1 } else { 6 })) {
+        Ok(started) => {
+            log(state, "OK", "Trainer started. Checking that it runs next to the game…");
+            watch_trainer(state, g, trainer, &started, &log_file);
             true
         }
         Err(why) => {
             log(state, "ERR", format!("The trainer did not start: {}", why));
-            let said = fs::read_to_string(&log_file).unwrap_or_default();
-            match trainer::cause_of(&said) {
-                Some(trainer::Cause::CppRuntime) => log(state, "WARN", format!("The trainer needs the Visual C++ runtime in the game's prefix. Install it with protontricks: protontricks {} vcrun2022", app_id)),
-                Some(trainer::Cause::DotNet) => log(state, "WARN", format!("The trainer needs .NET in the game's prefix. Install it with protontricks: protontricks {} dotnet48", app_id)),
-                Some(trainer::Cause::OtherBuild) => log(state, "WARN", "The game and the trainer run with different compatibility tools. Pick the same one for both under Compatibility."),
-                None => {}
-            }
+            set_trainer_run(state, g, &file, "closed", 0, 0);
+            trainer_cause_hint(state, g, &log_file);
             false
         }
     }
@@ -1427,9 +1568,38 @@ fn trainers_dir(cache_dir: &Path) -> PathBuf {
     cache_dir.parent().unwrap_or(cache_dir).join("trainers")
 }
 
+/// The trainers kept for a game: the ones attached before (still on disk) and the copies in Gantry's trainer folder.
+fn trainer_shelf(st: &AppState, appid: &str) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = st.config.trainers.get(appid).into_iter().chain(st.config.trainer_shelf.get(appid).into_iter().flatten()).map(PathBuf::from).collect();
+    let prefix = format!("{}_", appid);
+    let mut kept: Vec<PathBuf> = fs::read_dir(trainers_dir(&st.paths.cache_dir))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.file_name().map(|n| n.to_string_lossy()).is_some_and(|n| n.starts_with(&prefix) && n.to_lowercase().ends_with(".exe")))
+        .collect();
+    kept.sort();
+    out.extend(kept);
+    let mut seen = HashSet::new();
+    out.retain(|p| p.is_file() && seen.insert(p.clone()));
+    out
+}
+
+/// The name a kept trainer is shown with (Gantry's copies carry the game's id in front).
+fn trainer_display(appid: &str, p: &Path) -> String {
+    let n = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    n.strip_prefix(&format!("{}_", appid)).map(str::to_string).unwrap_or(n)
+}
+
 fn attach_trainer(state: &SharedState, appid: &str, trainer: &Path, display: &str) {
     let mut st = write_state(state);
     st.config.trainers.insert(appid.to_string(), trainer.to_string_lossy().to_string());
+    let shelf = st.config.trainer_shelf.entry(appid.to_string()).or_default();
+    let path = trainer.to_string_lossy().to_string();
+    if !shelf.contains(&path) {
+        shelf.push(path);
+    }
     st.save_config();
     if let Some(g) = st.games.iter_mut().find(|g| g.appid == appid) {
         g.trainer_name = display.to_string();
@@ -1438,6 +1608,12 @@ fn attach_trainer(state: &SharedState, appid: &str, trainer: &Path, display: &st
     let low = display.to_lowercase();
     if ["setup", "installer", "install "].iter().any(|w| low.contains(w)) {
         st.log("WARN", format!("{} looks like an installer, not a trainer. Running it would install a program inside the game's prefix.", display));
+    }
+    // reading the game's executable takes a moment, so not under the lock
+    if let Some(g) = st.games.iter().find(|g| g.appid == appid).cloned() {
+        drop(st);
+        let (state, display) = (Arc::clone(state), display.to_string());
+        thread::spawn(move || trainer_version_warning(&state, &g, &display));
     }
 }
 
@@ -5012,6 +5188,39 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 write_state(state).log("INFO", format!("Restored '{}' to the list.", name));
                 let state_bg = Arc::clone(state);
                 thread::spawn(move || rescan(&state_bg));
+            }
+        }
+        "/api/trainer_use" | "/api/trainer_forget" => {
+            let id = body_str(body, "id");
+            let found = {
+                let st = read_state(state);
+                st.games.get(st.selected_idx).cloned().and_then(|g| {
+                    let p = trainer_shelf(&st, &g.appid).into_iter().find(|p| !id.is_empty() && p.file_name().is_some_and(|n| n.to_string_lossy() == id))?;
+                    Some((g, p))
+                })
+            };
+            match (found, path) {
+                (None, _) => log(state, "WARN", "That trainer is not kept for this game any more."),
+                (Some((g, p)), "/api/trainer_use") => attach_trainer(state, &g.appid, &p, &trainer_display(&g.appid, &p)),
+                (Some((g, p)), _) => {
+                    let mut st = write_state(state);
+                    let key = p.to_string_lossy().to_string();
+                    if let Some(shelf) = st.config.trainer_shelf.get_mut(&g.appid) {
+                        shelf.retain(|s| *s != key);
+                    }
+                    if st.config.trainers.get(&g.appid) == Some(&key) {
+                        st.config.trainers.remove(&g.appid);
+                        if let Some(gm) = st.games.iter_mut().find(|x| x.appid == g.appid) {
+                            gm.trainer_name.clear();
+                        }
+                    }
+                    st.save_config();
+                    // Gantry's own copy goes; a file elsewhere (the user's Downloads) is only forgotten
+                    if p.parent() == Some(trainers_dir(&st.paths.cache_dir).as_path()) {
+                        let _ = fs::remove_file(&p);
+                    }
+                    st.log("OK", format!("Removed the trainer {} from {}.", trainer_display(&g.appid, &p), g.name));
+                }
             }
         }
         "/api/detach_trainer" => {
@@ -10357,6 +10566,108 @@ mod tests {
         let said = fs::read_to_string(&log).unwrap();
         assert!(said.contains("-- proton run --") && said.contains("app=") && !said.contains("other-tool"), "Steam's own choice wins over Gantry's: {said}");
         let _ = steams;
+    }
+
+    #[test]
+    fn several_trainers_are_kept_per_game_and_one_is_picked() {
+        let h = harness("trainershelf");
+        add_plain_game(&h);
+        let (appid, gi) = {
+            let st = h.state.read().unwrap();
+            (st.games[st.selected_idx].appid.clone(), st.selected_idx)
+        };
+        let kept = trainers_dir(&h.state.read().unwrap().paths.cache_dir);
+        fs::create_dir_all(&kept).unwrap();
+        let old = kept.join(format!("{appid}_Game v1.0-v1.2 Trainer.exe"));
+        fs::write(&old, b"MZ").unwrap();
+        let mine = h._dir.join("Downloads/Game v2.0 Trainer.exe");
+        fs::create_dir_all(mine.parent().unwrap()).unwrap();
+        fs::write(&mine, b"MZ").unwrap();
+        attach_trainer(&h.state, &appid, &old, "Game v1.0-v1.2 Trainer.exe");
+        attach_trainer(&h.state, &appid, &mine, "Game v2.0 Trainer.exe");
+        let shelf = || api(&h, "/api/state", json!({}))["trainer_shelf"].as_array().cloned().unwrap();
+        let s = shelf();
+        assert_eq!(s.len(), 2, "{s:?}");
+        let cur: Vec<_> = s.iter().filter(|t| t["current"] == true).map(|t| t["name"].as_str().unwrap().to_string()).collect();
+        assert_eq!(cur, vec!["Game v2.0 Trainer.exe"], "the newest one is attached");
+        let older = s.iter().find(|t| t["current"] == false).unwrap();
+        assert_eq!(older["name"], "Game v1.0-v1.2 Trainer.exe", "Gantry's copy is shown without the id in front");
+        assert_eq!(older["made_for"], "1.0–1.2");
+        // switch back to the older one
+        api(&h, "/api/trainer_use", json!({ "id": older["id"] }));
+        assert_eq!(h.state.read().unwrap().config.trainers.get(&appid).map(String::as_str), Some(old.to_string_lossy().as_ref()));
+        assert_eq!(h.state.read().unwrap().games[gi].trainer_name, "Game v1.0-v1.2 Trainer.exe");
+        // letting the one in Downloads go only forgets it; letting Gantry's copy go deletes the copy and detaches it
+        let mine_id = shelf().iter().find(|t| t["current"] == false).unwrap()["id"].clone();
+        api(&h, "/api/trainer_forget", json!({ "id": mine_id }));
+        assert!(mine.is_file(), "a file Gantry does not own stays");
+        api(&h, "/api/trainer_forget", json!({ "id": older["id"] }));
+        assert!(!old.exists() && shelf().is_empty());
+        assert!(!h.state.read().unwrap().config.trainers.contains_key(&appid) && h.state.read().unwrap().games[gi].trainer_name.is_empty());
+        api(&h, "/api/trainer_use", json!({ "id": "../../etc/passwd" }));
+        assert!(!h.state.read().unwrap().config.trainers.contains_key(&appid), "only kept trainers can be picked");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_started_trainer_is_seen_running_in_the_game_prefix_or_its_closing_is_explained() {
+        use std::os::unix::fs::PermissionsExt;
+        let h = harness("trainerwatch");
+        add_plain_game(&h);
+        let tag = std::process::id();
+        let pfx = h._dir.join("compat/pfx");
+        let exe = h._dir.join("game/Watch.exe");
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        // the game's executable says it is version 1.5
+        let mut bin = b"MZ".to_vec();
+        bin.extend_from_slice(&[0xBD, 0x04, 0xEF, 0xFE, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
+        bin.extend_from_slice(&((1u32 << 16) | 5).to_le_bytes());
+        bin.extend_from_slice(&0u32.to_le_bytes());
+        fs::write(&exe, bin).unwrap();
+        let ct = h._dir.join("ct");
+        let proton = ct.join("Fake/proton");
+        fs::create_dir_all(proton.parent().unwrap()).unwrap();
+        let appid = "4343".to_string();
+        let start_with = |script: &str, trainer_name: &str| {
+            fs::write(&proton, format!("#!/bin/sh\n{script}\n")).unwrap();
+            fs::set_permissions(&proton, fs::Permissions::from_mode(0o755)).unwrap();
+            let trainer = h._dir.join("t").join(trainer_name);
+            fs::create_dir_all(trainer.parent().unwrap()).unwrap();
+            fs::write(&trainer, b"MZ").unwrap();
+            {
+                let mut st = h.state.write().unwrap();
+                let i = st.selected_idx;
+                st.games[i].appid = appid.clone();
+                st.games[i].pfx = pfx.to_string_lossy().to_string();
+                st.games[i].shipping_exe = exe.to_string_lossy().to_string();
+                st.tools_dirs = Some(vec![ct.clone()]);
+                st.steam_env = SteamEnv { config_vdf: Some(h._dir.join("no-config.vdf")), localconfig: None, running: Some(false), libraries: Some(vec![]) };
+                st.config.proton_choice.insert(appid.clone(), proton.to_string_lossy().to_string());
+                st.config.trainers.insert(appid.clone(), trainer.to_string_lossy().to_string());
+                st.trainer_run = None;
+            }
+            api(&h, "/api/trainer", json!({}));
+            wait_until("trainer checked", || {
+                let r = &api(&h, "/api/state", json!({}))["trainer_run"];
+                r["file"] == trainer_name && r["state"] != "starting"
+            });
+            api(&h, "/api/state", json!({}))["trainer_run"].clone()
+        };
+        let logs = |h: &Harness| h.state.read().unwrap().logs.iter().map(|l| l.message.clone()).collect::<Vec<_>>().join("\n");
+        // Proton starts the trainer as a process of its own, inside the prefix it was given
+        let name = format!("Watch{tag} v1.0-v1.2 Trainer.exe");
+        let run = start_with("sh -c 'sleep 4; :' \"$2\" &\nwait", &name);
+        assert_eq!(run["state"], "attached", "{run}");
+        assert_eq!(run["alive"], true);
+        let said = logs(&h);
+        assert!(said.contains("Wine session"), "{said}");
+        assert!(said.contains("made for") && said.contains("1.0–1.2") && said.contains("1.5"), "the version is checked against the name: {said}");
+        // a trainer that closes at once is reported with what it printed
+        let name = format!("Quit{tag}.exe");
+        let run = start_with("echo 'err:module:import_dll Library MSVCP140.dll not found'; sleep 1.2; exit 3", &name);
+        assert_eq!(run["state"], "closed", "{run}");
+        let said = logs(&h);
+        assert!(said.contains("The trainer closed") && said.contains("MSVCP140") && said.contains("vcrun2022"), "{said}");
     }
 
     #[cfg(target_os = "linux")]
