@@ -591,6 +591,7 @@
 "Mod page": "Mod sayfası",
 "Mod removed.": "Mod kaldırıldı.",
 "Mod updates available": "Mod güncellemeleri var",
+"Mod updates: {}": "Mod güncellemeleri: {1}",
 "mod.io API key removed from this computer.": "mod.io API anahtarı bu bilgisayardan kaldırıldı.",
 "mod.io connected.": "mod.io bağlandı.",
 "mod.io error {}.": "mod.io hatası {1}.",

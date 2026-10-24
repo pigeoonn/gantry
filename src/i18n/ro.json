@@ -591,6 +591,7 @@
 "Mod page": "Pagina modului",
 "Mod removed.": "Modul a fost eliminat.",
 "Mod updates available": "Actualizări de moduri disponibile",
+"Mod updates: {}": "Actualizări de moduri: {1}",
 "mod.io API key removed from this computer.": "Cheia API mod.io a fost ștearsă de pe acest calculator.",
 "mod.io connected.": "mod.io conectat.",
 "mod.io error {}.": "Eroare mod.io {1}.",

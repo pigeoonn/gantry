@@ -591,6 +591,7 @@
 "Mod page": "Mod-Seite",
 "Mod removed.": "Mod entfernt.",
 "Mod updates available": "Mod-Updates verfügbar",
+"Mod updates: {}": "Mod-Updates: {1}",
 "mod.io API key removed from this computer.": "mod.io-API-Schlüssel von diesem Computer entfernt.",
 "mod.io connected.": "mod.io verbunden.",
 "mod.io error {}.": "mod.io-Fehler {1}.",

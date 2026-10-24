@@ -43,6 +43,9 @@
 - **Search everywhere** now also covers mod.io and the game's core mods (from their GitHub releases), asks every site
   at the same time, and lists a mod that is on two sites once, with both named. The name opens the mod's page; Nexus
   results already in your library say so.
+- **One notice for all mod updates:** the background check (every six hours) now lists every waiting update from
+  Nexus Mods, Thunderstore, GitHub and mod.io with its versions and the first line of what changed, instead of a
+  count that always said "on Nexus Mods".
 - **A game update is noticed before you play:** Gantry remembers the build of each game's executable your mods last
   worked with. When it changes and some of your mods run code in the game (plugins, script mods), the check before
   playing and the health card say so and name them, with *Check for updates* and *They work*. A minute of play without

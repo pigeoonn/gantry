@@ -9127,6 +9127,40 @@ fn update_summary(nexus: &[UpdateRow], thunder: &[ThunderUpdate]) -> String {
     lines.join("\n")
 }
 
+/// Every waiting update in one line for the notice: "Cool Pack v1.0 → v2.0: fixed the crash; Lib v1 → v2", the game
+/// named when there are several, the first eight and how many more.
+fn update_digest(st: &AppState) -> String {
+    let first_line = |c: &str| -> String {
+        let l = c.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+        l.trim_start_matches(['-', '*', '•', ' ']).chars().take(70).collect()
+    };
+    let mut rows: Vec<(String, String, String, String, String)> = Vec::new();
+    rows.extend(st.nexus.updates.iter().map(|u| (u.game.clone(), u.name.clone(), u.installed_version.clone(), u.new_version.clone(), first_line(&u.changes))));
+    rows.extend(st.thunder.updates.iter().map(|u| (u.game.clone(), u.name.clone(), u.installed_version.clone(), u.new_version.clone(), String::new())));
+    rows.extend(st.github_updates.iter().map(|u| (u.game.clone(), u.name.clone(), u.installed_version.clone(), u.new_version.clone(), String::new())));
+    rows.extend(st.modio_updates.iter().map(|u| (u.game.clone(), u.name.clone(), u.installed_version.clone(), u.new_version.clone(), String::new())));
+    let games: HashSet<&str> = rows.iter().map(|r| r.0.as_str()).collect();
+    let mut parts: Vec<String> = rows
+        .iter()
+        .take(8)
+        .map(|(game, name, old, new, what)| {
+            let mut p = [name.as_str(), " v", old, " → v", new].concat();
+            if games.len() > 1 && !game.is_empty() {
+                p.push_str(&format!(" ({game})"));
+            }
+            if !what.is_empty() {
+                p.push_str(": ");
+                p.push_str(what);
+            }
+            p
+        })
+        .collect();
+    if rows.len() > 8 {
+        parts.push(format!("+{}", rows.len() - 8));
+    }
+    parts.join("; ")
+}
+
 fn spawn_update_checker(state: Weak<RwLock<AppState>>) {
     if cfg!(test) {
         return;
@@ -9142,12 +9176,12 @@ fn spawn_update_checker(state: Weak<RwLock<AppState>>) {
             let _ = check_thunder_updates(&st);
             auto_update(&st);
             // one quiet desktop message when there is more to update than the last time we said
-            let (n, lang, summary) = {
+            let (n, lang, summary, digest) = {
                 let s = read_state(&st);
-                (s.nexus.updates.len() + s.thunder.updates.len() + s.github_updates.len() + s.modio_updates.len(), s.config.language.clone(), update_summary(&s.nexus.updates, &s.thunder.updates))
+                (s.nexus.updates.len() + s.thunder.updates.len() + s.github_updates.len() + s.modio_updates.len(), s.config.language.clone(), update_summary(&s.nexus.updates, &s.thunder.updates), update_digest(&s))
             };
             if n > told {
-                add_note(&st, "updates", if n == 1 { "1 mod update available on Nexus Mods.".to_string() } else { format!("{} mod updates available on Nexus Mods.", n) }, "");
+                add_note(&st, "updates", format!("Mod updates: {}", digest), "");
                 let tail = i18n::tr(&lang, "Open Gantry and press Update all.");
                 platform::notify(&i18n::tr(&lang, "Mod updates available"), &if summary.is_empty() { tail } else { format!("{summary}\n{tail}") });
             }
@@ -13219,6 +13253,18 @@ mod tests {
         assert_eq!(many.lines().count(), 4);
         assert!(many.ends_with("+2"), "{many}");
         assert!(update_summary(&[row("X", "1", "2", &"very long ".repeat(30))], &[]).chars().count() < 120);
+        // the notice lists every source in one line, naming the game when there are several
+        let h = harness("digest");
+        {
+            let mut st = h.state.write().unwrap();
+            st.nexus.updates = vec![row("Cool Pack", "1.0", "2.0", "- fixed the crash")];
+            st.thunder.updates = vec![t("Lib")];
+            assert_eq!(update_digest(&st), "Cool Pack v1.0 → v2.0: fixed the crash; Lib v1.0 → v1.1");
+            st.thunder.updates[0].game = "Other".into();
+            assert_eq!(update_digest(&st), "Cool Pack v1.0 → v2.0 (g): fixed the crash; Lib v1.0 → v1.1 (Other)");
+            st.nexus.updates = (0..10).map(|i| row(&format!("M{i}"), "1", "2", "")).collect();
+            assert!(update_digest(&st).ends_with("; +3"), "{}", update_digest(&st));
+        }
     }
 
 
