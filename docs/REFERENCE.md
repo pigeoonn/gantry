@@ -128,6 +128,14 @@ Free accounts work through the website button (Nexus puts a one-time key in the 
 The CLI equivalents are `rig --register-nxm` / `--unregister-nxm`. The Nexus HTTP calls are covered by tests against a
 local fake API.
 
+## New downloads and missing core mods
+
+When a mod archive finishes downloading into your Downloads folder (zip, 7z or rar, not older than two weeks), the Mods tab
+shows it with *Add*, *Add all* and *Not now*; Gantry only ever installs from that folder what you pressed. A mod that needs
+a core mod the game lacks (Cyberpunk's RED4ext, ArchiveXL, TweakXL, Redscript, Cyber Engine Tweaks; SKSE for Skyrim; F4SE
+for Fallout 4) gets a line in the health bar with a button to the place to get it. Two copies of one Nexus file are pointed
+out too.
+
 ## mod.io
 
 mod.io is where many newer games keep their mods. *Find mods → mod.io* lists the selected game's mods when the game's makers

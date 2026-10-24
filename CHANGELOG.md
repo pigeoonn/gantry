@@ -1,10 +1,25 @@
 # Changes
 
-## Unreleased
+## 5.4.0
 
 - **mod.io** is a third place to find mods (*Find mods → mod.io*). Games whose makers let other programs use their mod.io
   mods are listed and installed in one click, free, with the mods they need installed first. It uses your own free
   read-only key (mod.io/me/access), kept only on this computer. Games that only allow downloads inside the game say so.
+- **mod.io is complete:** its mods have updates (checked with the others, *Update all* and the *update automatically*
+  rule work), an in-app page (text, what changed, what it needs), a picker when a game's name does not match (only games
+  that let other programs use their mods are offered), and a key row in Settings.
+- **New mod files from your Downloads folder** are offered in the Mods tab ("3 new mod files in your Downloads folder"):
+  *Add* installs one, *Add all* the lot, *Not now* hides them. Files already in the library are never offered again.
+- **Missing core mods are named.** Cyberpunk's RED4ext, ArchiveXL, TweakXL, Redscript and Cyber Engine Tweaks, and the
+  script extenders of Skyrim and Fallout 4, are found from the files: a mod that brings `.archive.xl` files needs
+  ArchiveXL, and so on. The health bar says which are missing and links to where to get them.
+- **The same mod twice** (two versions of one Nexus file) is pointed out; the several files of one Nexus page are not
+  mistaken for copies.
+- **Free space is checked** before a download starts, before an archive is unpacked and before a dropped file is
+  accepted, so a nearly full drive gets a clear message instead of being filled to the brim.
+- **Several mods that need a guess** each get their question, one after another; before, only the first was asked.
+- **A game whose name started with a quote** broke the picture fallback of its card (one letter went into a script);
+  the screen test now runs every screen with hostile names (markup, quotes, template syntax) in the lists.
 - **Install what is missing.** A mod that needs other mods now has a button for it on every account. Premium accounts get
   them at once; free accounts get their Nexus pages opened one after another, and each download is installed the moment
   its *Mod Manager Download* click arrives, without asking again. (Nexus only lets the website start a free download, so

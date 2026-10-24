@@ -2535,7 +2535,9 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
     {
         let mut groups: std::collections::BTreeMap<String, Vec<String>> = Default::default();
         for m in mods.iter().filter(|m| m.enabled) {
-            let key = m.nexus.as_ref().filter(|n| n.valid()).map(|n| format!("nx:{}:{}", n.game, n.mod_id)).or_else(|| m.thunderstore.as_ref().map(|t| format!("ts:{}", t.full_name().to_lowercase()))).or_else(|| m.modio.as_ref().map(|r| format!("mio:{}:{}", r.game_id, r.mod_id)));
+            // one Nexus page can offer several files at once (a head and a body, say): only the same name twice is a duplicate
+            let norm = |s: &str| s.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
+            let key = m.nexus.as_ref().filter(|n| n.valid()).map(|n| format!("nx:{}:{}:{}", n.game, n.mod_id, norm(&m.name))).or_else(|| m.thunderstore.as_ref().map(|t| format!("ts:{}", t.full_name().to_lowercase()))).or_else(|| m.modio.as_ref().map(|r| format!("mio:{}:{}", r.game_id, r.mod_id)));
             if let Some(k) = key {
                 groups.entry(k).or_default().push(if m.version.is_empty() { m.name.clone() } else { format!("{} v{}", m.name, m.version) });
             }
@@ -9120,6 +9122,8 @@ fn doctor_text(d: &Value) -> String {
             // a known problem from the logs has a title and the log line that showed it; the others a short code
             let what = i["title"].as_str().map(str::to_string).unwrap_or_else(|| match i["code"].as_str().unwrap_or("") {
                 "launch_option" => "launch_option: Steam's launch options lack what the mods need (open Gantry, then Doctor, Close Steam & apply)".to_string(),
+                "needs_framework" => format!("needs_framework: the mods need {} and the game does not have it", args.join(", ")),
+                "duplicate_mod" => format!("duplicate_mod: installed more than once: {}", args.join("; ")),
                 code => format!("{}{}", code, if args.is_empty() { String::new() } else { format!(": {}", args.join(", ")) }),
             });
             out.push_str(&format!("         {} {}\n", i["level"].as_str().unwrap_or(""), what));
@@ -9913,16 +9917,18 @@ mod tests {
         add_plain_game(&h);
         let g = h.state.read().unwrap().games.last().unwrap().clone();
         let lib = library_of(&g).unwrap();
-        for (n, v) in [("Cool Pack", "1.0"), ("Cool Pack renamed", "2.0")] {
-            let s = h._dir.join(&format!("dupe-{v}"));
+        for (n, v) in [("Cool Pack", "1.0"), ("Cool Pack", "2.0"), ("Cool Pack Extras", "1.0")] {
+            let s = h._dir.join(&format!("dupe-{n}-{v}"));
             fs::create_dir_all(s.join("Data")).unwrap();
-            fs::write(s.join(format!("Data/{v}.esp")), v).unwrap();
-            lib.add_with(&s, n, &format!("{n}.zip"), Some(nexus::NexusRef { game: "coolgame".into(), mod_id: 5, file_id: if v == "1.0" { 10 } else { 12 } }), v).unwrap();
+            fs::write(s.join(format!("Data/{n}-{v}.esp")), v).unwrap();
+            lib.add_with(&s, n, &format!("{n}-{v}.zip"), Some(nexus::NexusRef { game: "coolgame".into(), mod_id: 5, file_id: if v == "1.0" { 10 } else { 12 } }), v).unwrap();
         }
         refresh_mods_shared(&h.state);
         let (issues, _) = game_issues(&h.state, &g, false);
         let d = issues.iter().find(|i| i["code"] == "duplicate_mod").expect("two copies of Nexus mod 5");
-        assert!(d["args"][0].as_str().unwrap().contains("Cool Pack v1.0") && d["args"][0].as_str().unwrap().contains("Cool Pack renamed v2.0"), "{d}");
+        let said = d["args"][0].as_str().unwrap();
+        assert!(said.contains("Cool Pack v1.0") && said.contains("Cool Pack v2.0") && !said.contains("Extras"), "another file of the same page is not a copy: {d}");
+        assert_eq!(issues.iter().filter(|i| i["code"] == "duplicate_mod").count(), 1);
         // turning one off clears it
         let id = lib.mods()[0].id.clone();
         lib.set_enabled(&id, false).unwrap();
