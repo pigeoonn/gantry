@@ -14523,7 +14523,11 @@ mod tests {
         // mod 3 needs 2, which needs 1: all three arrive, the needed ones first
         api(&h, "/api/modio_install", json!({ "id": "3" }));
         let lib = library_of(&h.state.read().unwrap().games.last().unwrap().clone()).unwrap();
-        wait_until("three mods installed", || lib.mods().len() == 3);
+        // a mod is added first and gets its mod.io record right after, so wait for both
+        wait_until("three mods installed with their mod.io record", || {
+            let mods = lib.mods();
+            mods.len() == 3 && mods.iter().all(|m| m.modio.is_some())
+        });
         let names: Vec<String> = lib.mods().iter().map(|m| m.name.clone()).collect();
         assert_eq!(names, vec!["Mod 1", "Mod 2", "Mod 3"], "what a mod needs is added before it");
         assert!(lib.mods().iter().all(|m| m.modio.as_ref().map(|r| r.game_id) == Some(7)));
