@@ -36,6 +36,10 @@
   needs ArchiveXL and TweakXL, a Skyrim plugin that needs SKSE) shows "⚠ Needs: ↗ ArchiveXL [Install ArchiveXL]" in the
   mod list: the name opens its page, the button installs it from its official releases together with what it needs
   itself (ArchiveXL brings RED4ext). Nexus requirements already showed there; their names now carry the same ↗.
+- **The mod list tells more at a glance:** where each mod came from (N, TS, io, GH, ✋ by hand), when it was added, a
+  red dot when it needs another mod and an amber one when it shares files with another; new chips *Needs something* and
+  *Core* (the game's core mods and loaders, grouped by themselves); a group shown by itself can be turned on or off
+  as a whole. A mod that was updated has *↶ v1.2* on its row to go back, and three old versions are kept (was two).
 - **Fixed:** a Cyberpunk mod zipped as only `red4ext/...` or `engine/...` lost that folder when the game did not have it
   yet, and landed in the wrong place.
 

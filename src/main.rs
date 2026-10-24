@@ -1260,6 +1260,10 @@ fn library_status(g: &GameEntry, first: bool) -> Value {
             v["steam_cloud"] = json!(steamlib::manifest_for(Path::new(&g.game_dir), g.steam_id()).is_some() && steamlib::cloud_synced(&RigPaths::steam_roots(), g.steam_id()));
             v["plugins"] = json!(has_plugins(g));
             v["core_needs"] = core_needs_json(g, &lib);
+            // the mods everything else stands on: the game's core mods and the mod loaders
+            let mut core_names: Vec<String> = frameworks::cores(Path::new(&g.game_dir)).iter().map(|c| c.name.to_lowercase()).collect();
+            core_names.extend(["bepinex", "melonloader", "ue4ss"].map(String::from));
+            v["core_ids"] = json!(lib.mods().iter().filter(|m| core_names.iter().any(|c| m.name.to_lowercase().contains(c.as_str()))).map(|m| m.id.clone()).collect::<Vec<_>>());
             v
         }
         None => Value::Null,
@@ -11243,6 +11247,8 @@ mod tests {
         api(&h, "/api/core_install", json!({ "name": "ArchiveXL" }));
         wait_until("ArchiveXL and RED4ext are in", || dir.join("red4ext/plugins/ArchiveXL/ArchiveXL.dll").is_file() && dir.join("red4ext/RED4ext.dll").is_file());
         wait_until("the list follows", || names(&needs()[&jacket]) == vec!["TweakXL"]);
+        let core_ids = api(&h, "/api/state", json!({}))["library"]["core_ids"].clone();
+        assert_eq!(core_ids.as_array().map(|a| a.len()), Some(2), "ArchiveXL and RED4ext are core mods, the jacket is not: {core_ids}");
         assert!(!dir.join("red4ext/plugins/TweakXL").exists());
         api(&h, "/api/core_install", json!({ "name": "Not A Core" }));
         assert!(last_log(&h).contains("does not know that core mod"));

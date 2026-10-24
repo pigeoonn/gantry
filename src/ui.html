@@ -997,6 +997,13 @@
   .ml-n { cursor: pointer; min-width: 22px; text-align: center; border-radius: 6px; }
   .ml-n:hover { background: var(--n4); }
   .ml-n.on { background: var(--acc); color: var(--acc-ink); font-weight: 800; }
+  .ml-src { display: inline-block; min-width: 18px; text-align: center; font-size: 9.5px; font-weight: 800; padding: 1px 4px; margin-right: 6px; border-radius: 5px; vertical-align: 1px; background: color-mix(in srgb, var(--text-muted) 16%, transparent); color: var(--text); }
+  .ml-src.nx { background: color-mix(in srgb, #f59e0b 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #f59e0b 45%, transparent); color: var(--text); }
+  .ml-src.ts { background: color-mix(in srgb, #3b82f6 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #3b82f6 45%, transparent); color: var(--text); }
+  .ml-src.mio { background: color-mix(in srgb, #10b981 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #10b981 45%, transparent); color: var(--text); }
+  .ml-src.gh { background: color-mix(in srgb, #a855f7 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #a855f7 45%, transparent); color: var(--text); }
+  .ml-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .ml-dot.bad { background: #ef4444; } .ml-dot.warn { background: #f59e0b; }
   .ml-group { font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-muted); margin-left: 6px; }
   .undo-toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 24px); opacity: 0; pointer-events: none; z-index: 120; display: flex; gap: 12px; align-items: center; padding: 10px 14px; border-radius: 12px; background: var(--n3); border: 1px solid var(--line-2); box-shadow: 0 14px 40px rgba(0,0,0,0.6); font-weight: 600; transition: opacity .25s ease, transform .3s var(--spring); }
   .undo-toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
@@ -5920,6 +5927,12 @@
     clearTimeout(undoToast.timer);
     undoToast.timer = setTimeout(() => el.classList.remove('show'), 9000);
   }
+  function mlGroupSet(on) {
+    if (!mlShownIds.length) return;
+    ipcSend('/api/lib_toggle_many', { ids: mlShownIds, enabled: on });
+    undoToast(on ? tp(mlShownIds.length, '{} mod turned on', '{} mods turned on') : tp(mlShownIds.length, '{} mod turned off', '{} mods turned off'), () => ipcSend('/api/lib_undo', {}));
+  }
+
   function mlBulk(what) {
     const lib = modLibData();
     const ids = [...mlSel];
@@ -6081,13 +6094,18 @@
     const fq = (document.getElementById('mlFilter').value || '').trim().toLowerCase();
     const upIds = new Set([...(nx.updates || []).filter(u => g && u.appid === g.appid).map(u => u.lib_id), ...thunderUpdatesFor(g ? g.appid : '').map(u => u.lib_id)]);
     const groups = [...new Set(lib.mods.map(m => m.group).filter(Boolean))];
-    const chipTests = { all: () => true, updates: m => upIds.has(m.id), conflicts: m => m.conflicts, off: m => !m.enabled };
+    const coreIds = new Set(lib.core_ids || []);
+    const needIds = new Set([...Object.keys(lib.core_needs || {}), ...(nx.needs || []).filter(u => g && u.appid === g.appid).map(u => u.lib_id)]);
+    const chipTests = { all: () => true, updates: m => upIds.has(m.id), needs: m => needIds.has(m.id), conflicts: m => m.conflicts, off: m => !m.enabled, core: m => coreIds.has(m.id) };
     groups.forEach(gr => { chipTests['g:' + gr] = m => m.group === gr; });
     if (!chipTests[mlChip]) mlChip = 'all';
-    const chipDefs = [['all', t('All')], ['updates', t('Updates')], ['conflicts', t('Conflicts')], ['off', t('Off')]].concat(groups.map(gr => ['g:' + gr, gr]));
+    const chipDefs = [['all', t('All')], ['updates', t('Updates')], ['needs', t('Needs something')], ['conflicts', t('Conflicts')], ['off', t('Off')], ['core', t('Core')]].concat(groups.map(gr => ['g:' + gr, gr]));
     const chipHtml = chipDefs.map(([k, label]) => ({ k, label, n: lib.mods.filter(chipTests[k]).length })).filter(c => c.k === 'all' || c.k === mlChip || c.n > 0)
       .map(c => `<button class="ml-chip ${c.k === mlChip ? 'on' : ''}" onclick='setMlChip(${JS(c.k)})'>${escapeHtml(c.label)}<small>${c.n}</small></button>`).join('');
-    document.getElementById('mlChips').innerHTML = lib.mods.length > 1 ? chipHtml + `<button class="ml-chip" onclick="mlSelectAll()" title="${escapeHtml(t('Select every mod shown'))}">☑ ${t('Select all')}</button>` : '';
+    // a group shown by itself can be switched on or off as a whole
+    const groupView = mlChip === 'core' || mlChip.startsWith('g:');
+    const groupBtns = groupView ? `<button class="ml-chip" onclick="mlGroupSet(true)">${t('Turn the group on')}</button><button class="ml-chip" onclick="mlGroupSet(false)">${t('Turn the group off')}</button>` : '';
+    document.getElementById('mlChips').innerHTML = lib.mods.length > 1 ? chipHtml + groupBtns + `<button class="ml-chip" onclick="mlSelectAll()" title="${escapeHtml(t('Select every mod shown'))}">☑ ${t('Select all')}</button>` : '';
     const shown = lib.mods.map((m, i) => ({ m, i })).filter(({ m }) => chipTests[mlChip](m) && (!fq || [m.name, m.note, m.source, m.version, m.group].join(' ').toLowerCase().includes(fq)));
     mlShownIds = shown.map(x => x.m.id);
     for (const id of [...mlSel]) if (!lib.mods.some(m => m.id === id)) mlSel.delete(id);
@@ -6103,20 +6121,24 @@
       const tup = thunderUpdatesFor(g ? g.appid : '').find(u => u.lib_id === m.id);
       const need = (nx.needs || []).find(u => u.appid === (g && g.appid) && u.lib_id === m.id);
       const cores = ((modLibData() || {}).core_needs || {})[m.id] || [];
+      const prev = (lib.previous || {})[m.id];
+      const src = m.nexus ? ['nx', 'Nexus'] : m.thunderstore ? ['ts', 'Thunderstore'] : m.modio ? ['mio', 'mod.io'] : m.github ? ['gh', 'GitHub'] : ['hand', t('Added by hand')];
+      const dot = needIds.has(m.id) ? ['bad', t('Needs another mod')] : m.conflicts ? ['warn', t('Shares files with another mod')] : null;
       return `
       <div class="ml-row ${m.enabled ? '' : 'off'} ${mlSel.has(m.id) ? 'sel' : ''} ${seen && !seen.has(m.id) ? 'fresh' : ''}" data-i="${i}" ondragover="mlDragOver(event, ${i})" ondrop="mlDrop(event, ${i})">
         <span class="ml-grip" draggable="true" ondragstart="mlDragStart(event, ${JS(m.id)})" ondragend="mlDragEnd()" title="${escapeHtml(t('Drag to change the load order'))}">⠿</span>
         <span class="ml-n ${mlSel.has(m.id) ? 'on' : ''}" onclick='mlSelect(event, ${JS(m.id)})' title="${escapeHtml(t('Select (Shift: a range)'))}">${mlSel.has(m.id) ? '✓' : i + 1}</span>
         <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange='ipcSend("/api/lib_toggle", { id: ${JS(m.id)}, enabled: this.checked })' title="${t('Enable / disable')}">
         <div class="ml-main">
-          <div class="ml-name">${escapeHtml(m.name)}${m.group ? `<span class="ml-group">${escapeHtml(m.group)}</span>` : ''} ${m.version ? `<small style="color:var(--text-muted)">v${escapeHtml(m.version)}</small>` : ''}${(m.programs || []).length ? ` <span title="${escapeHtml(t('Contains programs: {}', m.programs.slice(0, 3).join(', ')))}">⚠</span>` : ''}${m.update_rule === 'never' ? ` <span title="${escapeHtml(t('You chose to keep this version: it is never updated.'))}">🔒</span>` : m.update_rule === 'auto' ? ` <span title="${escapeHtml(t('Updates itself when the game is closed.'))}">⟳</span>` : ''} ${m.conflicts ? '<span class="ml-pill warn" style="margin-left:4px">⚔</span>' : ''}</div>
+          <div class="ml-name">${dot ? `<span class="ml-dot ${dot[0]}" title="${escapeHtml(dot[1])}"></span>` : ''}<span class="ml-src ${src[0]}" title="${escapeHtml(src[1])}">${src[0] === 'hand' ? '✋' : src[0] === 'nx' ? 'N' : src[0] === 'ts' ? 'TS' : src[0] === 'mio' ? 'io' : 'GH'}</span>${escapeHtml(m.name)}${m.group ? `<span class="ml-group">${escapeHtml(m.group)}</span>` : ''} ${m.version ? `<small style="color:var(--text-muted)">v${escapeHtml(m.version)}</small>` : ''}${(m.programs || []).length ? ` <span title="${escapeHtml(t('Contains programs: {}', m.programs.slice(0, 3).join(', ')))}">⚠</span>` : ''}${m.update_rule === 'never' ? ` <span title="${escapeHtml(t('You chose to keep this version: it is never updated.'))}">🔒</span>` : m.update_rule === 'auto' ? ` <span title="${escapeHtml(t('Updates itself when the game is closed.'))}">⟳</span>` : ''} ${m.conflicts ? '<span class="ml-pill warn" style="margin-left:4px">⚔</span>' : ''}</div>
           ${need ? `<div class="ml-need">⚠ ${t('Needs')}: ${need.missing.map(r => r.page_url ? `<a onclick='openNexusPage(${JS(r.page_url)})' title="${escapeHtml(r.notes || t('Open its Nexus page'))}">↗ ${escapeHtml(r.name)}</a>` : escapeHtml(r.name)).join(', ')}<button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:6px" title="${escapeHtml(nx.premium ? '' : t('Opens their Nexus pages one after another: press Mod Manager Download on each and Gantry installs it.'))}" onclick='ipcSend("/api/nexus_install_needs", { appid: ${JS(need.appid)}, lib_id: ${JS(need.lib_id)} })'>${nx.premium ? t('Install them') : t('Get them')}</button></div>` : ''}
           ${cores.length ? `<div class="ml-need">⚠ ${t('Needs')}: ${cores.map(c => `<span style="white-space:nowrap"><a onclick='openWeb(${JS(c.url)})' title="${escapeHtml(t('Open its page'))}">↗ ${escapeHtml(c.name)}</a><button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:4px" title="${escapeHtml(t('Installs it from its official releases, with what it needs itself'))}" onclick='ipcSend("/api/core_install", { name: ${JS(c.name)} })'>${t('Install {}', escapeHtml(c.name))}</button></span>`).join(' ')}</div>` : ''}
           ${m.note ? `<div class="ml-note">${escapeHtml(m.note)}</div>` : ''}
-          <div class="ml-sub">${tp(m.files, '{} file', '{} files')} · ${fmtSize(m.size)} · ${escapeHtml(m.source || t('manual'))}${m.target ? ' · ' + t('into {}/', escapeHtml(m.target)) : ''}${m.placed_by === 'names' ? ' · ' + t('placed by matching file names') : (m.placed_by === 'readme' ? ' · ' + t('placed as its instructions say') : (m.placed_by === 'pack' ? ' · ' + t('placed by the game\'s support entry') : ''))}${m.nexus ? ' · ' + t('from Nexus') : ''}${m.thunderstore ? ' · ' + t('from Thunderstore') : ''}${(m.depends_on || []).length ? ' · ' + t('needs {}', m.depends_on.map(d => d.split('-').slice(1).join('-').replace(/_/g, ' ')).join(', ')) : ''}</div>
+          <div class="ml-sub">${tp(m.files, '{} file', '{} files')} · ${fmtSize(m.size)}${m.added_ms ? ' · ' + escapeHtml(t('added {}', ago(m.added_ms))) : ''} · ${escapeHtml(m.source || t('manual'))}${m.target ? ' · ' + t('into {}/', escapeHtml(m.target)) : ''}${m.placed_by === 'names' ? ' · ' + t('placed by matching file names') : (m.placed_by === 'readme' ? ' · ' + t('placed as its instructions say') : (m.placed_by === 'pack' ? ' · ' + t('placed by the game\'s support entry') : ''))}${m.nexus ? ' · ' + t('from Nexus') : ''}${m.thunderstore ? ' · ' + t('from Thunderstore') : ''}${(m.depends_on || []).length ? ' · ' + t('needs {}', m.depends_on.map(d => d.split('-').slice(1).join('-').replace(/_/g, ' ')).join(', ')) : ''}</div>
         </div>
         ${tup ? `<button class="btn btn-heal" style="padding:3px 9px; font-size:11px;" onclick='ipcSend("/api/thunder_update", { appid: ${JS(tup.appid)}, id: ${JS(tup.lib_id)} })'>⬆ v${escapeHtml(tup.installed_version)} → v${escapeHtml(tup.new_version)}</button>` : ''}
         ${up ? `<button class="btn btn-heal" style="padding:3px 9px; font-size:11px;" title="${escapeHtml(up.new_file_name + (up.changes ? '\n\n' + up.changes : ''))}" onclick='ipcSend("/api/nexus_update", { appid: ${JS(up.appid)}, id: ${JS(up.lib_id)} })'>⬆ ${up.installed_version ? 'v' + escapeHtml(up.installed_version) + ' → ' : ''}v${escapeHtml(up.new_version || '?')}</button>` : ''}
+        ${prev ? `<button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Go back to v{}? The current version stays in the library trash, so you can return to it.', prev.version))}" onclick='if (confirm(${JS(t('Go back to v{}? The current version stays in the library trash, so you can return to it.', prev.version))})) ipcSend("/api/lib_rollback", { id: ${JS(m.id)}, dir: ${JS(prev.dir)} })'>↶ v${escapeHtml(prev.version || '?')}</button>` : ''}
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${t('Load earlier (loses conflicts)')}" onclick='ipcSend("/api/lib_move", { id: ${JS(m.id)}, delta: -1 })'>▲</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${t('Load later (wins conflicts)')}" onclick='ipcSend("/api/lib_move", { id: ${JS(m.id)}, delta: 1 })'>▼</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('About this mod: its page, what changed, what it needs'))}" onclick='openModPage(${JS(m.id)})'>ℹ</button>

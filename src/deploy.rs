@@ -1071,6 +1071,31 @@ impl Library {
         out
     }
 
+    /// For every mod with an earlier version in the trash, the newest one: mod id → (trash folder, version). Reads the
+    /// trash once (the list shows it on every row).
+    pub fn newest_previous(&self, mods: &[LibMod]) -> HashMap<String, (String, String)> {
+        let mut best: HashMap<String, (String, String, u64)> = HashMap::new();
+        for e in fs::read_dir(self.root.join("trash")).into_iter().flatten().flatten() {
+            let Some(v) = fs::read(e.path().join("mod.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) else { continue };
+            let Ok(m) = serde_json::from_value::<LibMod>(v["mod"].clone()) else { continue };
+            if !e.path().join("files").is_dir() {
+                continue;
+            }
+            let at = v["removed_ms"].as_u64().unwrap_or(0);
+            for cur in mods {
+                let same = match (&m.nexus, &cur.nexus, &m.thunderstore, &cur.thunderstore) {
+                    (Some(a), Some(b), _, _) => a.game == b.game && a.mod_id == b.mod_id,
+                    (_, _, Some(a), Some(b)) => a.full_name().eq_ignore_ascii_case(&b.full_name()),
+                    _ => m.name == cur.name,
+                };
+                if same && m.version != cur.version && best.get(&cur.id).is_none_or(|b| b.2 < at) {
+                    best.insert(cur.id.clone(), (e.file_name().to_string_lossy().to_string(), m.version.clone(), at));
+                }
+            }
+        }
+        best.into_iter().map(|(k, (d, v, _))| (k, (d, v))).collect()
+    }
+
     /// Mods whose version changed at or after `since_ms`, with the version they could go back to:
     /// `(mod id, name, version now, earlier version, trash folder of the earlier one, when it changed)`.
     pub fn recent_updates(&self, since_ms: u64) -> Vec<RecentUpdate> {
@@ -1242,8 +1267,8 @@ impl Library {
         self.save(&lf)?;
         added = m;
         self.remove_inner(old_id)?;
-        // keep the last two earlier versions for a rollback, not every one there ever was
-        for (dir, _, _) in self.previous_versions(&added.id).into_iter().skip(2) {
+        // keep the last three earlier versions for a rollback, not every one there ever was
+        for (dir, _, _) in self.previous_versions(&added.id).into_iter().skip(3) {
             let _ = fs::remove_dir_all(self.root.join("trash").join(dir));
         }
         Ok(added)
@@ -2394,9 +2419,10 @@ impl Library {
             "drift": drift,
             "history": lf.history.iter().rev().map(|h| json!({ "label": h.label, "ts": h.ts })).collect::<Vec<_>>(),
             "trash": self.trash_list().into_iter().map(|(dir, name, version, size, removed_ms)| json!({ "dir": dir, "name": name, "version": version, "size": size, "removed_ms": removed_ms })).collect::<Vec<_>>(),
+            "previous": self.newest_previous(&lf.mods).into_iter().map(|(id, (dir, version))| (id, json!({ "dir": dir, "version": version }))).collect::<serde_json::Map<String, Value>>(),
             "mods": lf.mods.iter().map(|m| json!({
                 "id": m.id, "name": m.name, "version": m.version, "enabled": m.enabled, "target": m.target,
-                "nexus": m.nexus, "thunderstore": m.thunderstore, "modio": m.modio,
+                "nexus": m.nexus, "thunderstore": m.thunderstore, "modio": m.modio, "github": m.github.is_some(),
                 "source": m.source, "files": m.files.len(), "size": m.size, "added_ms": m.added_ms, "notes": m.notes.len(), "placed_by": m.placed_by, "note": m.note, "group": m.group, "depends_on": m.depends_on, "update_rule": m.update_rule, "verified": m.verified, "programs": m.programs,
                 "needed_by": m.thunderstore.as_ref().map(|t| lf.mods.iter().filter(|o| o.id != m.id && o.depends_on.iter().any(|d| d.eq_ignore_ascii_case(&t.full_name()))).map(|o| o.name.clone()).collect::<Vec<_>>()).unwrap_or_default(),
                 "conflicts": in_conflict.contains(&m.name),
@@ -2981,7 +3007,7 @@ mod tests {
     }
 
     #[test]
-    fn an_update_can_be_rolled_back_and_only_the_last_two_old_versions_are_kept() {
+    fn an_update_can_be_rolled_back_and_only_the_last_three_old_versions_are_kept() {
         let (d, game, lib) = setup("rollback");
         let nx = |file_id| NexusRef { game: "g".into(), mod_id: 5, file_id };
         let v1 = lib.add_with(&stage(&d, "v1", &[("Data/new.esp", "V1")]), "Cool", "c1.zip", Some(nx(1)), "1.0").unwrap();
@@ -3012,15 +3038,19 @@ mod tests {
         assert!(lib.set_update_rule(&id, "sometimes").is_err());
         assert_eq!(lib.mods().len(), 1);
 
-        // after more updates only the last two old versions are kept
+        // after more updates only the last three old versions are kept
         let mut cur = id;
         for (i, ver) in ["3.0", "4.0", "5.0"].iter().enumerate() {
             let m = lib.replace_with(&cur, &stage(&d, &format!("v{ver}"), &[("Data/new.esp", ver)]), "Cool", "c.zip", Some(nx(10 + i as u64)), ver).unwrap();
             cur = m.id;
         }
         let kept: Vec<String> = lib.previous_versions(&cur).into_iter().map(|p| p.1).collect();
-        assert_eq!(kept.len(), 2, "{kept:?}");
-        assert!(kept.contains(&"4.0".to_string()) && kept.contains(&"3.0".to_string()), "the newest two: {kept:?}");
+        assert_eq!(kept.len(), 3, "{kept:?}");
+        assert!(kept.contains(&"4.0".to_string()) && kept.contains(&"3.0".to_string()), "the newest three: {kept:?}");
+        // the list shows the newest one on the mod's row
+        let st = lib.status_json();
+        assert_eq!(st["previous"][&cur]["version"], "4.0", "{}", st["previous"]);
+        assert_eq!(st["previous"].as_object().unwrap().len(), 1);
         // what was updated lately is listed with the version to go back to
         let recent = lib.recent_updates(0);
         assert_eq!((recent.len(), recent[0].version.as_str()), (1, "5.0"));
