@@ -23,6 +23,8 @@ export const AUDIT_JS = `(() => {
       return '';
     }
     if (letters(e.innerText)) return 'text';
+    // a row scrolled out of view is not laid out (content-visibility), so it has no innerText; screen readers still read it
+    if (typeof e.checkVisibility === 'function' && e.checkVisibility() && !e.checkVisibility({ contentVisibilityAuto: true }) && letters(e.textContent)) return 'text';
     if ([...e.querySelectorAll('img[alt]')].some(i => letters(i.alt))) return 'alt';
     if (letters(e.getAttribute('title'))) return 'title';
     return '';

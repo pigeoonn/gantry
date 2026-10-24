@@ -14,7 +14,7 @@
 //! survive reinstalling the game; when that folder is not writable it falls back to the user's
 //! data directory.
 
-use crate::fsutil::{self, atomic_write, move_file};
+use crate::fsutil::{self, move_file};
 use crate::nexus::NexusRef;
 use crate::thunderstore::ThunderRef;
 use serde::{Deserialize, Serialize};
@@ -699,29 +699,29 @@ impl Library {
     }
 
     fn load(&self) -> LibFile {
-        let p = self.lib_path();
-        match fs::read(&p) {
-            Ok(b) => serde_json::from_slice(&b).unwrap_or_else(|_| {
-                // never silently start over: keep what could not be read
-                let _ = fs::rename(&p, p.with_extension(format!("json.corrupt-{}", fsutil::now_ms())));
-                LibFile::default()
-            }),
-            Err(_) => LibFile::default(),
-        }
+        // never silently start over: what could not be read is kept, and the copy from before the last change is used
+        fsutil::read_json_kept(&self.lib_path()).value().unwrap_or_default()
     }
 
     fn save(&self, f: &LibFile) -> Result<(), String> {
         let json = serde_json::to_string_pretty(f).map_err(|e| e.to_string())?;
-        atomic_write(&self.lib_path(), json).map_err(|e| format!("Could not save the mod library: {e}"))
+        fsutil::atomic_write_kept(&self.lib_path(), json).map_err(|e| format!("Could not save the mod library: {e}"))
+    }
+
+    /// Read the list and the journal once, so a damaged one is found (and recovered) now rather than in the middle of
+    /// something. Returns how many mods the list has.
+    pub fn self_check(&self) -> usize {
+        let _ = self.journal();
+        self.load().mods.len()
     }
 
     fn journal(&self) -> Journal {
-        fs::read(self.journal_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+        fsutil::read_json_kept(&self.journal_path()).value().unwrap_or_default()
     }
 
     fn save_journal(&self, j: &Journal) -> Result<(), String> {
         let json = serde_json::to_string(j).map_err(|e| e.to_string())?;
-        atomic_write(&self.journal_path(), json).map_err(|e| format!("Could not write the deploy journal: {e}"))
+        fsutil::atomic_write_kept(&self.journal_path(), json).map_err(|e| format!("Could not write the deploy journal: {e}"))
     }
 
     pub fn mods(&self) -> Vec<LibMod> {
@@ -3689,10 +3689,30 @@ mod tests {
     fn a_corrupt_library_file_is_set_aside_not_overwritten() {
         let (d, _g, lib) = setup("corrupt");
         lib.add_from_dir(&stage(&d, "a", &[("Data/a.esp", "A")]), "A", "a.zip").unwrap();
+        let _ = fs::remove_file(fsutil::kept_copy(&lib.lib_path()));
         fs::write(lib.lib_path(), b"{ not json").unwrap();
         assert!(lib.mods().is_empty());
         let kept: Vec<_> = fs::read_dir(lib.root()).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().contains("corrupt")).collect();
         assert_eq!(kept.len(), 1);
+    }
+
+    #[test]
+    fn a_damaged_library_or_journal_comes_back_from_the_copy_before_the_last_change() {
+        let (d, g, lib) = setup("recover");
+        lib.add_from_dir(&stage(&d, "a", &[("Data/a.esp", "A")]), "A", "a.zip").unwrap();
+        lib.add_from_dir(&stage(&d, "b", &[("Data/b.esp", "B")]), "B", "b.zip").unwrap();
+        lib.deploy(false).unwrap();
+        lib.deploy(false).unwrap();
+        let _ = fsutil::take_repaired();
+        fs::write(lib.lib_path(), b"\0\0\0 half written").unwrap();
+        fs::write(lib.journal_path(), b"{").unwrap();
+        assert_eq!(lib.mods().len(), 2, "both mods are still known");
+        let repaired = fsutil::take_repaired();
+        assert!(repaired.iter().any(|(p, ok)| *ok && p.ends_with("library.json")), "{repaired:?}");
+        // the journal still knows what was placed, so going back to vanilla removes it
+        lib.purge().unwrap();
+        assert!(!g.join("Data/a.esp").exists() && !g.join("Data/b.esp").exists());
+        assert!(fs::read_dir(lib.root()).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("library.json.corrupt-")), "the damaged file is kept");
     }
 
     #[test]

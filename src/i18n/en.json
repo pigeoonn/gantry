@@ -1618,6 +1618,8 @@
 "{} to download",
 "{} UE4SS is already installed.",
 "{} Using the copy downloaded earlier ({}).",
+"{} was damaged and could not be read. Gantry used the copy from before its last change; the damaged file is kept next to it.",
+"{} was damaged and there was no good copy of it. The damaged file is kept next to it (in {}).",
 "{} was left without its mods; putting them back.",
 "{} was updated just before this run: go back to v{}.",
 "{} will start with {} the next time Steam runs it.",

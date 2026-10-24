@@ -1618,6 +1618,8 @@
 "{} to download": "{1} de descărcat",
 "{} UE4SS is already installed.": "{1} UE4SS este deja instalat.",
 "{} Using the copy downloaded earlier ({}).": "{1} Se folosește copia descărcată anterior ({2}).",
+"{} was damaged and could not be read. Gantry used the copy from before its last change; the damaged file is kept next to it.": "{1} era deteriorat și nu a putut fi citit. Gantry a folosit copia de dinaintea ultimei schimbări; fișierul deteriorat a rămas lângă el.",
+"{} was damaged and there was no good copy of it. The damaged file is kept next to it (in {}).": "{1} era deteriorat și nu exista nicio copie bună. Fișierul deteriorat a rămas lângă el (în {2}).",
 "{} was left without its mods; putting them back.": "{1} a rămas fără moduri; le pun la loc.",
 "{} was updated just before this run: go back to v{}.": "{1} s-a actualizat chiar înainte de această sesiune: întoarce-te la v{2}.",
 "{} will start with {} the next time Steam runs it.": "{1} va porni cu {2} data viitoare când îl rulează Steam.",

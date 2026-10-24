@@ -84,6 +84,10 @@ Logs of fatal errors: `~/.cache/rig/rig.log`. Config: `~/.config/protonrig/rig_c
 
 ## What it guarantees
 - **Atomic writes.** Every config, `mods.txt`, ini, registry and Steam edit is temp-file + fsync + rename.
+- **Damaged files come back.** Settings, custom games, every Mod Library list and its journal keep a `.bak` copy of the
+  version before the last change. A file that cannot be read is kept as `<name>.corrupt-<time>` and the copy is used
+  (for settings, the newest weekly backup when the copy is bad too); the bell says so. Defaults are never silently used.
+  The lists of every installed game are also checked once at start.
 - **Zero-copy placement.** Uploads stream to disk; archives are staged on the game's own partition so
   moving mods into place is an instant `rename(2)`; other copies use `copy_file_range`.
 - **Local API is locked down.** `Host` and `Origin` are checked and every call needs a per-launch token

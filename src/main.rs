@@ -598,14 +598,62 @@ fn selected_game(state: &SharedState) -> Option<GameEntry> {
     st.games.get(st.selected_idx).cloned()
 }
 
+/// The settings. A file that cannot be read is kept aside and the copy from before its last change is used; when even
+/// that is gone, the newest weekly backup's settings. Never silently the defaults over a damaged file.
+fn load_config(paths: &RigPaths) -> RigConfigData {
+    match fsutil::read_json_kept::<RigConfigData>(&paths.config_file) {
+        fsutil::Loaded::Fine(c) | fsutil::Loaded::Recovered(c) => c,
+        fsutil::Loaded::Missing => RigConfigData::default(),
+        fsutil::Loaded::Lost(_) => {
+            let dir = paths.cache_dir.parent().unwrap_or(&paths.cache_dir).join("auto-backups");
+            let from_backup = autobackup::list(&dir).iter().find_map(|e| autobackup::read(&dir, &e.name).ok().and_then(|v| serde_json::from_value::<RigConfigData>(v["config"].clone()).ok()));
+            match from_backup {
+                Some(c) => {
+                    if let Ok(json) = serde_json::to_string_pretty(&c) {
+                        let _ = fsutil::atomic_write_kept(&paths.config_file, json);
+                    }
+                    c
+                }
+                None => RigConfigData::default(),
+            }
+        }
+    }
+}
+
+/// Right after start: every game's mod list and deploy journal is read once, so a damaged one is found and recovered
+/// before anything works with it (and the person is told).
+fn spawn_self_check(state: Weak<RwLock<AppState>>) {
+    thread::spawn(move || {
+        let Some(st) = state.upgrade() else { return };
+        let games: Vec<GameEntry> = read_state(&st).games.iter().filter(|g| g.is_installed).cloned().collect();
+        for g in &games {
+            if let Some(lib) = library_of(g) {
+                lib.self_check();
+            }
+        }
+        report_repaired(&st);
+    });
+}
+
+/// Tell about files that were found damaged and what was done (once each).
+fn report_repaired(state: &SharedState) {
+    for (path, ok) in fsutil::take_repaired() {
+        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let text = if ok {
+            format!("{} was damaged and could not be read. Gantry used the copy from before its last change; the damaged file is kept next to it.", name)
+        } else {
+            format!("{} was damaged and there was no good copy of it. The damaged file is kept next to it (in {}).", name, path.parent().map(|p| p.display().to_string()).unwrap_or_default())
+        };
+        log(state, "WARN", text.clone());
+        add_note(state, "repair", text, "");
+    }
+}
+
 impl AppState {
     pub fn new(notifier: Arc<EventNotifier>) -> Self {
         let t0 = Instant::now();
         let paths = RigPaths::new();
-        let config: RigConfigData = fs::read_to_string(&paths.config_file)
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default();
+        let config = load_config(&paths);
         let games = RigEngine::scan_all_games(&paths, &config);
         let protons = RigEngine::find_protons();
         let mut st = Self::with(paths, config, games, protons, notifier);
@@ -722,13 +770,13 @@ impl AppState {
     pub fn save_custom_games(&self) {
         let custom: Vec<&GameEntry> = self.games.iter().filter(|g| g.is_custom).collect();
         if let Ok(json) = serde_json::to_string_pretty(&custom) {
-            let _ = atomic_write(&self.paths.custom_games_file, json);
+            let _ = fsutil::atomic_write_kept(&self.paths.custom_games_file, json);
         }
     }
 
     pub fn save_config(&self) {
         if let Ok(json) = serde_json::to_string_pretty(&self.config) {
-            let _ = atomic_write(&self.paths.config_file, json);
+            let _ = fsutil::atomic_write_kept(&self.paths.config_file, json);
         }
     }
 
@@ -3345,6 +3393,7 @@ fn spawn_health_monitor(state: Weak<RwLock<AppState>>) {
                     s.notifier.bump();
                 }
             }
+            report_repaired(&st);
             drop(st);
             thread::sleep(Duration::from_secs(25));
         }
@@ -11005,6 +11054,8 @@ fn main() {
 
     let trash = read_state(&state).cache_root().join("trash");
     ModManager::purge_trash(&trash, TRASH_MAX_AGE);
+    report_repaired(&state);
+    spawn_self_check(Arc::downgrade(&state));
     resume_bisect(&state);
     load_nexus_key(&state);
     load_vt_key(&state);
@@ -16759,6 +16810,40 @@ mod tests {
         assert!(last_log(&h).contains("slot2.sav"));
         api(&h, "/api/saves_restore_file", json!({ "id": id, "key": key, "path": "../../../../x" }));
         wait_until("the refusal", || last_log(&h).contains("not a file of this backup"));
+    }
+
+    #[test]
+    fn damaged_settings_come_back_from_the_copy_or_the_weekly_backup_never_the_defaults() {
+        let h = harness("cfgrecover");
+        let paths = h.state.read().unwrap().paths.clone();
+        {
+            let mut st = h.state.write().unwrap();
+            st.config.theme = "midnight".into();
+            st.save_config();
+            st.config.game_notes.insert("42".into(), "my note".into());
+            st.save_config();
+        }
+        // half a file (a crash of the computer, a full disk)
+        let text = fs::read_to_string(&paths.config_file).unwrap();
+        fs::write(&paths.config_file, &text[..text.len() / 2]).unwrap();
+        let c = load_config(&paths);
+        assert_eq!(c.theme, "midnight", "the copy from before the last change");
+        assert!(serde_json::from_str::<RigConfigData>(&fs::read_to_string(&paths.config_file).unwrap()).is_ok(), "and it is back in place");
+        let dir = paths.config_file.parent().unwrap();
+        assert!(fs::read_dir(dir).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("rig_config.json.corrupt-")), "the damaged one is kept");
+
+        // no good copy either: the newest weekly backup
+        let backups = h.state.read().unwrap().cache_root().join("auto-backups");
+        let mut bundle = backup_bundle(&h.state);
+        bundle["config"]["theme"] = json!("forest");
+        autobackup::store(&backups, now_ms(), &bundle.to_string()).unwrap();
+        fs::write(&paths.config_file, "{ broken").unwrap();
+        fs::write(fsutil::kept_copy(&paths.config_file), "also broken").unwrap();
+        assert_eq!(load_config(&paths).theme, "forest");
+        // a missing file is simply a first start
+        fs::remove_file(&paths.config_file).unwrap();
+        fs::remove_file(fsutil::kept_copy(&paths.config_file)).unwrap();
+        assert_eq!(load_config(&paths).theme, RigConfigData::default().theme);
     }
 
     #[test]

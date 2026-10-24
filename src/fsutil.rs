@@ -149,6 +149,86 @@ pub fn atomic_write(dst: &Path, data: impl AsRef<[u8]>) -> io::Result<()> {
     res
 }
 
+/// The copy of a file as it was before its last change (see `atomic_write_kept`).
+pub fn kept_copy(p: &Path) -> PathBuf {
+    let mut name: OsString = p.file_name().unwrap_or_default().to_os_string();
+    name.push(".bak");
+    p.with_file_name(name)
+}
+
+/// `atomic_write`, keeping the file as it was before as its `kept_copy`: a file that is damaged later (a full disk, a
+/// crash of the computer, a hand edit) can then be recovered by `read_json_kept`.
+pub fn atomic_write_kept(dst: &Path, data: impl AsRef<[u8]>) -> io::Result<()> {
+    if fs::metadata(dst).map(|m| m.is_file() && m.len() > 0).unwrap_or(false) {
+        let _ = fs::copy(dst, kept_copy(dst));
+    } else {
+        // the first version is its own copy, so there is something to go back to from the start
+        let _ = atomic_write(&kept_copy(dst), data.as_ref());
+    }
+    atomic_write(dst, data)
+}
+
+/// What reading a kept file found.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Loaded<T> {
+    Fine(T),
+    Missing,
+    /// The file could not be read; the copy from before its last change was used (and put back).
+    Recovered(T),
+    /// The file could not be read and there was no good copy; it was moved aside to this path, never deleted.
+    Lost(PathBuf),
+}
+
+impl<T> Loaded<T> {
+    pub fn value(self) -> Option<T> {
+        match self {
+            Loaded::Fine(v) | Loaded::Recovered(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+/// Files that had to be recovered (true) or could not be (false) since this was last asked.
+static REPAIRED: std::sync::Mutex<Vec<(PathBuf, bool)>> = std::sync::Mutex::new(Vec::new());
+
+pub fn take_repaired() -> Vec<(PathBuf, bool)> {
+    std::mem::take(&mut *REPAIRED.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+/// Read a JSON file written with `atomic_write_kept`. One that cannot be read is moved aside (`<name>.corrupt-<ms>`)
+/// and its kept copy is used and put back in its place. Both are noted for `take_repaired`.
+pub fn read_json_kept<T: serde::de::DeserializeOwned>(p: &Path) -> Loaded<T> {
+    let Ok(bytes) = fs::read(p) else {
+        // a change that stopped between the copy and the write leaves only the copy
+        return match fs::read(kept_copy(p)).ok().and_then(|b| serde_json::from_slice::<T>(&b).ok()) {
+            Some(v) if !p.exists() && fs::copy(kept_copy(p), p).is_ok() => {
+                REPAIRED.lock().unwrap_or_else(|e| e.into_inner()).push((p.to_path_buf(), true));
+                Loaded::Recovered(v)
+            }
+            _ => Loaded::Missing,
+        };
+    };
+    if let Ok(v) = serde_json::from_slice(&bytes) {
+        return Loaded::Fine(v);
+    }
+    let mut name: OsString = p.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".corrupt-{}", now_ms()));
+    let aside = p.with_file_name(name);
+    let _ = fs::rename(p, &aside);
+    let kept = kept_copy(p);
+    match fs::read(&kept).ok().and_then(|b| serde_json::from_slice::<T>(&b).ok()) {
+        Some(v) => {
+            let _ = fs::copy(&kept, p);
+            REPAIRED.lock().unwrap_or_else(|e| e.into_inner()).push((p.to_path_buf(), true));
+            Loaded::Recovered(v)
+        }
+        None => {
+            REPAIRED.lock().unwrap_or_else(|e| e.into_inner()).push((p.to_path_buf(), false));
+            Loaded::Lost(aside)
+        }
+    }
+}
+
 /// Like `atomic_write`, but the file is created readable by its owner only (secrets such as API
 /// keys). The temp file already has mode 0600, so the contents are never briefly world-readable.
 pub fn atomic_write_private(dst: &Path, data: impl AsRef<[u8]>) -> io::Result<()> {

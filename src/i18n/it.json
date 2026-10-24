@@ -1618,6 +1618,8 @@
 "{} to download": "{1} da scaricare",
 "{} UE4SS is already installed.": "{1} UE4SS è già installato.",
 "{} Using the copy downloaded earlier ({}).": "{1} Uso la copia scaricata in precedenza ({2}).",
+"{} was damaged and could not be read. Gantry used the copy from before its last change; the damaged file is kept next to it.": "{1} era danneggiato e non si poteva leggere. Gantry ha usato la copia di prima dell'ultima modifica; il file danneggiato è conservato accanto.",
+"{} was damaged and there was no good copy of it. The damaged file is kept next to it (in {}).": "{1} era danneggiato e non c'era una copia buona. Il file danneggiato è conservato accanto (in {2}).",
 "{} was left without its mods; putting them back.": "{1} era rimasto senza mod; le rimetto a posto.",
 "{} was updated just before this run: go back to v{}.": "{1} è stata aggiornata appena prima di questa partita: torna alla v{2}.",
 "{} will start with {} the next time Steam runs it.": "{1} partirà con {2} la prossima volta che Steam lo avvia.",

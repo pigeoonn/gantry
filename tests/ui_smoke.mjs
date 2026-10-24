@@ -169,13 +169,18 @@ try {
     await ev('closeModals(); document.getElementById("notesPanel")?.classList.remove("open")');
   }
   const bad = /(\{\}|\{\d\}|undefined|\[object |NaN)/;
+  // how long the page is busy without a break, per screen (tasks under 50 ms are not reported by the browser)
+  await ev(`window.__lt = []; new PerformanceObserver(l => l.getEntries().forEach(e => window.__lt.push(e.duration))).observe({ type: 'longtask' }); true`);
+  const busy = [];
   for (const lang of ['en', 'ro', 'it', 'fr', 'es', 'ru', 'de', 'pt', 'pl', 'tr']) {
     await ev(`setLanguage('${lang}', false)`);
     await sleep(500);
     await ev(fake);
     for (const s of screens) {
+      await ev('window.__lt.splice(0)');
       await ev(`closeModals(); (typeof closePalette === "function" && closePalette()); appState.pending_install = null; renderPlaceDialog(); ${s}`);
       await sleep(250);
+      busy.push([Math.max(0, ...((await ev('window.__lt.splice(0)')) || [])), lang, screens.indexOf(s)]);
       if (shotsDir && lang === 'en') {
         // a picture of every screen (the automatic checks upload them, so how it looks on Windows and macOS can be seen)
         const shot = await send('Page.captureScreenshot', { format: 'png' });
@@ -191,6 +196,31 @@ try {
     }
     await ev('closeModals()');
   }
+  // a big library: hundreds of games and mods must not freeze the window either
+  await ev(`setLanguage('en', false)`);
+  await sleep(400);
+  await ev(fake);
+  const stress = [
+    ["many games", `(() => { const base = appState.games[0]; appState.games = Array.from({ length: 400 }, (_, i) => Object.assign({}, base, { appid: String(5000 + i), name: 'Game number ' + i, steam_appid: String(5000 + i) })); appState.selected_idx = 7; renderUI(true); })()`],
+    ["many mods", `(() => { const m0 = appState.library.mods[0]; appState.library = Object.assign({}, appState.library, { mods: Array.from({ length: 800 }, (_, i) => Object.assign({}, m0, { id: 'm' + i, name: 'Mod number ' + i, enabled: i % 3 > 0, group: i % 5 ? '' : 'Visual', conflicts: i % 7 === 0 })) }); setTab('mods'); renderModLib(); })()`],
+    ["redraw everything", `renderUI(true)`],
+    ["filter the mods", `setMlChip('off')`],
+    ["all the mods again", `mlLimit = 100000; setMlChip('all')`],
+    ["the game list", `openLibrary()`],
+  ];
+  for (const [what, expr] of stress) {
+    await ev('window.__lt.splice(0)');
+    await ev(expr);
+    await sleep(300);
+    const worst = Math.max(0, ...((await ev('window.__lt.splice(0)')) || []));
+    busy.push([worst, 'big library', what]);
+  }
+  if (process.env.SMOKE_PROFILE) console.log(JSON.stringify(await ev(`(() => { const out = {}; const time = (n, f) => { const t = performance.now(); f(); out[n] = Math.round(performance.now() - t); }; ['renderGames(true)', 'renderMods()', 'renderModLib()', 'renderHero()', 'renderNotes()', 'renderLogs()', 'renderNexusUi()', 'renderLoaderCard()', 'renderSortSelect()', 'applyLook(appState.settings)', 'applyLayout(appState.settings.layout)', 'renderUI(true)', 'openLibrary()'].forEach(x => { try { time(x, () => (0, eval)(x)); } catch (e) { out[x] = String(e); } }); mlLimit = 100000; time('modlib 800', () => renderModLib()); mlLimit = 150; return out; })()`)));
+  busy.sort((a, b) => b[0] - a[0]);
+  // the goal is 100 ms on an ordinary computer; slow test machines get room, a real regression does not
+  const busyMax = Number(process.env.SMOKE_BUSY_MAX || 300);
+  for (const b of busy.filter(b => b[0] > busyMax)) failures.push(`the window was busy for ${Math.round(b[0])} ms without a break (${b[1]}, ${b[2]})`);
+  if (process.env.SMOKE_BUSY) console.log('longest busy moments (ms, language, screen): ' + busy.slice(0, Number(process.env.SMOKE_BUSY) || 10).map(b => `${Math.round(b[0])} ${b[1]} ${typeof b[2] === 'number' ? '#' + b[2] : b[2]}`).join(', '));
   ws.close();
 } catch (e) {
   failures.push('the check itself failed: ' + e);

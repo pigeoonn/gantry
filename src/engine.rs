@@ -767,8 +767,8 @@ impl RigEngine {
             }
         }
 
-        if let Ok(txt) = fs::read_to_string(&paths.custom_games_file) {
-            if let Ok(custom_list) = serde_json::from_str::<Vec<GameEntry>>(&txt) {
+        {
+            if let Some(custom_list) = crate::fsutil::read_json_kept::<Vec<GameEntry>>(&paths.custom_games_file).value() {
                 for mut cg in custom_list {
                     cg.is_custom = true;
                     let gpath = PathBuf::from(&cg.game_dir);

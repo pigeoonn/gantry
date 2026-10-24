@@ -2,6 +2,10 @@
 
 ## Next
 
+- **Speed and reliability.** A damaged settings file, mod list or journal is now recovered from the copy made before
+  its last change (or, for settings, the newest weekly backup) instead of quietly becoming empty; the damaged file is kept
+  and the bell says what happened. Big libraries stay quick: with 800 mods, showing them all takes about a third of the
+  time, the game list a quarter, and the look of the window is no longer recomputed on every refresh.
 - **Sharing and moving computers.** *Copy share code* puts a game's setup on the clipboard as one line of text; *Import a
   code* takes it (or a Thunderstore profile code). Importing a modpack, setup file or code, or dropping a `.gantrypack`
   on the window, now shows every mod and how it will arrive before anything is fetched. Shared setups carry GitHub and

@@ -1618,6 +1618,8 @@
 "{} to download": "indirilecek {1}",
 "{} UE4SS is already installed.": "{1} UE4SS zaten kurulu.",
 "{} Using the copy downloaded earlier ({}).": "{1} Daha önce indirilen kopya kullanılıyor ({2}).",
+"{} was damaged and could not be read. Gantry used the copy from before its last change; the damaged file is kept next to it.": "{1} bozulmuştu ve okunamadı. Gantry son değişiklikten önceki kopyayı kullandı; bozuk dosya yanında saklanıyor.",
+"{} was damaged and there was no good copy of it. The damaged file is kept next to it (in {}).": "{1} bozulmuştu ve iyi bir kopyası yoktu. Bozuk dosya yanında saklanıyor ({2} içinde).",
 "{} was left without its mods; putting them back.": "{1} modsuz kalmıştı; modlar geri konuyor.",
 "{} was updated just before this run: go back to v{}.": "{1} bu oturumdan hemen önce güncellendi: v{2} sürümüne geri dön.",
 "{} will start with {} the next time Steam runs it.": "{1}, Steam onu bir sonraki çalıştırışında {2} ile başlayacak.",

@@ -559,6 +559,9 @@
   .ml-pill.bad { background: rgba(248,113,113,0.18); color: color-mix(in srgb, #f87171, var(--ink) var(--lift)); }
   .ml-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; z-index: 2; padding-right: 4px; }
   .ml-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 10px; background: rgb(var(--shade) / calc(0.38 * var(--shade-k))); border: 1px solid var(--glass-border); }
+  /* rows and cards that are off screen are not laid out until they scroll in (big libraries stay quick) */
+  .ml-row, .game-item { content-visibility: auto; contain-intrinsic-size: auto 52px; }
+  .lib-card { content-visibility: auto; contain-intrinsic-size: auto 150px; }
   .ml-row.off .ml-name { color: var(--text-muted); font-weight: 500; }
   .ml-row.off .ml-thumb { opacity: .7; }
   .ml-n { width: 22px; text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 800; }
@@ -3231,27 +3234,32 @@
     return c;
   }
   function fitTokens(root, light) {
+    // every read of a computed style after a change makes the browser restyle the whole page (slow with a big
+    // library), so all the original values are taken out first and read in one go
+    const fitted = ['--text-muted', '--accent-cyan', '--accent-amber', '--accent-red', '--accent-violet'];
+    fitted.forEach(k => root.style.removeProperty(k));
     const cs = getComputedStyle(root);
     const base = ['--n0', '--n1', '--n2', '--n3', '--n4'].map(k => rgbOf(cs.getPropertyValue(k))).filter(Boolean);
     // rows and cards are often tinted a little by what is on them (hover, selection): count that as well
     const w = rgbOf(`rgb(${cs.getPropertyValue('--w').trim().replace(/ +/g, ',')})`) || [255, 255, 255];
     const surf = base.concat(base.map(b => b.map((v, i) => Math.round(v * 0.86 + w[i] * 0.14))));
-    root.style.removeProperty('--text-muted');
-    const muted = rgbOf(getComputedStyle(root).getPropertyValue('--text-muted'));
-    if (muted && surf.length) root.style.setProperty('--text-muted', `rgb(${nudgeToward(muted, surf, light, 4.7).join(',')})`);
-    for (const k of ['--accent-cyan', '--accent-amber', '--accent-red', '--accent-violet']) {
-      root.style.removeProperty(k);
-      const c = rgbOf(getComputedStyle(root).getPropertyValue(k));
-      if (c && surf.length) root.style.setProperty(k, `rgb(${nudgeToward(c, surf, light, 4.7).join(',')})`);
-    }
+    const orig = fitted.map(k => rgbOf(cs.getPropertyValue(k)));
+    fitted.forEach((k, i) => {
+      if (orig[i] && surf.length) root.style.setProperty(k, `rgb(${nudgeToward(orig[i], surf, light, 4.7).join(',')})`);
+    });
     const acc = rgbOf(root.style.getPropertyValue('--acc'));
     if (acc && surf.length) {
       const tinted = surf.map(b => b.map((v, i) => Math.round(v * 0.84 + acc[i] * 0.16)));
       root.style.setProperty('--acc-fg', `rgb(${nudgeToward(acc, surf.concat(tinted), light, 4.7).join(',')})`);
     }
   }
+  let lookKey = '';
   function applyLook(s) {
     const root = document.documentElement;
+    // nothing about the look changed: nothing to do (a redraw calls this every time)
+    const key = JSON.stringify([s.theme, s.accent, s.custom_theme, !!s.compact, gameAccent, root.style.zoom, s.theme === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches]);
+    if (key === lookKey) return;
+    lookKey = key;
     const th = themeOf(s);
     const light = th.light;
     root.classList.toggle('light', light);
@@ -3647,7 +3655,7 @@
   a11yEnhance(document.body);
 
   // ---------- Notification centre ----------
-  const NOTE_ICON = { rollback: '↶', virustotal: '🛡', crash: '💥', updates: '⬆', download: '⬇', gameupdate: '🔄', pack: '📦', waiting: '🌐', known: '⚠' };
+  const NOTE_ICON = { rollback: '↶', virustotal: '🛡', crash: '💥', updates: '⬆', download: '⬇', gameupdate: '🔄', pack: '📦', waiting: '🌐', known: '⚠', repair: '🛠' };
   let notesSeen = null;
   function renderNotes() {
     const n = (appState.notes || { unread: 0, items: [] });
