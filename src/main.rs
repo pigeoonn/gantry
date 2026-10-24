@@ -5189,11 +5189,20 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             }
         }
         "/api/core_install" => {
-            let name = body_str(body, "name");
+            // one core mod (`name`) or several (`names`), one after the other
+            let mut names: Vec<String> = body.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).take(16).collect()).unwrap_or_default();
+            if names.is_empty() {
+                names.push(body_str(body, "name"));
+            }
             if let Some(g) = selected_game(state).filter(|g| g.is_installed) {
-                if frameworks::cores(Path::new(&g.game_dir)).iter().any(|c| c.name == name) {
+                let known = frameworks::cores(Path::new(&g.game_dir));
+                if names.iter().all(|n| known.iter().any(|c| c.name == n)) {
                     let state_bg = Arc::clone(state);
-                    thread::spawn(move || install_missing_cores(&state_bg, &g, Some(&name)));
+                    thread::spawn(move || {
+                        for n in names {
+                            install_missing_cores(&state_bg, &g, Some(&n));
+                        }
+                    });
                 } else {
                     log(state, "WARN", "Gantry does not know that core mod for this game.");
                 }
@@ -8017,6 +8026,34 @@ fn mod_page_json(state: &SharedState, mod_id: &str) -> Result<Value, String> {
         None => (modinfo::Page { source: "local".into(), name: m.name.clone(), version: m.version.clone(), ..Default::default() }, false, String::new()),
     };
     page.mark_installed(&nexus_ids, &thunder_keys);
+    // the core mods its files ask for go with what its page lists; and the other mods that stand on this one
+    let dir = PathBuf::from(&g.game_dir);
+    let in_game = |x: &deploy::LibMod| -> Vec<String> { x.files.iter().map(|f| if x.target.is_empty() { f.clone() } else { format!("{}/{}", x.target, f) }).collect() };
+    for c in frameworks::wanted(&dir, &in_game(&m)) {
+        if !page.requirements.iter().any(|r| r.name.to_lowercase().contains(&c.name.to_lowercase())) {
+            page.requirements.push(modinfo::Req { name: c.name.into(), page_url: c.page.into(), notes: "Found from its files.".into(), installed: c.installed, core: true, ..Default::default() });
+        }
+    }
+    let provides = frameworks::provided(&dir, &in_game(&m));
+    let ts_key = m.thunderstore.as_ref().map(|t| t.full_name().to_lowercase());
+    let ts_deps: std::collections::HashMap<String, Vec<String>> = match &ts_key {
+        Some(_) => thunder_community_for(state, &g)
+            .and_then(|c| thunder_listing(state, &c))
+            .map(|all| all.into_iter().map(|l| (l.full_name.to_lowercase(), l.deps.iter().map(|d| d.to_lowercase()).collect())).collect())
+            .unwrap_or_default(),
+        None => Default::default(),
+    };
+    let needed_by: Vec<Value> = mods
+        .iter()
+        .filter(|x| x.id != m.id)
+        .filter_map(|x| {
+            if let Some(c) = (!provides.is_empty()).then(|| frameworks::wanted(&dir, &in_game(x))).and_then(|w| w.into_iter().find(|c| provides.contains(&c.name))) {
+                return Some(json!({ "id": x.id, "name": x.name, "enabled": x.enabled, "via": c.name }));
+            }
+            let (Some(k), Some(t)) = (&ts_key, &x.thunderstore) else { return None };
+            ts_deps.get(&t.full_name().to_lowercase()).filter(|d| d.contains(k)).map(|_| json!({ "id": x.id, "name": x.name, "enabled": x.enabled, "via": "" }))
+        })
+        .collect();
 
     let update = {
         let st = read_state(state);
@@ -8039,6 +8076,7 @@ fn mod_page_json(state: &SharedState, mod_id: &str) -> Result<Value, String> {
     v["previous"] = json!(lib.previous_versions(&m.id).into_iter().map(|(dir, version, ms)| json!({ "dir": dir, "version": version, "removed_ms": ms })).collect::<Vec<_>>());
     v["nexus_user"] = m.nexus.as_ref().filter(|n| n.valid()).map(|n| nexus_user_json(state, n)).unwrap_or(Value::Null);
     v["notes"] = json!(notes);
+    v["needed_by"] = json!(needed_by);
     v["installed"] = json!({
         "id": m.id, "name": m.name, "version": m.version, "enabled": m.enabled, "source": m.source, "target": m.target, "placed_by": m.placed_by, "size": m.size,
         "file_count": m.files.len(), "files": m.files.iter().take(300).collect::<Vec<_>>(), "added_ms": m.added_ms, "note": m.note,
@@ -9269,16 +9307,16 @@ fn forward_nxm(port: u16, url: &str) -> bool {
     use std::io::Write;
     use std::net::{SocketAddr, TcpStream};
     let addr: SocketAddr = ([127, 0, 0, 1], port).into();
-    let send = |req: String| -> Option<String> {
+    let send = |req: String| -> Option<(u16, String)> {
         let mut s = TcpStream::connect_timeout(&addr, Duration::from_millis(800)).ok()?;
         s.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
         s.write_all(req.as_bytes()).ok()?;
         let mut raw = Vec::new();
         let _ = s.read_to_end(&mut raw);
-        Some(String::from_utf8_lossy(&raw).into_owned())
+        http_reply(&raw)
     };
     let host = format!("127.0.0.1:{}", port);
-    let Some(page) = send(format!("GET / HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n", host)) else { return false };
+    let Some((_, page)) = send(format!("GET / HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n", host)) else { return false };
     let Some(token) = page.split("RIG_TOKEN = \"").nth(1).and_then(|r| r.split('"').next()).map(str::to_string) else { return false };
     let body = json!({ "url": url }).to_string();
     send(format!(
@@ -9288,8 +9326,7 @@ fn forward_nxm(port: u16, url: &str) -> bool {
         body.len(),
         body
     ))
-    .map(|r| r.starts_with("HTTP/1.1 200"))
-    .unwrap_or(false)
+    .is_some_and(|(code, _)| code == 200)
 }
 
 // ───────────────────────────── Undo ─────────────────────────────
@@ -10093,10 +10130,30 @@ fn local_http(port: u16, request: &str) -> Option<(u16, String)> {
     s.write_all(request.as_bytes()).ok()?;
     let mut raw = Vec::new();
     let _ = s.read_to_end(&mut raw);
-    let text = String::from_utf8_lossy(&raw).into_owned();
-    let status = text.strip_prefix("HTTP/1.1 ")?.get(..3)?.parse().ok()?;
-    let body = text.split_once("\r\n\r\n").map(|(_, b)| b.to_string()).unwrap_or_default();
-    Some((status, body))
+    http_reply(&raw)
+}
+
+/// The status and body of a raw HTTP/1.1 reply. A big reply comes in chunks (with their sizes between them), which are
+/// put back together.
+fn http_reply(raw: &[u8]) -> Option<(u16, String)> {
+    let split = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
+    let head = String::from_utf8_lossy(&raw[..split]).into_owned();
+    let status = head.strip_prefix("HTTP/1.1 ")?.get(..3)?.parse().ok()?;
+    let mut rest = &raw[split + 4..];
+    if !head.lines().any(|l| l.to_lowercase().replace(' ', "") == "transfer-encoding:chunked") {
+        return Some((status, String::from_utf8_lossy(rest).into_owned()));
+    }
+    let mut body = Vec::new();
+    while let Some(eol) = rest.windows(2).position(|w| w == b"\r\n") {
+        let size = usize::from_str_radix(String::from_utf8_lossy(&rest[..eol]).split(';').next()?.trim(), 16).ok()?;
+        if size == 0 {
+            break;
+        }
+        let chunk = rest.get(eol + 2..eol + 2 + size)?;
+        body.extend_from_slice(chunk);
+        rest = rest.get(eol + 2 + size + 2..).unwrap_or(&[]);
+    }
+    Some((status, String::from_utf8_lossy(&body).into_owned()))
 }
 
 /// The game a command-line name means: an exact id, an exact name, or the one game whose name contains it.
@@ -11379,6 +11436,43 @@ mod tests {
         assert_eq!(row("Judy Stays")["loses"][0], json!({ "mod": "Panam Stays", "files": 1 }));
         // a game without archives or scripts is not read at all
         assert!(clash_issues(&h._dir.join("nowhere"), &lib).is_empty());
+    }
+
+    #[test]
+    fn a_mod_page_lists_the_core_mods_it_needs_and_the_mods_that_need_it() {
+        let h = harness("needgraph");
+        let dir = add_plain_game(&h);
+        fs::create_dir_all(dir.join("bin/x64")).unwrap();
+        fs::write(dir.join("bin/x64/Cyberpunk2077.exe"), b"MZ").unwrap();
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        let add = |n: &str, files: &[&str]| {
+            let s = h._dir.join(&format!("stage-{n}"));
+            for f in files {
+                fs::create_dir_all(s.join(f).parent().unwrap()).unwrap();
+                fs::write(s.join(f), b"x").unwrap();
+            }
+            lib.add_with(&s, n, &format!("{n}.zip"), None, "1").unwrap();
+        };
+        add("RED4ext", &["red4ext/RED4ext.dll", "bin/x64/winmm.dll"]);
+        add("Cool Plugin", &["red4ext/plugins/Cool/cool.dll", "archive/pc/mod/cool.archive.xl"]);
+        add("Plain", &["archive/pc/mod/plain.archive"]);
+        lib.deploy(false).unwrap();
+        refresh_mods_shared(&h.state);
+        let id = |n: &str| lib.mods().iter().find(|m| m.name == n).unwrap().id.clone();
+        let page = |n: &str| -> Value {
+            let (code, body) = http(&h, "GET", &format!("/api/mod_page?id={}", id(n)), &[("X-Rig-Token", &h.token)], b"");
+            assert_eq!(code, 200, "{body}");
+            serde_json::from_str(&body).unwrap()
+        };
+        let cool = page("Cool Plugin");
+        let reqs: Vec<(String, bool, bool)> = cool["requirements"].as_array().unwrap().iter().map(|r| (r["name"].as_str().unwrap().to_string(), r["installed"].as_bool().unwrap(), r["core"].as_bool().unwrap())).collect();
+        assert_eq!(reqs, vec![("RED4ext".to_string(), true, true), ("ArchiveXL".to_string(), false, true)], "{cool}");
+        assert!(cool["needed_by"].as_array().unwrap().is_empty());
+        let red = page("RED4ext");
+        let by: Vec<(&str, &str)> = red["needed_by"].as_array().unwrap().iter().map(|x| (x["name"].as_str().unwrap(), x["via"].as_str().unwrap())).collect();
+        assert_eq!(by, vec![("Cool Plugin", "RED4ext")], "the plain mod does not stand on it");
+        assert!(page("Plain")["requirements"].as_array().unwrap().is_empty());
     }
 
     #[test]
@@ -15610,6 +15704,14 @@ mod tests {
         let st = api(&h, "/api/state", json!({}));
         assert_eq!(st["nexus"]["pending"]["file_id"], 8);
         assert!(!forward_nxm(1, "nxm://halfsword/mods/7/files/8"), "no running instance: reports failure");
+    }
+
+    #[test]
+    fn a_reply_in_chunks_is_put_back_together() {
+        let raw = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n9\r\nRIG_TOKEN\r\n6\r\n = \"ab\r\n3;x=1\r\ncd\"\r\n0\r\n\r\n";
+        assert_eq!(http_reply(raw), Some((200, "RIG_TOKEN = \"abcd\"".to_string())));
+        assert_eq!(http_reply(b"HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\n\r\nno"), Some((404, "no".to_string())));
+        assert_eq!(http_reply(b"garbage"), None);
     }
 
     #[test]

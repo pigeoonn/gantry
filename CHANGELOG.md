@@ -40,6 +40,14 @@
   red dot when it needs another mod and an amber one when it shares files with another; new chips *Needs something* and
   *Core* (the game's core mods and loaders, grouped by themselves); a group shown by itself can be turned on or off
   as a whole. A mod that was updated has *↶ v1.2* on its row to go back, and three old versions are kept (was two).
+- **Search everywhere** now also covers mod.io and the game's core mods (from their GitHub releases), asks every site
+  at the same time, and lists a mod that is on two sites once, with both named. The name opens the mod's page; Nexus
+  results already in your library say so.
+- **What needs what:** a mod's *Needs* tab also lists the core mods its files ask for (with *Install*), *Get all
+  missing* fetches everything it lacks at once, and *Needed by* shows the mods that stop working without it (from the
+  core mods' files and from Thunderstore's dependency lists).
+- **Fixed:** opening a Nexus link or using the command line while Gantry was already running could fail when the page
+  happened to arrive in pieces.
 - **Conflicts you could not see before:** each mod's row says which mods it wins files over and loses files to, with
   *Let it win them all*. For Cyberpunk 2077 Gantry also looks inside `.archive` files: two archives that change the same
   game resource are shown with the one the game actually uses (the one whose file name sorts first, or your

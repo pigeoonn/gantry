@@ -144,6 +144,24 @@ pub fn missing(game: &Path, enabled_files: &[String]) -> Vec<Missing> {
         .collect()
 }
 
+/// The core mods that `files` (paths from the game folder) ask for, whether the game has them or not.
+pub fn wanted(game: &Path, files: &[String]) -> Vec<Core> {
+    let Some(table) = table_for(game) else { return Vec::new() };
+    let lower: Vec<String> = files.iter().map(|f| f.replace('\\', "/").to_lowercase()).collect();
+    table
+        .iter()
+        .filter(|fw| lower.iter().any(|f| (fw.needs)(f)))
+        .map(|fw| Core { name: fw.name, page: fw.page, repo: fw.repo, installed: fw.present.iter().any(|p| has(game, p)), asset: fw.asset })
+        .collect()
+}
+
+/// The core mods that `files` are: the files a core mod is recognised by are among them.
+pub fn provided(game: &Path, files: &[String]) -> Vec<&'static str> {
+    let Some(table) = table_for(game) else { return Vec::new() };
+    let lower: Vec<String> = files.iter().map(|f| f.replace('\\', "/").to_lowercase()).collect();
+    table.iter().filter(|fw| fw.present.iter().any(|p| lower.contains(&p.to_lowercase()))).map(|fw| fw.name).collect()
+}
+
 /// Every core mod of the game, in the order they go in, and whether each is there already. Empty for a game Gantry has
 /// no table for.
 pub fn cores(game: &Path) -> Vec<Core> {
@@ -216,5 +234,20 @@ mod tests {
         assert_eq!(pick("Redscript", &["redscript-cli-aarch64-darwin", "redscript-cli.exe", "redscript-v0.5.32-macos.zip", "redscript-v0.5.32-windows.zip"]).as_deref(), Some("redscript-v0.5.32-windows.zip"));
         assert_eq!(pick("Cyber Engine Tweaks", &["cet_1_38_0.zip"]).as_deref(), Some("cet_1_38_0.zip"));
         assert_eq!(pick("RED4ext", &["red4ext-symbols-1.30.0.zip"]), None, "never the debug files");
+    }
+
+    #[test]
+    fn what_a_mod_asks_for_and_which_core_mod_it_is_come_from_its_files() {
+        let d = TempDir::new("fwwant");
+        touch(&d.join("bin/x64/Cyberpunk2077.exe"));
+        touch(&d.join("red4ext/RED4ext.dll"));
+        let files = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let w = wanted(&d.join(""), &files(&["archive/pc/mod/a.archive.xl", "red4ext/plugins/X/x.dll"]));
+        let got: Vec<(&str, bool)> = w.iter().map(|c| (c.name, c.installed)).collect();
+        assert_eq!(got, vec![("RED4ext", true), ("ArchiveXL", false)]);
+        assert_eq!(provided(&d.join(""), &files(&["RED4EXT/red4ext.dll", "red4ext/config.ini"])), vec!["RED4ext"]);
+        assert!(provided(&d.join(""), &files(&["archive/pc/mod/a.archive"])).is_empty());
+        let other = TempDir::new("fwwant2");
+        assert!(wanted(&other.join(""), &files(&["red4ext/plugins/X/x.dll"])).is_empty(), "a game without a table asks for nothing");
     }
 }

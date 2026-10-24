@@ -824,6 +824,8 @@
   .mp-chg h4 { margin: 0 0 6px; }
   .mp-req { display: flex; align-items: center; gap: 10px; padding: 8px 11px; border: 1px solid var(--glass-border); border-radius: 10px; margin-bottom: 7px; background: rgb(var(--shade) / calc(0.25 * var(--shade-k))); }
   .mp-req .mp-rn { flex: 1; min-width: 0; }
+  .mp-req .mp-rn a { color: inherit; text-decoration: none; }
+  .mp-req .mp-rn a:hover, .mp-req .mp-rn a:focus-visible { text-decoration: underline; }
   .mp-files { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--soft); word-break: break-all; }
   .mp-kv { display: grid; grid-template-columns: 130px 1fr; gap: 4px 12px; margin-bottom: 12px; font-size: 12.5px; }
   .mp-kv span:nth-child(odd) { color: var(--text-muted); }
@@ -5500,6 +5502,12 @@
     if (a) { e.preventDefault(); openWeb(a.dataset.url); }
   });
   // a mod that is not in the library yet, opened from the store
+  function mpGetMissing(cores, nexus) {
+    if (cores.length) ipcSend('/api/core_install', { names: cores });
+    if (nexus) ipcSend('/api/nexus_install_needs', nexus);
+    showToast(t('Installing…'));
+  }
+
   async function openStorePage(source, id) {
     const my = ++mpSeq;
     mpTab = 'desc';
@@ -5841,10 +5849,19 @@
       }
     } else if (mpTab === 'needs') {
       const list = d.requirements || [];
-      html += list.map(r => `<div class="mp-req"><div class="mp-rn"><b>${escapeHtml(r.name)}</b>${r.notes ? `<div style="color:var(--text-muted); font-size:12px">${escapeHtml(r.notes)}</div>` : ''}</div>
-          <span class="ml-pill ${r.installed ? 'good' : 'warn'}">${r.installed ? t('In your library') : t('Not in your library')}</span>
+      const g = appState.games[appState.selected_idx];
+      const lost = list.filter(r => !r.installed);
+      const lostCores = lost.filter(r => r.core).map(r => r.name);
+      const lostNexus = d.installed && d.source === 'nexus' && lost.some(r => !r.core && !r.external);
+      if (lost.length > 1 && (lostCores.length || lostNexus)) html += `<div style="margin-bottom:10px"><button class="btn btn-play" onclick='mpGetMissing(${JS(lostCores)}, ${lostNexus ? JS({ appid: g ? g.appid : '', lib_id: d.installed.id }) : 'null'})'>${t('Get all missing')}</button></div>`;
+      html += list.map(r => `<div class="mp-req"><div class="mp-rn"><b>${escapeHtml(r.name)}</b>${r.notes ? `<div style="color:var(--text-muted); font-size:12px">${escapeHtml(tm(r.notes))}</div>` : ''}</div>
+          <span class="ml-pill ${r.installed ? 'good' : 'warn'}">${r.installed ? (r.core ? t('Installed') : t('In your library')) : (r.core ? t('Not installed') : t('Not in your library'))}</span>
+          ${r.core && !r.installed ? `<button class="btn" style="padding:3px 9px; font-size:11px" onclick='mpGetMissing([${JS(r.name)}], null)'>${t('Install')}</button>` : ''}
           ${r.page_url ? `<button class="btn" style="padding:3px 9px; font-size:11px" aria-label="${escapeHtml(t('Open the page'))}" onclick='openWeb(${JS(r.page_url)})'>↗</button>` : ''}</div>`).join('')
         || `<div class="lib-empty">${t('This mod does not list anything else it needs.')}</div>`;
+      const by = d.needed_by || [];
+      if (by.length) html += `<h4 style="margin:16px 0 6px">${t('Needed by')}</h4>` + by.map(x => `<div class="mp-req"><div class="mp-rn"><a href="#" onclick='openModPage(${JS(x.id)}); return false'><b>${escapeHtml(x.name)}</b></a>${x.via ? `<div style="color:var(--text-muted); font-size:12px">${t('through {}', escapeHtml(x.via))}</div>` : ''}</div>${x.enabled ? '' : `<span class="ml-pill">${t('Off')}</span>`}</div>`).join('')
+        + `<div style="color:var(--text-muted); font-size:12px; margin-top:6px">${t('Switching this mod off or removing it stops these from working.')}</div>`;
     } else if (mpTab === 'files' && d.installed) {
       const i = d.installed;
       html += `<div class="mp-kv"><span>${t('Source')}</span><span>${escapeHtml(i.source || t('manual'))}</span>

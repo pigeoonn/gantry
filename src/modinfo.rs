@@ -27,6 +27,8 @@ pub struct Req {
     pub external: bool,
     /// Already in this game's library.
     pub installed: bool,
+    /// One of the game's core mods, found from the mod's files (Gantry installs it from its official releases).
+    pub core: bool,
     #[serde(skip)]
     pub nexus_id: u64,
     /// Lower-case `owner-name` of a Thunderstore package.
@@ -127,7 +129,7 @@ pub fn nexus_changes(files: &ModFiles) -> Vec<Change> {
 }
 
 pub fn nexus_requirements(reqs: &[Requirement]) -> Vec<Req> {
-    reqs.iter().map(|r| Req { name: r.name.clone(), page_url: r.page(), notes: crate::readme::plain(&r.notes).trim().to_string(), external: r.external, installed: false, nexus_id: if r.external { 0 } else { r.mod_id }, key: String::new() }).collect()
+    reqs.iter().map(|r| Req { name: r.name.clone(), page_url: r.page(), notes: crate::readme::plain(&r.notes).trim().to_string(), external: r.external, installed: false, nexus_id: if r.external { 0 } else { r.mod_id }, key: String::new(), core: false }).collect()
 }
 
 impl Page {
@@ -163,7 +165,7 @@ pub fn modio_page(c: &crate::modio::Card, deps: &[crate::modio::Dep]) -> Page {
         categories: c.tags.clone(),
         description_html: richtext::text_html(&c.description),
         changes,
-        requirements: deps.iter().map(|d| Req { name: d.name.clone(), page_url: String::new(), notes: String::new(), external: false, installed: false, nexus_id: 0, key: format!("modio:{}", d.mod_id) }).collect(),
+        requirements: deps.iter().map(|d| Req { name: d.name.clone(), page_url: String::new(), notes: String::new(), external: false, installed: false, nexus_id: 0, key: format!("modio:{}", d.mod_id), core: false }).collect(),
     }
 }
 
@@ -186,7 +188,7 @@ pub fn thunder_page(pkg: &Value, readme_md: &str, changelog_md: &str) -> Page {
                     // "Owner-Name-1.2.3"
                     let (base, ver) = d.rsplit_once('-')?;
                     let (o, nm) = base.split_once('-')?;
-                    Some(Req { name: [nm, ver].join(" "), page_url: format!("https://thunderstore.io/package/{o}/{nm}/"), notes: o.to_string(), external: false, installed: false, nexus_id: 0, key: base.to_lowercase() })
+                    Some(Req { name: [nm, ver].join(" "), page_url: format!("https://thunderstore.io/package/{o}/{nm}/"), notes: o.to_string(), external: false, installed: false, nexus_id: 0, key: base.to_lowercase(), core: false })
                 })
                 .collect()
         })

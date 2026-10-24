@@ -30,6 +30,9 @@ pub struct Listing {
     /// Marked adult by its author (kept in the list; the store hides these unless asked).
     #[serde(default)]
     pub nsfw: bool,
+    /// The packages the newest version needs, as `Owner-Name` (no version).
+    #[serde(default)]
+    pub deps: Vec<String>,
 }
 
 /// Packages of a community out of Thunderstore's list: deprecated and adult ones are left out.
@@ -58,6 +61,7 @@ pub fn parse_listing(v: &Value) -> Vec<Listing> {
                         updated: s(p, "date_updated"),
                         icon: s(latest, "icon"),
                         nsfw: p.get("has_nsfw_content").and_then(Value::as_bool).unwrap_or(false),
+                        deps: latest.get("dependencies").and_then(Value::as_array).map(|d| d.iter().filter_map(Value::as_str).map(|x| x.rsplit_once('-').map(|(n, _)| n).unwrap_or(x).to_string()).collect()).unwrap_or_default(),
                     })
                 })
                 .collect()
@@ -444,7 +448,7 @@ mod tests {
     fn sample_list() -> Value {
         serde_json::json!([
             {"name":"Cool_Mod","owner":"Own","is_deprecated":false,"has_nsfw_content":false,"rating_score":12,"date_updated":"2026-01-01T00:00:00Z","categories":["Mods"],
-             "versions":[{"version_number":"1.2.0","description":"Makes everything cooler","icon":"https://ccdn.thunderstore.io/i/a.png","downloads":500},{"version_number":"1.0.0","description":"old","icon":"","downloads":300}]},
+             "versions":[{"version_number":"1.2.0","description":"Makes everything cooler","icon":"https://ccdn.thunderstore.io/i/a.png","downloads":500,"dependencies":["BepInEx-BepInExPack-5.4.2100","Zed-Cooler-1.0.0"]},{"version_number":"1.0.0","description":"old","icon":"","downloads":300}]},
             {"name":"Cooler","owner":"Zed","is_deprecated":false,"has_nsfw_content":false,"rating_score":1,"categories":[],"versions":[{"version_number":"1.0.0","description":"Alternative to Cool Mod","icon":"","downloads":9000}]},
             {"name":"Old_Thing","owner":"Own","is_deprecated":true,"has_nsfw_content":false,"versions":[{"version_number":"1.0.0","description":"cool but dead","downloads":1}]},
             {"name":"Spicy","owner":"Own","is_deprecated":false,"has_nsfw_content":true,"versions":[{"version_number":"1.0.0","description":"cool","downloads":1}]},
@@ -458,6 +462,7 @@ mod tests {
         assert_eq!(all.len(), 4, "deprecated packages are left out; adult ones are kept but marked");
         assert_eq!(all.iter().filter(|l| l.nsfw).count(), 1);
         assert_eq!((all[0].full_name.as_str(), all[0].version.as_str(), all[0].downloads), ("Own-Cool_Mod", "1.2.0", 800), "latest version, all downloads counted");
+        assert_eq!(all[0].deps, vec!["BepInEx-BepInExPack", "Zed-Cooler"], "what the newest version needs, without versions");
         let names = |q: &str| search(&all, q, 10).iter().map(|l| l.full_name.clone()).collect::<Vec<_>>();
         assert_eq!(names("cool"), vec!["Zed-Cooler", "Own-Cool_Mod", "CoolGuy-Texture_Pack"], "names that start with it first, the more downloaded one before the other; owner matches last");
         assert_eq!(names("cool mod"), vec!["Own-Cool_Mod", "Zed-Cooler"], "every word has to match somewhere; the exact name ranks first");

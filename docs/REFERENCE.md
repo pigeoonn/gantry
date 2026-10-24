@@ -154,6 +154,10 @@ Under a mod's name in the Mods tab, *⚠ Needs* lists what it needs and is missi
 - **Nexus requirements**, as the author listed them on the mod's page (needs your Nexus key). *↗ Name* opens that mod's
   page; *Install them* / *Get them* fetches all of them (one page at a time on a free account).
 
+A mod's page (*i* on its row) has the same in its *Needs* tab, with *Get all missing* for everything at once, and
+*Needed by*: the mods in your library that stand on this one, found from the core mods' files and from Thunderstore's
+dependency lists. Switching such a mod off takes those down with it.
+
 ## Conflicts
 
 When two mods put the same file in the game, the one later in the load order wins it. Each mod's row says what it wins
