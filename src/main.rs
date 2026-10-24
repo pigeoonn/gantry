@@ -3551,6 +3551,7 @@ fn set_proton(state: &SharedState, tool: &str) {
         let Some(t) = tools.iter().find(|t| t.script.to_string_lossy() == tool) else {
             return log(state, "WARN", "That Proton is no longer installed.");
         };
+        guard_saves(state, &g, "before-tool");
         let mut st = write_state(state);
         st.config.proton_choice.insert(g.appid.clone(), t.script.to_string_lossy().to_string());
         st.save_config();
@@ -3568,6 +3569,7 @@ fn set_proton(state: &SharedState, tool: &str) {
     let Some(cfg) = env.config_vdf() else {
         return log(state, "ERR", "Steam's config.vdf was not found.");
     };
+    guard_saves(state, &g, "before-tool");
     let backups = read_state(state).cache_root().join("steam-backups");
     match steam::apply_compat_tool(&cfg, &g.appid, &t.internal, false, &backups) {
         Ok(()) => log(state, "OK", format!("{} will start with {} the next time Steam runs it.", g.name, t.display)),
@@ -3965,6 +3967,9 @@ fn fomod_continue(state: &SharedState, p: PendingFomod, selection: fomod::Select
 /// Put an extracted mod into the library (as asked, or where the user said), deploy, and report.
 #[allow(clippy::too_many_arguments)]
 fn finish_library_add(state: &SharedState, g: &GameEntry, lib: &deploy::Library, stage: &Path, name: &str, fname: &str, version: &str, opts: &InstallOpts, old: Option<deploy::LibMod>, target: Option<&str>) {
+    if old.is_some() {
+        guard_saves(state, g, "before-update");
+    }
     let added = match &old {
         Some(o) => lib.replace_with(&o.id, stage, name, fname, opts.nexus.clone(), version),
         None => lib.add_with_target(stage, name, fname, opts.nexus.clone(), version, target),
@@ -4554,6 +4559,29 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             };
             let snaps = game.map(|g| saves::list(&g, &cache_root)).unwrap_or_default();
             return respond_json(req, 200, json!({ "snapshots": snaps }).to_string());
+        }
+        "/api/saves_files" => {
+            let (game, cache_root, sessions_file) = {
+                let st = read_state(&state);
+                (st.games.get(st.selected_idx).cloned(), st.cache_root(), st.paths.config_file.with_file_name("sessions.jsonl"))
+            };
+            let Some(g) = game else { return respond_json(req, 200, json!({ "files": [] }).to_string()) };
+            let custom = save_places(&state, &g);
+            let (a, b, id) = (query_param(&query, "a").unwrap_or_default(), query_param(&query, "b").unwrap_or_default(), query_param(&query, "id").unwrap_or_default());
+            let body = if !a.is_empty() && !b.is_empty() {
+                match saves::compare(&g, &cache_root, &a, &b, &custom) {
+                    Ok(d) => json!({ "diff": d }),
+                    Err(e) => json!({ "error": e }),
+                }
+            } else if !id.is_empty() {
+                match saves::files(&g, &cache_root, &id) {
+                    Ok(f) => json!({ "id": id, "files": f }),
+                    Err(e) => json!({ "error": e }),
+                }
+            } else {
+                saves_made_with(&g, saves::live_files(&g, &custom), &stats::read(&sessions_file))
+            };
+            return respond_json(req, 200, body.to_string());
         }
         "/api/game_logs" => {
             let (src, q) = (query_param(&query, "src").unwrap_or_default(), query_param(&query, "q").unwrap_or_default());
@@ -5183,6 +5211,19 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 let id = body_str(body, "id");
                 let id = if id.is_empty() { saves::list(&g, &cache_root).first().map(|s| s.id.clone()).unwrap_or_default() } else { id };
                 match saves::restore(&g, &cache_root, &id, &save_places(state, &g)) {
+                    Ok(m) => log(state, "OK", m),
+                    Err(e) => log(state, "WARN", e),
+                }
+            }
+        }
+        "/api/saves_restore_file" => {
+            let (game_opt, cache_root) = {
+                let st = read_state(state);
+                (st.games.get(st.selected_idx).cloned(), st.cache_root())
+            };
+            if let Some(g) = game_opt {
+                let custom = save_places(state, &g);
+                match saves::restore_file(&g, &cache_root, &body_str(body, "id"), &body_str(body, "key"), &body_str(body, "path"), &custom) {
                     Ok(m) => log(state, "OK", m),
                     Err(e) => log(state, "WARN", e),
                 }
@@ -6236,7 +6277,8 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/lib_rollback" => {
             let (id, dir) = (body_str(body, "id"), body_str(body, "dir"));
-            library_task(state, move |s, lib, _g| {
+            library_task(state, move |s, lib, g| {
+                guard_saves(s, g, "before-rollback");
                 let name = lib.rollback(&id, &dir)?;
                 forget_updates_of(s, &id);
                 let applied = library_apply(s, lib, false)?;
@@ -6354,6 +6396,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         "/api/lib_profile_load" => {
             let name = body_str(body, "name");
             library_task(state, move |st, lib, g| {
+                guard_saves(st, g, "before-profile");
                 let n = lib.load_profile(&name)?;
                 log(st, "OK", format!("Library profile '{}' loaded ({} mods changed).", name, n));
                 switch_saves(st, g, lib, &name, false);
@@ -7492,12 +7535,15 @@ fn finish_run(state: &SharedState, run: Run) {
         let secs = ended.saturating_sub(run.started_ms) / 1000;
         if secs >= 10 {
             let path = read_state(state).paths.config_file.with_file_name("sessions.jsonl");
-            let on = library_of(&run.game).map(|l| l.mods().iter().filter(|m| m.enabled).count()).unwrap_or(0);
+            let lib = library_of(&run.game);
+            let enabled: Vec<String> = lib.as_ref().map(|l| l.mods().into_iter().filter(|m| m.enabled).map(|m| m.name).collect()).unwrap_or_default();
+            let on = enabled.len();
+            let profile = lib.and_then(|l| l.matching_profile()).unwrap_or_default();
             let perf = run.perf.summary().map(|mut p| {
                 p.frames = session_frames(run.started_ms, ended);
                 p
             });
-            stats::record(&path, &stats::Session { appid: run.game.appid.clone(), name: run.game.name.clone(), start_ms: run.started_ms, end_ms: ended, secs, crashed, mods: on, perf });
+            stats::record(&path, &stats::Session { appid: run.game.appid.clone(), name: run.game.name.clone(), start_ms: run.started_ms, end_ms: ended, secs, crashed, mods: on, perf, profile, mod_names: enabled.into_iter().take(stats::MAX_NAMES).collect() });
         }
     }
     {
@@ -9769,6 +9815,46 @@ fn snapshot_after_session(state: &SharedState, g: &GameEntry) {
     }
 }
 
+/// Save Guard before something that can change or hide the saves: a mod update, a rollback, a profile
+/// switch, another compatibility tool. Silent when nothing changed or there are no saves.
+fn guard_saves(state: &SharedState, g: &GameEntry, label: &str) {
+    let cache_root = read_state(state).cache_root();
+    match saves::snapshot(g, &cache_root, label, &save_places(state, g)) {
+        Ok(Some(s)) => log(state, "INFO", format!("Saves backed up first, just in case ({} file(s)).", s.files)),
+        Ok(None) => {}
+        Err(e) if saves::nothing_to_guard(&e) => {}
+        Err(e) => log(state, "WARN", format!("Could not back up the saves first: {}", e)),
+    }
+}
+
+/// The save files as they are now, each with the session it was written in (so the list can say which
+/// profile and mods made it). A file written outside any recorded session has no `made`.
+fn saves_made_with(g: &GameEntry, files: Vec<saves::SaveFile>, all: &[stats::Session]) -> Value {
+    const LATE_WRITE_MS: u64 = 120_000;
+    let mine: Vec<&stats::Session> = all.iter().filter(|s| s.appid == g.appid).collect();
+    let mut used: Vec<usize> = Vec::new();
+    let rows: Vec<Value> = files
+        .into_iter()
+        .map(|f| {
+            let at = mine.iter().rposition(|s| s.start_ms <= f.modified_ms && f.modified_ms <= s.end_ms + LATE_WRITE_MS);
+            let made = at.map(|i| used.iter().position(|u| *u == i).unwrap_or_else(|| {
+                used.push(i);
+                used.len() - 1
+            }));
+            let mut v = serde_json::to_value(&f).unwrap_or(Value::Null);
+            if let (Some(m), Some(o)) = (made, v.as_object_mut()) {
+                o.insert("made".into(), json!(m));
+            }
+            v
+        })
+        .collect();
+    let sessions: Vec<Value> = used.iter().map(|i| {
+        let s = mine[*i];
+        json!({ "start_ms": s.start_ms, "end_ms": s.end_ms, "mods": s.mods, "profile": s.profile, "names": s.mod_names, "crashed": s.crashed })
+    }).collect();
+    json!({ "files": rows, "sessions": sessions })
+}
+
 /// App id handed to Proton. Proton applies per-game fixes keyed on it, so an unrelated game must
 /// not borrow another game's id: use its own Steam id, Half Sword's for Half Sword, else 0.
 fn compat_app_id(g: &GameEntry) -> String {
@@ -9873,6 +9959,7 @@ fn switch_saves(state: &SharedState, g: &GameEntry, lib: &deploy::Library, to: &
     if from == to {
         return;
     }
+    guard_saves(state, g, "before-profile");
     let store = lib.root().join("profile_saves");
     if let Err(e) = profsaves::put_away(&store, &from, &roots) {
         return log(state, "ERR", e);
@@ -13879,6 +13966,8 @@ mod tests {
         api(&h, "/api/lib_profile_load", json!({ "name": "Plain" }));
         wait_until("saves moved to plain", || lib.saves_of() == "Plain");
         assert_eq!(slot(), "modded 1", "Plain has no saves yet: it starts from the ones there are");
+        let cache_root = read_state(&h.state).cache_root();
+        assert!(saves::list(&g, &cache_root).iter().any(|s| s.label == "before-profile"), "the saves were backed up before the switch");
         fs::write(live.join("slot.sav"), "plain 1").unwrap();
         api(&h, "/api/lib_profile_load", json!({ "name": "Modded" }));
         wait_until("modded saves back", || lib.saves_of() == "Modded");
@@ -15024,7 +15113,7 @@ mod tests {
         // one session with mods around the newer picture
         let g = selected_game(&h.state).unwrap();
         let sessions = h.state.read().unwrap().paths.config_file.with_file_name("sessions.jsonl");
-        stats::record(&sessions, &stats::Session { appid: g.appid.clone(), name: g.name.clone(), start_ms: now - 600_000, end_ms: now, secs: 600, crashed: false, mods: 2, perf: None });
+        stats::record(&sessions, &stats::Session { appid: g.appid.clone(), name: g.name.clone(), start_ms: now - 600_000, end_ms: now, secs: 600, crashed: false, mods: 2, perf: None, ..Default::default() });
         let (code, body) = http(&h, "GET", "/api/screenshots", &[("X-Rig-Token", &h.token)], b"");
         assert_eq!(code, 200);
         let v: Value = serde_json::from_str(&body).unwrap();
@@ -16049,6 +16138,7 @@ mod tests {
         let sess = |mods: usize, end: u64, fps: u32, mb: u64| stats::Session {
             appid: g.appid.clone(), name: g.name.clone(), start_ms: end - 600_000, end_ms: end, secs: 600, crashed: false, mods,
             perf: Some(perf::Summary { peak_mb: mb, avg_cpu: 90, peak_cpu: 150, frames: (fps > 0).then(|| perf::FrameStats { frames: 100, avg_fps: fps, low1_fps: fps / 4, spikes: 7, ..Default::default() }) }),
+            ..Default::default()
         };
         let get = || {
             let (c, b) = http(&h, "GET", "/api/perf", &[("X-Rig-Token", &h.token)], b"");
@@ -16256,6 +16346,50 @@ mod tests {
         // unknown ids are refused politely
         api(&h, "/api/saves_restore", json!({ "id": "../../etc" }));
         assert!(last_log(&h).contains("does not exist"));
+    }
+
+    #[test]
+    #[cfg(not(windows))] // the saves of this test live in a Wine prefix
+    fn the_save_browser_says_what_made_each_save_and_puts_back_one_file() {
+        let h = harness("savebrowser");
+        let dir = PathBuf::from(&h.game.pfx).join("drive_c/users/steamuser/AppData/Local/Demo/Saved/SaveGames");
+        let g = selected_game(&h.state).unwrap();
+        let get = |q: &str| {
+            let (c, b) = http(&h, "GET", &format!("/api/saves_files{q}"), &[("X-Rig-Token", &h.token)], b"");
+            assert_eq!(c, 200);
+            serde_json::from_str::<Value>(&b).unwrap()
+        };
+        assert_eq!(http(&h, "GET", "/api/saves_files", &[], b"").0, 403);
+        assert_eq!(get("")["files"], json!([]));
+
+        fs::write(dir.join("slot1.sav"), "ONE").unwrap();
+        fs::write(dir.join("slot2.sav"), "TWO").unwrap();
+        let now = now_ms();
+        let sessions = read_state(&h.state).paths.config_file.with_file_name("sessions.jsonl");
+        stats::record(&sessions, &stats::Session { appid: g.appid.clone(), name: g.name.clone(), start_ms: now - 600_000, end_ms: now - 1000, secs: 599, mods: 2, profile: "Modded".into(), mod_names: vec!["A".into(), "B".into()], ..Default::default() });
+        stats::record(&sessions, &stats::Session { appid: "other".into(), start_ms: now - 600_000, end_ms: now, ..Default::default() });
+        let live = get("");
+        assert_eq!(live["files"].as_array().unwrap().len(), 2);
+        let made = &live["sessions"][live["files"][0]["made"].as_u64().unwrap() as usize];
+        assert_eq!((made["profile"].as_str(), made["mods"].as_u64(), made["names"].clone()), (Some("Modded"), Some(2), json!(["A", "B"])), "written during that session (or just after)");
+        assert_eq!(live["sessions"].as_array().unwrap().len(), 1, "one session row shared by both files; the other game's is not used");
+
+        snapshot_before_launch(&h.state, &g);
+        let id = saves::list(&g, &read_state(&h.state).cache_root())[0].id.clone();
+        let inside = get(&format!("?id={id}"));
+        let key = inside["files"][0]["key"].as_str().unwrap().to_string();
+        assert_eq!(inside["files"].as_array().unwrap().len(), 2);
+        thread::sleep(Duration::from_millis(1100));
+        fs::write(dir.join("slot2.sav"), "RUINED").unwrap();
+        let diff = get(&format!("?a={id}&b=now"));
+        assert_eq!((diff["diff"]["changed"][0]["path"].as_str(), diff["diff"]["same"].as_u64()), (Some("slot2.sav"), Some(1)));
+        assert!(get("?a=nope&b=now")["error"].is_string());
+
+        api(&h, "/api/saves_restore_file", json!({ "id": id, "key": key, "path": "slot2.sav" }));
+        wait_until("one file back", || fs::read_to_string(dir.join("slot2.sav")).unwrap() == "TWO");
+        assert!(last_log(&h).contains("slot2.sav"));
+        api(&h, "/api/saves_restore_file", json!({ "id": id, "key": key, "path": "../../../../x" }));
+        wait_until("the refusal", || last_log(&h).contains("not a file of this backup"));
     }
 
     #[test]

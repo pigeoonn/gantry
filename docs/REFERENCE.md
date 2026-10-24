@@ -192,14 +192,22 @@ the way Steam starts the game (the same Proton build, prefix and settings), and 
   or removes one; Gantry's own copy is deleted then, a file somewhere else (your Downloads) is only forgotten.
 
 ## Save Guard
-*💾 Save Guard* snapshots a game's save folders automatically before every launch (skipped when nothing changed), on request,
-during Full Setup and before any restore, and keeps the newest eight of each kind. Unreal `SaveGames` folders are found by
+*💾 Save Guard* snapshots a game's save folders automatically before every launch and after every session (skipped when
+nothing changed), before a mod update, before going back to an older version of a mod, before a profile switch, before
+another compatibility tool is chosen, on request, during Full Setup and before any restore. It keeps the newest eight manual
+backups and the newest twelve automatic ones. Unreal `SaveGames` folders are found by
 themselves; for other games the places come from the game's support entry (`saves`: Documents, AppData, Saved Games, the game
 folder ...), which is filled in for about forty popular games. It works the same in a Wine prefix (Steam, Lutris, Heroic) and
 on Windows. A snapshot remembers where each folder came from, so it goes back to the right place even if the folder is gone.
 Restoring never deletes files and first backs up the current state, so a restore can itself be undone (and never pushes the
 backup being restored out of the allowance). Folders over 2 GB are not copied automatically. Backups made by earlier versions
 stay listed and restorable. Snapshots live in `~/.cache/rig/saves/<game>/`.
+
+The window also lists **your saves as they are now**, newest first, each with the play session it was written in: which saved
+profile was on and how many mods (hover for their names), and whether that session crashed. *Files* opens one backup and
+puts back a **single file** (the others stay as they are; the current state is backed up first). *What changed since*
+compares a backup with your saves now, and *Compare two backups* compares any two: which files changed (by content, not
+date), which are new and which are gone.
 
 ## Mod conflicts
 *⚔ Conflicts* (mods header) reads the file index of every enabled `.pak` mod (never the payload, so it is quick even for

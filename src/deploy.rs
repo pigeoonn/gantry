@@ -1826,6 +1826,15 @@ impl Library {
         Ok(changed)
     }
 
+    /// The saved profile whose mods on are exactly the ones on now, if there is one.
+    pub fn matching_profile(&self) -> Option<String> {
+        let lf = self.load();
+        let have: HashSet<&str> = lf.mods.iter().map(|m| m.id.as_str()).collect();
+        let on: HashSet<&str> = lf.mods.iter().filter(|m| m.enabled).map(|m| m.id.as_str()).collect();
+        // a mod removed since the profile was saved does not count against it
+        lf.profiles.iter().find(|(_, set)| set.iter().filter(|(id, e)| *e && have.contains(id.as_str())).map(|(id, _)| id.as_str()).collect::<HashSet<_>>() == on).map(|(n, _)| n.clone())
+    }
+
     pub fn separate_saves(&self) -> bool {
         self.load().separate_saves
     }
@@ -2660,6 +2669,7 @@ mod tests {
         let state = |id: &str| m.iter().find(|x| x.id == id).unwrap().enabled;
         assert!(state(&a.id) && state(&b.id) && state(&c.id) && !state(&late.id));
         assert_eq!(m.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["A", "B", "C", "Late"], "the profile's order is restored too");
+        assert_eq!(lib.matching_profile().as_deref(), Some("Everything"), "what is on is exactly that profile");
         lib.deploy(false).unwrap();
         assert!(game.join("Data/a.esp").exists() && !game.join("Data/late.esp").exists());
 
@@ -2682,6 +2692,12 @@ mod tests {
         // errors are explained
         assert!(lib.load_profile("nope").is_err() && lib.delete_profile("nope").is_err());
         assert!(lib.save_profile("   ").is_err() && lib.save_profile(&"x".repeat(41)).is_err() && lib.save_profile("bad\nname").is_err());
+        lib.load_profile("Only B").unwrap();
+        lib.set_enabled(&c.id, true).unwrap();
+        assert_eq!(lib.matching_profile(), None);
+        lib.set_enabled(&c.id, false).unwrap();
+        lib.remove_many(std::slice::from_ref(&a.id)).unwrap();
+        assert_eq!(lib.matching_profile().as_deref(), Some("Only B"), "a removed mod does not count against a profile");
         lib.delete_profile("Only B").unwrap();
         assert_eq!(lib.status_json()["profiles"], json!(["Everything"]));
     }

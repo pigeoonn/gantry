@@ -11,7 +11,7 @@ const DAY_MS: u64 = 86_400_000;
 /// Older lines are dropped when the file grows past this many sessions.
 const KEEP: usize = 5000;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Session {
     pub appid: String,
     pub name: String,
@@ -24,7 +24,16 @@ pub struct Session {
     /// What the session cost (memory, processor, frame times), when it could be measured.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub perf: Option<crate::perf::Summary>,
+    /// The saved mod profile that matched exactly what was on, if one did.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub profile: String,
+    /// The names of the mods that were on (at most MAX_NAMES).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mod_names: Vec<String>,
 }
+
+/// A session remembers this many mod names; the count in `mods` stays exact.
+pub const MAX_NAMES: usize = 60;
 
 /// Add one session to the log.
 pub fn record(path: &Path, s: &Session) {
@@ -80,7 +89,7 @@ mod tests {
     use crate::fsutil::testutil::TempDir;
 
     fn s(appid: &str, end: u64, secs: u64, crashed: bool, mods: usize) -> Session {
-        Session { appid: appid.into(), name: appid.into(), start_ms: end - secs * 1000, end_ms: end, secs, crashed, mods, perf: None }
+        Session { appid: appid.into(), name: appid.into(), start_ms: end - secs * 1000, end_ms: end, secs, crashed, mods, perf: None, ..Default::default() }
     }
 
     #[test]

@@ -4095,28 +4095,64 @@
   }
 
   // ---------- Save Guard ----------
+  // what the Save Guard window shows: the list, the files of one backup ({ files: id }) or a comparison ({ a, b })
+  let sgView = null, sgSnaps = [];
   async function openSaveGuard() {
+    sgView = null;
     document.getElementById('savesContent').textContent = t('Loading…');
     document.getElementById('savesModal').classList.add('open');
     await renderSaveGuard();
+  }
+  function sgWhen(ms) { return ms ? new Date(ms).toLocaleString(LANG) : '—'; }
+  function sgLabel(l) {
+    const labels = { auto: t('before launch'), session: t('after the session'), manual: t('manual'), setup: t('full setup'), 'before-restore': t('before a restore'), 'before-update': t('before a mod update'), 'before-rollback': t('before going back to an older mod'), 'before-profile': t('before a profile switch'), 'before-tool': t('before a compatibility tool change'), legacy: t('older backup') };
+    return labels[l] || l;
+  }
+  function sgSnapName(id) {
+    if (id === 'now') return t('your saves now');
+    const s = sgSnaps.find(x => x.id === id);
+    return s ? sgWhen(s.at_ms) + ' · ' + sgLabel(s.label) : id;
+  }
+  function sgMade(f, sessions) {
+    const s = f.made == null ? null : sessions[f.made];
+    if (!s) return '';
+    const what = s.profile ? t('profile {} · {}', s.profile, tp(s.mods, '{} mod', '{} mods')) : tp(s.mods, '{} mod', '{} mods');
+    return `<small style="display:block; color:var(--text-muted)" title="${escapeHtml((s.names || []).join(', '))}">${s.mods ? t('Made while playing with {}', escapeHtml(what)) : t('Made while playing without mods')}${s.crashed ? ' · ' + t('that session crashed') : ''}</small>`;
+  }
+  function sgFileRow(f, extra, button) {
+    return `<div class="disk-row"><span style="flex:1; min-width:0; overflow-wrap:anywhere"><b>${escapeHtml(f.path)}</b> <span style="color:var(--text-muted)">· ${escapeHtml(sgWhen(f.modified_ms))} · ${fmtSize(f.bytes)}</span>${extra || ''}</span>${button || ''}</div>`;
   }
 
   async function renderSaveGuard() {
     const box = document.getElementById('savesContent');
     try {
-      const r = await (await fetch('/api/saves_list')).json();
-      const labels = { auto: t('before launch'), session: t('after the session'), manual: t('manual'), setup: t('full setup'), 'before-restore': t('before a restore'), legacy: t('older backup') };
-      let h = `<div style="color:var(--text-muted);">${t("Gantry copies this game's save files automatically before every launch (only when they changed) and keeps the newest ones. Restoring never deletes anything and first backs up what is there now.")}</div>
+      if (sgView && sgView.files) return await renderSaveGuardFiles(box, sgView.files);
+      if (sgView && sgView.a) return await renderSaveGuardCompare(box, sgView.a, sgView.b);
+      const [r, live] = await Promise.all([(await fetch('/api/saves_list')).json(), (await fetch('/api/saves_files')).json()]);
+      sgSnaps = r.snapshots || [];
+      let h = `<div style="color:var(--text-muted);">${t("Gantry copies this game's save files automatically before every launch, mod update, profile switch and compatibility tool change (only when they changed) and keeps the newest ones. Restoring never deletes anything and first backs up what is there now.")}</div>
         <div style="margin:10px 0;"><button class="btn btn-heal" onclick="saveGuardBackup()">${t('💾 Back up now')}</button></div>`;
-      if (!r.snapshots.length) {
+      const files = live.files || [];
+      if (files.length) {
+        h += `<div class="cp-h" style="margin-top:6px">${t('Your saves')} <span style="color:var(--text-muted); font-weight:normal">· ${tp(files.length, '{} file', '{} files')}</span></div>`;
+        h += files.slice(0, 40).map(f => sgFileRow(f, sgMade(f, live.sessions || []))).join('');
+        if (files.length > 40) h += `<div style="color:var(--text-muted); font-size:12px">${t('…and {} more', files.length - 40)}</div>`;
+      }
+      h += `<div class="cp-h" style="margin-top:12px">${t('Backups')}</div>`;
+      if (!sgSnaps.length) {
         h += `<div class="cd-card">${t('No backups yet. They appear after the game has created its first save.')}</div>`;
       } else {
-        r.snapshots.forEach(s => {
-          const when = s.at_ms ? new Date(s.at_ms).toLocaleString(LANG) : '—';
-          const kb = fmtSize(s.bytes);
-          h += `<div class="cd-card" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-            <div><b>${escapeHtml(when)}</b> <span style="color:var(--text-muted);">· ${escapeHtml(labels[s.label] || s.label)} · ${tp(s.files, '{} file', '{} files')} · ${kb}</span></div>
-            <button class="btn" onclick='saveGuardRestore(${JS(s.id)})'>${t('Restore')}</button></div>`;
+        const usable = sgSnaps.filter(s => s.label !== 'legacy');
+        if (usable.length > 1) {
+          const opts = sel => usable.map(s => `<option value="${escapeHtml(s.id)}"${s.id === sel ? ' selected' : ''}>${escapeHtml(sgWhen(s.at_ms) + ' · ' + sgLabel(s.label))}</option>`).join('');
+          h += `<div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px">${t('Compare two backups:')} <select id="sgA" class="proton-select">${opts(usable[1].id)}</select> → <select id="sgB" class="proton-select"><option value="now">${t('your saves now')}</option>${opts('')}</select>
+            <button class="btn" onclick="sgCompare(document.getElementById('sgA').value, document.getElementById('sgB').value)">${t('Compare')}</button></div>`;
+        }
+        sgSnaps.forEach(s => {
+          const legacy = s.label === 'legacy';
+          h += `<div class="cd-card" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
+            <div><b>${escapeHtml(sgWhen(s.at_ms))}</b> <span style="color:var(--text-muted);">· ${escapeHtml(sgLabel(s.label))} · ${tp(s.files, '{} file', '{} files')} · ${fmtSize(s.bytes)}</span></div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap">${legacy ? '' : `<button class="btn" onclick='sgShowFiles(${JS(s.id)})'>${t('Files')}</button><button class="btn" onclick='sgCompare(${JS(s.id)}, "now")'>${t('What changed since')}</button>`}<button class="btn" onclick='saveGuardRestore(${JS(s.id)})'>${t('Restore all')}</button></div></div>`;
         });
       }
       box.innerHTML = h;
@@ -4124,6 +4160,30 @@
       box.textContent = t('Could not load backups: {}', e);
     }
   }
+
+  const sgBack = () => `<div style="margin-bottom:10px"><button class="btn" onclick="sgView = null; renderSaveGuard()">${t('← All backups')}</button></div>`;
+  async function renderSaveGuardFiles(box, id) {
+    const r = await (await fetch('/api/saves_files?id=' + encodeURIComponent(id))).json();
+    let h = sgBack() + `<div class="cp-h">${escapeHtml(sgSnapName(id))}</div>`;
+    if (r.error) h += `<div class="cd-card">${escapeHtml(tm(r.error))}</div>`;
+    else {
+      h += `<div style="color:var(--text-muted); font-size:12px; margin-bottom:6px">${t('Put back only the save you need; the others stay as they are. What is there now is backed up first.')}</div>`;
+      h += (r.files || []).map(f => sgFileRow(f, '', `<button class="btn" onclick='sgRestoreFile(${JS(id)}, ${JS(f.key)}, ${JS(f.path)})'>${t('Restore')}</button>`)).join('') || `<div class="cd-card">${t('This backup is empty.')}</div>`;
+    }
+    box.innerHTML = h;
+  }
+  async function renderSaveGuardCompare(box, a, b) {
+    const r = await (await fetch('/api/saves_files?a=' + encodeURIComponent(a) + '&b=' + encodeURIComponent(b))).json();
+    let h = sgBack() + `<div class="cp-h">${escapeHtml(sgSnapName(a))} → ${escapeHtml(sgSnapName(b))}</div>`;
+    if (r.error) { box.innerHTML = h + `<div class="cd-card">${escapeHtml(tm(r.error))}</div>`; return; }
+    const d = r.diff, part = (title, list) => list.length ? `<div class="cp-h" style="margin-top:10px">${title} · ${list.length}</div>` + list.slice(0, 100).map(f => sgFileRow(f)).join('') : '';
+    if (!d.added.length && !d.changed.length && !d.removed.length) h += `<div class="cd-card">${t('No difference: the same {} file(s) on both sides.', d.same)}</div>`;
+    h += part(t('Changed'), d.changed) + part(t('New'), d.added) + part(t('Gone'), d.removed);
+    if (d.same && (d.added.length || d.changed.length || d.removed.length)) h += `<div style="color:var(--text-muted); font-size:12px; margin-top:8px">${tp(d.same, '{} file is the same', '{} files are the same')}</div>`;
+    box.innerHTML = h;
+  }
+  function sgShowFiles(id) { sgView = { files: id }; renderSaveGuard(); }
+  function sgCompare(a, b) { if (a === b) return; sgView = { a, b }; renderSaveGuard(); }
 
   async function saveGuardBackup() {
     await ipcPost('/api/saves_backup', {});
@@ -4133,6 +4193,11 @@
   async function saveGuardRestore(id) {
     if (!confirm(t('Restore this backup? Current saves are backed up first, so this can be undone.'))) return;
     await ipcPost('/api/saves_restore', { id });
+    setTimeout(renderSaveGuard, 600);
+  }
+  async function sgRestoreFile(id, key, path) {
+    if (!confirm(t('Put back {} from this backup? Your other saves are not touched, and the current state is backed up first.', path))) return;
+    await ipcPost('/api/saves_restore_file', { id, key, path });
     setTimeout(renderSaveGuard, 600);
   }
 

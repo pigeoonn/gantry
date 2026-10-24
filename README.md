@@ -53,7 +53,8 @@ The [tutorial](docs/TUTORIAL.md) walks through it with pictures.
 
 **When things go wrong**
 - **Crash Detective** and a health score with one-click fixes; a knowledge base of 121 known problems, each taken from what the mod loaders really write, explained in your language and caught while you play.
-- **Save Guard:** saves are backed up before every launch, and can be kept separately per mod profile.
+- **Save Guard:** saves are backed up before every launch, mod update and profile switch; browse them, see which mods made
+  each one, put back a single file or compare two backups. They can be kept separately per mod profile.
 - **Compatibility center:** pick another compatibility tool for a game, download newer builds, switch common fixes on or off.
 
 **Around your games**

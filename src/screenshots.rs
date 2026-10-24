@@ -95,7 +95,7 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     fn session(start: u64, end: u64, mods: usize) -> Session {
-        Session { appid: "620".into(), name: "G".into(), start_ms: start, end_ms: end, secs: (end - start) / 1000, crashed: false, mods, perf: None }
+        Session { appid: "620".into(), name: "G".into(), start_ms: start, end_ms: end, secs: (end - start) / 1000, crashed: false, mods, perf: None, ..Default::default() }
     }
 
     fn picture(dir: &Path, name: &str, at_ms: u64, with_thumb: bool) {

@@ -19,7 +19,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const KEEP_MANUAL: usize = 8;
-const KEEP_AUTO: usize = 8;
+const KEEP_AUTO: usize = 12;
 const META: &str = "meta.json";
 const DATA: &str = "data";
 const LEGACY_MARKER: &str = ".rig_backup_v2";
@@ -246,6 +246,136 @@ pub fn restore(game: &GameEntry, cache_root: &Path, id: &str, custom: &[String])
     }
 }
 
+/// Errors that only mean there is nothing to back up (no saves yet, or too much to copy on its own).
+pub fn nothing_to_guard(e: &str) -> bool {
+    e == NO_FOLDERS || e == EMPTY || e == TOO_BIG
+}
+
+/// One file of a game's saves, as it is now or inside a backup.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct SaveFile {
+    /// The save folder it is in (the name a backup stores it under).
+    pub key: String,
+    /// Its path inside that folder, with forward slashes.
+    pub path: String,
+    pub bytes: u64,
+    pub modified_ms: u64,
+}
+
+/// More files than this in one game's saves is not a list anyone reads.
+const MAX_LISTED: usize = 2000;
+const OLD_FORMAT: &str = "This backup was made by an older version of Gantry; it can only be restored as a whole.";
+
+fn files_under(dir: &Path, key: &str) -> Vec<(SaveFile, PathBuf)> {
+    walkdir::WalkDir::new(dir)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_file())
+        .take(MAX_LISTED)
+        .filter_map(|e| {
+            let m = e.metadata().ok()?;
+            let modified_ms = m.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as u64;
+            let path = fsutil::slashed(e.path().strip_prefix(dir).ok()?);
+            Some((SaveFile { key: key.to_string(), path, bytes: m.len(), modified_ms }, e.path().to_path_buf()))
+        })
+        .collect()
+}
+
+fn live_with_paths(game: &GameEntry, custom: &[String]) -> Vec<(SaveFile, PathBuf)> {
+    profsaves::roots(game, custom).iter().flat_map(|r| files_under(&r.live, &r.key)).collect()
+}
+
+/// The save files as they are now, newest first.
+pub fn live_files(game: &GameEntry, custom: &[String]) -> Vec<SaveFile> {
+    let mut out: Vec<SaveFile> = live_with_paths(game, custom).into_iter().map(|f| f.0).collect();
+    out.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms).then_with(|| a.path.cmp(&b.path)));
+    out
+}
+
+fn snapshot_with_paths(game: &GameEntry, cache_root: &Path, id: &str) -> Result<(Snapshot, Vec<(SaveFile, PathBuf)>), String> {
+    let snap = list(game, cache_root).into_iter().find(|s| s.id == id).ok_or("That backup does not exist (any more).")?;
+    if snap.roots.is_empty() {
+        return Err(OLD_FORMAT.into());
+    }
+    let data = game_dir(cache_root, game).join(&snap.id).join(DATA);
+    let files = snap.roots.iter().filter(|r| safe_id(&r.key) == r.key).flat_map(|r| files_under(&data.join(&r.key), &r.key)).collect();
+    Ok((snap, files))
+}
+
+/// The files inside one backup.
+pub fn files(game: &GameEntry, cache_root: &Path, id: &str) -> Result<Vec<SaveFile>, String> {
+    let mut out: Vec<SaveFile> = snapshot_with_paths(game, cache_root, id)?.1.into_iter().map(|f| f.0).collect();
+    out.sort_by(|a, b| (&a.key, &a.path).cmp(&(&b.key, &b.path)));
+    Ok(out)
+}
+
+/// What changed from one set of saves to another.
+#[derive(Clone, Debug, Default, Serialize, PartialEq, Eq)]
+pub struct Diff {
+    pub added: Vec<SaveFile>,
+    pub removed: Vec<SaveFile>,
+    pub changed: Vec<SaveFile>,
+    pub same: usize,
+}
+
+fn same_contents(a: &Path, b: &Path) -> bool {
+    use std::io::Read;
+    let (Ok(mut fa), Ok(mut fb)) = (fs::File::open(a), fs::File::open(b)) else { return false };
+    let (mut ba, mut bb) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
+    loop {
+        let (Ok(na), Ok(nb)) = (fa.read(&mut ba), fb.read(&mut bb)) else { return false };
+        if na != nb || ba[..na] != bb[..nb] {
+            return false;
+        }
+        if na == 0 {
+            return true;
+        }
+    }
+}
+
+/// Compare the saves in backup `from` with backup `to`; either may be "now" (the saves as they are).
+pub fn compare(game: &GameEntry, cache_root: &Path, from: &str, to: &str, custom: &[String]) -> Result<Diff, String> {
+    type Side = std::collections::BTreeMap<(String, String), (SaveFile, PathBuf)>;
+    let side = |id: &str| -> Result<Side, String> {
+        let files = if id == "now" { live_with_paths(game, custom) } else { snapshot_with_paths(game, cache_root, id)?.1 };
+        Ok(files.into_iter().map(|f| ((f.0.key.clone(), f.0.path.clone()), f)).collect())
+    };
+    let (a, b) = (side(from)?, side(to)?);
+    let mut d = Diff::default();
+    for (k, (fb, pb)) in &b {
+        match a.get(k) {
+            None => d.added.push(fb.clone()),
+            Some((fa, pa)) if fa.bytes != fb.bytes || !same_contents(pa, pb) => d.changed.push(fb.clone()),
+            Some(_) => d.same += 1,
+        }
+    }
+    d.removed = a.iter().filter(|(k, _)| !b.contains_key(*k)).map(|(_, f)| f.0.clone()).collect();
+    Ok(d)
+}
+
+/// Put one file of a backup back where it belongs; every other save stays as it is. What is there now is
+/// backed up first, like a full restore.
+pub fn restore_file(game: &GameEntry, cache_root: &Path, id: &str, key: &str, path: &str, custom: &[String]) -> Result<String, String> {
+    let rel = Path::new(path);
+    if path.is_empty() || !rel.components().all(|c| matches!(c, std::path::Component::Normal(_))) {
+        return Err("That is not a file of this backup.".into());
+    }
+    let (snap, files) = snapshot_with_paths(game, cache_root, id)?;
+    let (_, src) = files.into_iter().find(|(f, _)| f.key == key && f.path == path).ok_or("That is not a file of this backup.")?;
+    let root = snap.roots.iter().find(|r| r.key == key).ok_or("That is not a file of this backup.")?;
+    let dest = profsaves::resolve(&root.token, &profsaves::bases(game)).ok_or("The place this save belongs to was not found.")?.join(rel);
+    match snapshot_keeping(game, cache_root, "before-restore", custom, Some(id)) {
+        Ok(_) => {}
+        Err(e) if nothing_to_guard(&e) => {}
+        Err(e) => return Err(format!("Could not snapshot the current saves, restore aborted: {}", e)),
+    }
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Restore failed: {}", e))?;
+    }
+    fsutil::atomic_copy(&src, &dest).map_err(|e| format!("Restore failed: {}", e))?;
+    Ok(format!("Restored {} for '{}'. The previous state was kept as a \"before-restore\" backup.", path, game.name))
+}
+
 #[cfg(test)]
 #[cfg(not(windows))] // these tests build Wine prefixes; on Windows the saves are in the real AppData
 mod tests {
@@ -445,6 +575,49 @@ mod tests {
         fs::write(user.join("Documents/Wine Game/slot.sav"), "BROKEN").unwrap();
         restore(&game, &cache, &s.id, &custom).unwrap();
         assert_eq!(fs::read_to_string(user.join("Documents/Wine Game/slot.sav")).unwrap(), "WINE");
+    }
+
+    #[test]
+    fn one_save_can_be_restored_alone_and_two_backups_compared() {
+        let (d, game) = make_game("sg_one");
+        let cache = d.join("cache");
+        let dir = saves_dir(&game);
+        fs::write(dir.join("slot1.sav"), "ONE").unwrap();
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::write(dir.join("sub/slot2.sav"), "TWO").unwrap();
+        let first = snapshot(&game, &cache, "auto", NONE).unwrap().unwrap();
+        let listed = files(&game, &cache, &first.id).unwrap();
+        assert_eq!(listed.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec!["slot1.sav", "sub/slot2.sav"]);
+        let key = listed[0].key.clone();
+        std::thread::sleep(Duration::from_millis(1100));
+        fs::write(dir.join("slot1.sav"), "ONE, later").unwrap();
+        fs::write(dir.join("sub/slot2.sav"), "TWO, ruined").unwrap();
+        fs::write(dir.join("slot3.sav"), "NEW").unwrap();
+        let live = live_files(&game, NONE);
+        assert!(live[0].modified_ms >= live[2].modified_ms, "newest first");
+
+        // what changed since the backup
+        let diff = compare(&game, &cache, &first.id, "now", NONE).unwrap();
+        let names = |v: &[SaveFile]| v.iter().map(|f| f.path.clone()).collect::<Vec<_>>();
+        assert_eq!((names(&diff.added), names(&diff.changed), diff.removed.len(), diff.same), (vec!["slot3.sav".to_string()], vec!["slot1.sav".to_string(), "sub/slot2.sav".to_string()], 0, 0));
+
+        // only the ruined one goes back; the newer progress in the other slot stays
+        let msg = restore_file(&game, &cache, &first.id, &key, "sub/slot2.sav", NONE).unwrap();
+        assert!(msg.contains("sub/slot2.sav"), "{msg}");
+        assert_eq!(fs::read_to_string(dir.join("sub/slot2.sav")).unwrap(), "TWO");
+        assert_eq!(fs::read_to_string(dir.join("slot1.sav")).unwrap(), "ONE, later");
+        let safety = list(&game, &cache).into_iter().find(|s| s.label == "before-restore").expect("what was there is kept");
+        let back = compare(&game, &cache, &safety.id, "now", NONE).unwrap();
+        assert_eq!((names(&back.changed), back.same), (vec!["sub/slot2.sav".to_string()], 2));
+        // the same content with a new date is not a change
+        assert!(compare(&game, &cache, &first.id, &first.id, NONE).unwrap().changed.is_empty());
+
+        // nothing outside the backup and its folders can be named
+        for (k, p) in [(key.as_str(), "../slot1.sav"), (key.as_str(), "/etc/passwd"), (key.as_str(), ""), (key.as_str(), "nope.sav"), ("other", "slot1.sav")] {
+            assert!(restore_file(&game, &cache, &first.id, k, p, NONE).is_err(), "{k} {p}");
+        }
+        assert!(restore_file(&game, &cache, "../x", &key, "slot1.sav", NONE).is_err());
+        assert!(compare(&game, &cache, "nope", "now", NONE).is_err());
     }
 
     #[test]

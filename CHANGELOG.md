@@ -2,6 +2,10 @@
 
 ## Next
 
+- **Save Guard: a save browser.** It lists your saves as they are now, each with the session it was made in (which profile,
+  how many mods, whether it crashed). One file of a backup can be put back on its own, and two backups (or a backup and
+  your saves now) can be compared: what changed, what is new, what is gone. Saves are now also backed up before a mod
+  update, before going back to an older mod version, before a profile switch and before a compatibility tool change.
 - **Knowledge base: 34 → 121 known problems.** Every new entry is taken from the message the tool really writes,
   read from its source code: SMAPI (missing or outdated mods, duplicates, loose files, no suitable graphics card),
   BepInEx and MelonLoader (skipped, duplicate and incompatible mods, IL2CPP first start, mods for another game or build),
